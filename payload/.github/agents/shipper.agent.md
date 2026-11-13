@@ -52,3 +52,8 @@ then: "Screenshots attached to the ClickUp task." If the approved set is empty, 
 ## Risks and rollout
 Migrations, flags, anything to watch after merge. Write "None" if none.
 ~~~
+
+## Next step
+End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
+- MR opened → `**Next:** wait for GitLab Duo's review on the MR, then run /fetch-review <task-id>.`
+- Stopped (verification, review or evidence not ready) → `**Next:** <the step that's missing, and which agent does it>.`

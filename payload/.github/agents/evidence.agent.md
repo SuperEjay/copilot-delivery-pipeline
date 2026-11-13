@@ -69,3 +69,8 @@ Tick `- [x]` to approve. Only ticked items get uploaded to ClickUp.
 - AC-4: background job; covered by `tests/jobs/export.test.ts` (see verification.md)
 ~~~
 Each evidence line must start with `- [ ]` and hold the file name in backticks; the approval script reads exactly that format.
+
+## Next step
+End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
+- Evidence ready → `**Next:** review .work/<task-id>/evidence/evidence.md, tick what you approve, run scripts/agent/approve-evidence.sh <task-id> in your terminal, then pick the **shipper** agent and say "Ship <task-id>".`
+- App bug found → `**Next:** pick the **implementer** agent and say "Fix the evidence issue for <task-id>".`

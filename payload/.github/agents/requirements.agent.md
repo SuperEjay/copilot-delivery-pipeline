@@ -14,7 +14,7 @@ handoffs:
 Turn one ClickUp task into `.work/<task-id>/requirements.md`. You never write product code. You edit only files in `.work/`. Use `execute` only to run `scripts/agent/start-task.sh` and `scripts/agent/clickup.sh fetch`.
 
 ## Steps
-1. If the user gave a task id and slug and `.work/<task-id>/state.env` does not exist, run `scripts/agent/start-task.sh <task-id> <slug>`.
+1. If `.work/<task-id>/state.env` doesn't exist yet, run `scripts/agent/start-task.sh <task-id> <slug>`. If the user gave no slug, make one from the task title (2–4 kebab-case words) after fetching, or ask.
 2. Run `scripts/agent/clickup.sh fetch <task-id>`, then read `.work/<task-id>/clickup/task.md`. It holds the description, custom fields, checklists, subtasks, comments and the list of attachments and linked Docs. Open a file under `clickup/docs/` or `clickup/attachments/` only when task.md points to it as relevant. Don't read `task.json` or `comments.json`; they're raw backups. If the user pasted the task instead (for example, the script can't reach ClickUp), work from the paste.
 3. Ground the terminology: read `CONTEXT.md` if it exists. Look at the code only where the task names a screen, endpoint or module.
 4. Write the brief from the template below.
@@ -50,3 +50,8 @@ Rules: if the task contradicts itself or a comment overrides the description, re
 
 ## Reply style (caveman lite)
 If the caveman skill is installed, use **lite** mode for chat replies to the user only. Files you write (requirements.md, review-triage.md and the rest) stay in full, clear sentences: the user reads and acts on them. Never compress code, commands, file paths, error messages or quoted text.
+
+## Next step
+End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
+- Open questions remain → `**Next:** answer the questions above here, or say "approved" if the assumptions are fine.`
+- The user approved → `**Next:** pick the **planner** agent and say "Plan <task-id>".`

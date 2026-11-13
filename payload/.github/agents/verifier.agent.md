@@ -40,3 +40,8 @@ Result: PASS | FAIL
 What isn't covered and why (e.g. needs a real third-party API).
 ~~~
 Result is FAIL if any check fails, or any AC fails or has no test.
+
+## Next step
+End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
+- FAIL → `**Next:** pick the **implementer** agent and say "Fix the verification failures for <task-id>".`
+- PASS → `**Next:** pick the **reviewer** agent and say "Review <task-id>".`

@@ -33,7 +33,7 @@ git clone https://github.com/SuperEjay/copilot-delivery-pipeline.git /tmp/cdp
 /tmp/cdp/install.sh .
 
 # Option B: one line, pinned to a release
-curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.0.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.1.0/install.sh | bash
 ```
 
 Then follow the "Next steps" the installer prints: fill in `.agent.env`, export
@@ -50,7 +50,7 @@ Then follow the "Next steps" the installer prints: fill in `.agent.env`, export
 
 **What the installer touches:**
 - **Pipeline files** (listed with fingerprints in `.github/agent-pipeline.manifest`):
-  - `.github/agents/`, `.github/prompts/`, `.github/hooks/`
+  - `.github/agents/`, `.github/skills/`, `.github/hooks/`
   - `scripts/agent/`
   - `docs/agent-pipeline.md`, `.agent.env.example`
 - **Your existing files:** it never overwrites them. Rules go into

@@ -105,3 +105,12 @@ Local only. Nothing here has been sent anywhere. Decide per item: pull in, keep 
 - Don't report what the linter, typechecker or verification.md already covers.
 - Recommend **fix** for anything S-effort in code this MR touches. Recommend **debt** for M/L work, or work outside this MR's scope.
 - Verdict is FIX FIRST while any blocker or major finding has Decision fix or pending.
+
+## Next step
+End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
+- Findings written, decisions pending → `**Next:** decide per finding here: fix / debt / skip, or "accept recommendations".`
+- After decisions, use the furthest-back route any fix needs:
+  - requirements → `**Next:** pick the **requirements** agent and say "Update requirements for <task-id> from the code review".`
+  - re-plan → `**Next:** pick the **planner** agent and say "Re-plan the review findings for <task-id>".`
+  - quick only → `**Next:** pick the **implementer** agent and say "Fix the review findings for <task-id>".`
+  - nothing to fix (verdict READY) → `**Next:** pick the **evidence** agent and say "Capture evidence for <task-id>".`

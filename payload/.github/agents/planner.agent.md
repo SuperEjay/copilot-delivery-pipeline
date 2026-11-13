@@ -61,3 +61,9 @@ When handed findings with `Route: re-plan` from `code-review.md`:
 | AC | Slices |
 |---|---|
 ~~~
+
+## Next step
+End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
+- Plan written → `**Next:** review .work/<task-id>/plan.md. When it's right, pick the **implementer** agent and say "Build <task-id>".`
+- Requirement gaps found → `**Next:** pick the **requirements** agent and say "Update requirements for <task-id> from the plan gaps".`
+- Review slices added → `**Next:** pick the **implementer** agent and say "Build <task-id>".`

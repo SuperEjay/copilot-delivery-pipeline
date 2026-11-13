@@ -99,7 +99,7 @@ if $is_edit || $is_read; then
       if grep -qE 'evidence/(APPROVED|UPLOADED)$' <<<"$p"; then
         decide deny "evidence/APPROVED and evidence/UPLOADED are managed by the user's approval and the upload script only."
       fi
-      if grep -qE '(^|/)\.github/(agents|hooks|prompts)/|(^|/)\.github/copilot-instructions\.md$|(^|/)scripts/agent/|(^|/)\.agent\.env$' <<<"$p"; then
+      if grep -qE '(^|/)\.github/(agents|hooks|prompts)/|(^|/)\.github/skills/(start-task|fetch-review)/|(^|/)\.github/copilot-instructions\.md$|(^|/)scripts/agent/|(^|/)\.agent\.env$' <<<"$p"; then
         decide deny "Pipeline config (agents, models, hooks, prompts, instructions, scripts, .agent.env) is user-owned. Tell the user what you'd change and why."
       fi
     fi

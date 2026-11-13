@@ -43,3 +43,9 @@ If the ponytail skill is installed, apply it to every piece of code you write: r
 - Run tests, lint and typechecks only through `run-checks.sh`. Its summary is enough; open `.work/<task-id>/logs/<check>.log` only for a failure you can't place from the summary, and then search it rather than reading the whole log.
 - Stay inside the slice. If the plan is wrong (a missing file, a wrong assumption), stop and explain the problem rather than quietly widening the scope.
 - If you're stuck on the same failure after 3 attempts, stop. Use the diagnosing-bugs skill or hand back to the user with what you've learned.
+
+## Next step
+End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
+- Slices left → `**Next:** say "Next slice" here.`
+- All slices (or review fixes) done → `**Next:** pick the **verifier** agent and say "Verify <task-id>".`
+- Stuck or the plan is wrong → `**Next:** decide how to proceed (see above): adjust plan.md with the **planner** agent, or tell me how to continue.`

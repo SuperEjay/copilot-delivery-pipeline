@@ -19,16 +19,21 @@
 ```
 
 Each stage writes one file into `.work/<task-id>/`, and the next stage reads it.
-Your approval points are the handoff buttons, which have `send: false`, so you
-can edit the prompt before the next agent starts.
+**Moving between stages:** every agent ends its reply with a **Next:** line
+naming the agent to pick and what to say, e.g. *"Next: pick the **planner**
+agent and say 'Plan 86c1abcde'"*. Pick that agent in the Copilot Chat agent
+picker, preferably in a new chat. In older Local-harness sessions you also get
+handoff buttons that do the same thing. In Copilot (Agent Host) sessions, the
+default in current VS Code, the buttons don't appear, and the Next line is how
+you move on.
 
 ## What's in here
 
 | Path | What it is |
 |---|---|
 | `.github/agents/*.agent.md` | The eight agents: requirements, planner, implementer, verifier, reviewer, evidence, shipper, review-responder |
-| `.github/prompts/start-task.prompt.md` | `/start-task <id> <slug>` |
-| `.github/prompts/fetch-review.prompt.md` | `/fetch-review <id>` |
+| `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>`: branch, work folder, ClickUp fetch, then on to requirements |
+| `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id>`: pull Duo's open threads, then on to review-responder |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
 | `.github/copilot-instructions.md` | Six short rules every agent follows (kept short on purpose: it's sent with every request) |
 | `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, thread reply/resolve |
@@ -69,8 +74,11 @@ admin policy that blocks MCP servers doesn't affect any of this.
      the requirements agent works from a paste too.
 7. **Find Duo's username:** open any MR Duo has reviewed, check the author name
    on its comment, and put it in `DUO_USERNAMES`.
-8. **VS Code 1.106 or newer** is needed for the handoff buttons. Reload the
-   window, and the agents appear in the Copilot Chat agent picker.
+8. **Fully quit and reopen VS Code.** The agents appear in the Copilot Chat
+   agent picker, and `/start-task` and `/fetch-review` appear when you type `/`.
+   They're agent skills, not prompt files, because Copilot (Agent Host)
+   sessions don't load prompt files. If they're missing, check that VS Code is
+   open on the project's root folder.
 9. **Evidence screenshots (Playwright):**
    - If the repo doesn't have it yet: `npm i -D @playwright/test && npx playwright install chromium`.
    - Set `EVIDENCE_BASE_URL` and `EVIDENCE_START_CMD` in `.agent.env`.
@@ -105,23 +113,26 @@ variants. Leave them that way.
 
 ## Daily use
 
-1. `/start-task 86c1abcde invoice-export` → read `requirements.md`, answer the
-   open questions in chat → **Approved → plan the slices**
-2. Read `plan.md` → **Plan approved → build slice 1** → **Next slice** … →
-   **All slices done → verify**
-3. Verifier: FAIL goes back to the implementer, PASS goes to the **reviewer**.
-4. **Your review decisions** (see "Code review and tech debt" below). Fixes
-   loop back through the right stage; once the verdict is READY,
-   **Review done → capture evidence**.
-5. **Your evidence review** (see "Evidence approval" below), then
-   **Evidence approved → prepare the MR**.
-6. The shipper checks your approval, asks before pushing, opens the MR, uploads
-   the approved evidence to ClickUp and comments with the MR link.
-7. When Duo has reviewed: `/fetch-review 86c1abcde` → approve the triage table →
-   fixes are pushed and threads replied to → **Re-verify after fixes**.
-   After `MAX_REVIEW_ROUNDS` rounds, the fetch script stops and leaves the rest to you.
+Follow the **Next:** line at the end of each reply. The usual path:
 
-**Start a new chat for each stage** (the handoff button does this). The files
+| Step | Pick agent / run | Say |
+|---|---|---|
+| 1 | `/start-task 86c1abcde invoice-export` | (sets up, then tells you to pick requirements) |
+| 2 | **requirements** | `Analyse 86c1abcde`. Answer its questions, then say "approved". |
+| 3 | **planner** | `Plan 86c1abcde`, then review `plan.md` |
+| 4 | **implementer** | `Build 86c1abcde`, then `Next slice` until all slices are done |
+| 5 | **verifier** | `Verify 86c1abcde`. FAIL goes back to the implementer. |
+| 6 | **reviewer** | `Review 86c1abcde`. Decide per finding; fixes loop back (see "Code review and tech debt"). |
+| 7 | **evidence** | `Capture evidence for 86c1abcde`, then review, tick and run `approve-evidence.sh` |
+| 8 | **shipper** | `Ship 86c1abcde`. Confirm the push when VS Code asks. |
+| 9 | `/fetch-review 86c1abcde` | When Duo has reviewed: hands over to review-responder |
+| 10 | **review-responder** | `Triage 86c1abcde`, approve the table, confirm the push, then back to the verifier |
+
+After `MAX_REVIEW_ROUNDS` Duo rounds, the fetch script stops and leaves the
+rest to you. Picking a later agent too early is safe: each one checks that the
+earlier stages are done, and tells you what's missing.
+
+**Start a new chat for each stage** when you pick the next agent. The files
 carry the context, so each agent starts small instead of dragging the whole
 history along.
 
@@ -139,7 +150,7 @@ instructions into enforcement:
 | **Deny** | Destructive git: force push, remote branch delete, `reset --hard`, `clean -f`, `branch -D`, `checkout -- .`, `--no-verify` |
 | **Deny** | Raw `git push`, `glab` write commands, or direct ClickUp API calls (the scripts must be used) |
 | **Deny** | Raw test, lint and typecheck commands (`npm test`, `npx vitest`, `npx playwright test`, `npx tsc`…), so output always goes through the condensed `run-checks.sh` |
-| **Deny** | Agent edits to pipeline config: agent files (including their pinned models), hooks, prompts, `copilot-instructions.md`, `scripts/agent/`, `.agent.env` |
+| **Deny** | Agent edits to pipeline config: agent files (including their pinned models), hooks, the pipeline's skills, `copilot-instructions.md`, `scripts/agent/`, `.agent.env` |
 
 The agent sees the reason and adjusts. Every ask or deny is logged to
 `.work/hooks.log`, so you can see what was blocked. **You** can still edit all

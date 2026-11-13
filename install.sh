@@ -14,7 +14,7 @@
 # Run via curl:       curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/TAG/install.sh | bash
 set -euo pipefail
 
-PIPELINE_VERSION="v1.0.0"
+PIPELINE_VERSION="v1.1.0"
 PIPELINE_REPO="${PIPELINE_REPO:-SuperEjay/copilot-delivery-pipeline}"
 MANIFEST=".github/agent-pipeline.manifest"
 BEGIN_MARK="<!-- BEGIN agent-pipeline (managed by install.sh; edits inside are replaced on update) -->"
@@ -76,7 +76,7 @@ if [ "$MODE" = uninstall ]; then
     awk -v b="$GI_BEGIN" -v e="$GI_END" '$0==b{skip=1;next} $0==e{skip=0;next} !skip' .gitignore > .gitignore.tmp && mv .gitignore.tmp .gitignore
     ok "removed the pipeline block from .gitignore"
   fi
-  find .github/agents .github/prompts .github/hooks scripts/agent/hooks scripts/agent docs -type d -empty -delete 2>/dev/null || true
+  find .github/agents .github/prompts .github/skills/start-task .github/skills/fetch-review .github/skills .github/hooks scripts/agent/hooks scripts/agent docs -type d -empty -delete 2>/dev/null || true
   say ""
   say "Done. Kept: .agent.env (your settings) and .work/ (task folders). Delete them yourself if you no longer need them."
   exit 0
@@ -154,6 +154,9 @@ while IFS=$'\t' read -r h p; do
   if [ -f "$p" ] && [ "$(sha256 "$p")" = "$h" ]; then rm -f "$p"; ok "removed $p (no longer part of the pipeline)"; fi
 done < "$OLD_MANIFEST"
 rm -f "$OLD_MANIFEST"
+for d in .github/prompts .github/skills/start-task .github/skills/fetch-review; do
+  [ -d "$d" ] && [ -z "$(ls -A "$d")" ] && rmdir "$d" 2>/dev/null || true
+done
 mkdir -p "$(dirname "$MANIFEST")"; mv "$NEW_MANIFEST" "$MANIFEST"
 msg="pipeline files: $written written, $unchanged unchanged"; [ "$skipped" -gt 0 ] && msg="$msg, $skipped kept as you changed them"; ok "$msg"
 
@@ -221,7 +224,7 @@ say "Done. Next steps:"
 say "  1. Fill in .agent.env (test commands, Duo username, ClickUp workspace ID)."
 say "  2. Export CLICKUP_API_TOKEN in your shell profile, and run 'glab auth login'."
 say "  3. Check the model names in .github/agents/*.agent.md match your Copilot model picker."
-say "  4. Reload VS Code, then try:  /start-task <clickup-id> <short-slug>"
+say "  4. Fully quit and reopen VS Code, then type in Copilot Chat:  /start-task <clickup-id> <short-slug>"
 say "Full guide: docs/agent-pipeline.md"
 [ "$missing" -gt 0 ] && say "Install the missing tools above before your first task."
 exit 0

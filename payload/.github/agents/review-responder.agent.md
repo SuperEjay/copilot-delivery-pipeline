@@ -35,3 +35,9 @@ If the ponytail skill is installed, apply it to every piece of code you write: r
 
 ## Reply style (caveman lite)
 If the caveman skill is installed, use **lite** mode for chat replies to the user only. Files you write (requirements.md, review-triage.md and the rest) stay in full, clear sentences: the user reads and acts on them. Never compress code, commands, file paths, error messages or quoted text.
+
+## Next step
+End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
+- Triage written → `**Next:** approve or adjust the triage table here.`
+- Fixes pushed → `**Next:** pick the **verifier** agent and say "Re-verify <task-id>".`
+- Nothing to fix, only replies → `**Next:** wait for the next Duo review or a human review, then run /fetch-review <task-id> again.`
