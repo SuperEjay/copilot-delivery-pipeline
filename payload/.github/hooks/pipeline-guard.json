@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "scripts/agent/hooks/pre-tool-guard.sh",
+        "timeoutSec": 10
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "scripts/agent/hooks/post-edit-format.sh",
+        "timeoutSec": 60
+      }
+    ]
+  }
+}
