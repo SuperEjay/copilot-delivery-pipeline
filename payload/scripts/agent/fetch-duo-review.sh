@@ -3,6 +3,8 @@
 # Writes .work/<task-id>/review.json: only unresolved, resolvable threads,
 # filtered to DUO_USERNAMES when that's set, trimmed to what an agent needs.
 # Counts review rounds and refuses past MAX_REVIEW_ROUNDS unless --force.
+# A fetch that returns the same set of threads as the last one is the same
+# round, so running this twice for one review doesn't use up a round.
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 require glab jq
@@ -13,14 +15,8 @@ DIR="$(task_dir "$TASK")"
 load_state "$TASK"
 : "${MR_IID:?No MR_IID in state.env. Run create-mr.sh first.}"
 
-ROUND=$(( ${REVIEW_ROUND:-0} + 1 ))
-if [ "$ROUND" -gt "$MAX_REVIEW_ROUNDS" ] && [ "$FORCE" != "--force" ]; then
-  echo "Review round $ROUND would exceed MAX_REVIEW_ROUNDS=$MAX_REVIEW_ROUNDS." >&2
-  echo "Look at the remaining threads yourself, or re-run with --force." >&2
-  exit 3
-fi
-
 OUT="$DIR/review.json"
+TMP="$OUT.tmp"; trap 'rm -f "$TMP"' EXIT
 glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=100" \
 | jq -s --arg users "$DUO_USERNAMES" '
     (add // []) as $all
@@ -36,11 +32,25 @@ glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=10
             body: .notes[0].body,
             replies: [ .notes[1:][] | {author: .author.username, body: (.body | .[0:400])} ]
           }
-      ]' > "$OUT"
+      ]' > "$TMP"
 
-set_state "$TASK" REVIEW_ROUND "$ROUND"
+IDS="$(jq -r '[.[].id] | sort | join(",")' "$TMP" | cksum | cut -d' ' -f1)"
+if [ -n "${REVIEW_IDS:-}" ] && [ "$IDS" = "$REVIEW_IDS" ]; then
+  ROUND="${REVIEW_ROUND:-0}"; note=" (same threads as the last fetch, not a new round)"
+else
+  ROUND=$(( ${REVIEW_ROUND:-0} + 1 )); note=""
+  if [ "$ROUND" -gt "$MAX_REVIEW_ROUNDS" ] && [ "$FORCE" != "--force" ]; then
+    echo "Review round $ROUND would exceed MAX_REVIEW_ROUNDS=$MAX_REVIEW_ROUNDS." >&2
+    echo "Look at the remaining threads yourself, or re-run with --force." >&2
+    exit 3
+  fi
+  set_state "$TASK" REVIEW_ROUND "$ROUND"
+  set_state "$TASK" REVIEW_IDS "$IDS"
+fi
+mv "$TMP" "$OUT"
+
 count="$(jq 'length' "$OUT")"
-echo "Round $ROUND: $count unresolved thread(s) in ${OUT#"$REPO_ROOT"/}"
+echo "Round $ROUND: $count unresolved thread(s) in ${OUT#"$REPO_ROOT"/}$note"
 if [ "$count" -gt 0 ]; then
   jq -r '.[] | "  \(.id[0:8])  \(.file // "(general)"):\(.line // "-")  \(.body | split("\n")[0] | .[0:100])"' "$OUT"
 fi

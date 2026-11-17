@@ -70,6 +70,7 @@ Then follow the "Next steps" the installer prints: fill in `.agent.env`, export
 ```bash
 tests/test-install.sh     # installs into a scratch repo, then updates, forces and uninstalls
 tests/test-guard.sh       # checks the hook guard's allow / deny / ask decision for each tool call
+tests/test-gates.sh       # checks that only the verified commit can be pushed (stub glab, local remote)
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release

@@ -4,6 +4,12 @@
 
 - The hook guard now blocks agents from changing pipeline config through the shell too (redirects, `sed -i`, `cp`, `mv`, `rm`, `chmod`, `tee`, inline `python -c` and similar), not only through edit tools. Before this, a shell command could rewrite or switch off the guard itself.
 - New `tests/test-guard.sh`: a table of tool calls and the decision the guard must make for each.
+- **Only verified code is pushed.** `run-checks.sh <id> all` records the commit it passed on a clean tree in `.work/<id>/verified-head`, and `create-mr.sh` and `push-branch.sh` refuse to push anything else. Before this, the shipper only checked that `verification.md` said PASS, so a commit added after verification could ship unverified.
+- **Evidence is tied to a commit.** `approve-evidence.sh` records the full commit, and `upload-evidence.sh` (and so a new MR) refuses if HEAD has moved on since. Existing approvals with a short sha still work.
+- **Duo fixes are verified before they're pushed.** The review-responder commits fixes and hands over to the verifier; it pushes and replies on the threads only after the verifier passes (`Push and reply <id>`).
+- **Re-fetching a Duo review doesn't use up a round.** `fetch-duo-review.sh` counts a new round only when the set of threads changes.
+- The verifier now commits its new tests first and runs `run-checks.sh all` last.
+- New `tests/test-gates.sh` covers the push gates and round counting.
 
 ## v1.1.0
 

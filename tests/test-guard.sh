@@ -24,7 +24,7 @@ sh allow 'git status'
 sh allow 'git add -A && git commit -m "feat: thing"'
 sh allow 'ls src && cat package.json'
 sh allow 'cat scripts/agent/config.sh'
-sh allow 'scripts/agent/run-checks.sh T-1 test,lint'
+sh allow 'scripts/agent/run-checks.sh T-1 unit lint'
 sh allow 'rm -rf .work/T-1/tmp && scripts/agent/run-checks.sh T-1 test'
 sh allow 'scripts/agent/run-checks.sh T-1 test > .work/T-1/checks.txt 2>&1'
 sh allow 'sed -i s/foo/bar/ src/app.ts'
@@ -88,6 +88,11 @@ sh deny "perl -pi -e s/a/b/ .github/agents/reviewer.agent.md"
 sh deny 'git checkout -- .github/agents/planner.agent.md'
 sh deny 'cd src && rm ../scripts/agent/run-checks.sh'
 
+# ---------- verified commit marker ----------
+sh deny 'git rev-parse HEAD > .work/T-1/verified-head'
+sh deny 'cat .work/T-1/verified-head'
+sh allow 'scripts/agent/run-checks.sh T-1 all'
+
 # ---------- edit and read tools ----------
 ed allow editFiles 'src/app.ts'
 ed allow read_file 'scripts/agent/config.sh'
@@ -96,6 +101,7 @@ ed deny  create_file '.github/agents/new.agent.md'
 ed deny  replace_string_in_file '.github/copilot-instructions.md'
 ed deny  apply_patch '.agent.env'
 ed deny  editFiles '.work/T-1/evidence/APPROVED'
+ed deny  create_file '.work/T-1/verified-head'
 ed deny  read_file '.auth/session.json'
 ed deny  read_file "$HOME/.ssh/id_rsa"
 

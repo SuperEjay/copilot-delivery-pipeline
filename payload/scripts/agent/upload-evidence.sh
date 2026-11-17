@@ -4,7 +4,8 @@
 #
 # Uploads exactly the files you approved (see approve-evidence.sh) to the
 # ClickUp task and posts a comment listing them. Refuses if there's no approval,
-# or if any approved file or the manifest changed after you approved it.
+# or if any approved file or the manifest changed after you approved it, or if
+# HEAD has moved past the commit the evidence was approved at.
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
@@ -17,6 +18,14 @@ APPROVED="$EV/APPROVED"
 if [ ! -f "$APPROVED" ]; then
   echo "Evidence is not approved yet. Review ${EV#"$REPO_ROOT"/}/evidence.md, then run:" >&2
   echo "  scripts/agent/approve-evidence.sh $TASK" >&2
+  exit 1
+fi
+
+at="$(sed -nE '1s/.* at commit ([0-9a-f]{7,40}).*/\1/p' "$APPROVED")"
+head="$(git rev-parse HEAD)"
+if [ -z "$at" ] || [ "${head#"$at"}" = "$head" ]; then
+  echo "Evidence was approved at commit ${at:-(unknown)}, but HEAD is now ${head:0:7}." >&2
+  echo "The screenshots may not show the code that ships. Re-capture with the evidence agent and approve again." >&2
   exit 1
 fi
 

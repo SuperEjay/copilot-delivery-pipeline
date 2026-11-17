@@ -27,6 +27,22 @@ fi
 
 task_dir() { echo "$WORK_DIR/$1"; }
 
+# The commit that last passed `run-checks.sh <task> all` on a clean tree.
+verified_head() { local f; f="$(task_dir "$1")/verified-head"; [ -f "$f" ] && cat "$f"; return 0; }
+
+# Exit unless HEAD is exactly the verified commit, so nothing unverified ships.
+require_verified_head() {
+  local v head
+  v="$(verified_head "$1")"; head="$(git rev-parse HEAD)"
+  if [ -z "$v" ]; then
+    echo "No verified commit for $1. The verifier must run run-checks.sh $1 all on the final code." >&2; exit 1
+  fi
+  if [ "$v" != "$head" ]; then
+    echo "HEAD $(git rev-parse --short HEAD) is not the verified commit ${v:0:7}: $(git rev-list --count "$v..HEAD" 2>/dev/null || echo some) commit(s) since. Re-verify before pushing." >&2
+    exit 1
+  fi
+}
+
 require() {
   for bin in "$@"; do
     command -v "$bin" >/dev/null 2>&1 || { echo "Missing dependency: $bin" >&2; exit 1; }

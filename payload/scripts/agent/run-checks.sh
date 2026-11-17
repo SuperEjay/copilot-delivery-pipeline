@@ -2,6 +2,10 @@
 # Usage: run-checks.sh <task-id> [fast|all|lint|types|unit|integration|e2e]...
 #   fast = lint types unit (the default)    all = lint types unit integration e2e
 #
+# When a run covers every check, passes, and the tree has no uncommitted
+# changes, it records HEAD in .work/<task-id>/verified-head. create-mr.sh and
+# push-branch.sh only push that exact commit. A failing full run clears it.
+#
 # The full output of each check goes to .work/<task-id>/logs/<check>.log.
 # Only one line per check plus the failing lines is printed, so an agent's
 # context gets the verdict instead of thousands of lines of test output.
@@ -39,8 +43,10 @@ strip_ansi() { sed -E 's/\x1B\[[0-9;]*[A-Za-z]//g'; }
 FAIL_PATTERN='(FAIL|✗|✕|×|[Ee]rror|AssertionError|Expected|Received|failed|panicked|Traceback)'
 
 overall=0
+ran=" "
 for group in "$@"; do
   for check in $(expand "$group"); do
+    ran="$ran$check "
     if ! cmd="$(cmd_for "$check")"; then
       echo "ERROR unknown check: $check"; overall=2; continue
     fi
@@ -68,4 +74,19 @@ for group in "$@"; do
     fi
   done
 done
+
+full=true
+for c in lint types unit integration e2e; do case "$ran" in *" $c "*) ;; *) full=false ;; esac; done
+if $full; then
+  marker="$(task_dir "$TASK")/verified-head"
+  if [ "$overall" -ne 0 ]; then
+    rm -f "$marker"
+  elif [ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no)" ]; then
+    rm -f "$marker"
+    echo "NOTE  all checks passed, but there are uncommitted changes, so this isn't recorded as verified. Commit, then run all again."
+  else
+    git -C "$REPO_ROOT" rev-parse HEAD > "$marker"
+    echo "VERIFIED $(git -C "$REPO_ROOT" rev-parse --short HEAD): the only commit create-mr.sh and push-branch.sh will push."
+  fi
+fi
 exit "$overall"

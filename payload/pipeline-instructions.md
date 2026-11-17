@@ -7,5 +7,5 @@
 - Refer to acceptance criteria by id (AC-n) in plans, tests, commits and the MR.
 - End every reply with one `**Next:**` line naming the next agent to pick and what to say to it; each agent file lists them.
 - Keep replies to the user short. Lead with what needs their decision. Don't restate file contents.
-- Never push, open an MR, or change a ClickUp status without the user's go-ahead in the current session.
+- Never push, open an MR, or change a ClickUp status without the user's go-ahead in the current session. Only the commit the verifier passed (`verified-head`) can be pushed; never write that file.
 - Each agent runs on the model pinned in its file. Never switch to a fast, priority or other premium-speed variant of any model: they cost several times more for the same work.

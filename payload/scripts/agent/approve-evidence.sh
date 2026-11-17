@@ -9,7 +9,9 @@
 #
 # It records a SHA-256 fingerprint of every approved file in evidence/APPROVED.
 # upload-evidence.sh and the shipper refuse to go on if any approved file, or
-# the manifest, changes afterwards. Agents are instructed never to run this script.
+# the manifest, changes afterwards, or if new commits land after approval
+# (the screenshots must show the code that ships). Agents are instructed never
+# to run this script.
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
@@ -47,7 +49,7 @@ read -r -p "Type 'approve' to approve exactly this set: " answer </dev/tty
 [ "$answer" = "approve" ] || { echo "Not approved. Nothing recorded."; exit 1; }
 
 {
-  echo "# approved $(date -u +%Y-%m-%dT%H:%M:%SZ) by $(git config user.name || echo unknown) at commit $(git rev-parse --short HEAD)"
+  echo "# approved $(date -u +%Y-%m-%dT%H:%M:%SZ) by $(git config user.name || echo unknown) at commit $(git rev-parse HEAD)"
   echo "$(sha256 "$MAN")  evidence.md"
   for f in ${approved[@]+"${approved[@]}"}; do echo "$(sha256 "$EV/$f")  $f"; done
 } > "$EV/APPROVED"

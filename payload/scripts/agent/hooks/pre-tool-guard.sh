@@ -4,7 +4,7 @@
 # the agent sees) or "ask" (VS Code asks you to confirm).
 #
 # It turns the pipeline's rules into enforced ones:
-#   deny  approving evidence, touching evidence/APPROVED|UPLOADED
+#   deny  approving evidence, touching evidence/APPROVED|UPLOADED or verified-head
 #   deny  reading or printing secrets (tokens, .auth/ sessions, ~/.ssh)
 #   deny  destructive git (force push, reset --hard, clean -f, branch -D, --no-verify)
 #   deny  raw git push / glab write calls (scripts must be used)
@@ -54,6 +54,8 @@ if $is_shell; then
     decide deny "Evidence approval is the user's job. Ask them to review evidence.md and run approve-evidence.sh themselves."
   has 'evidence/(APPROVED|UPLOADED)' &&
     decide deny "evidence/APPROVED and evidence/UPLOADED are managed by the user's approval and the upload script only."
+  has 'verified-head' &&
+    decide deny "verified-head is written only by run-checks.sh when every check passes. Run scripts/agent/run-checks.sh <task-id> all instead."
 
   # Shell writes to pipeline config (the edit-tool rule below, applied to the
   # shell). Checked per command segment, so `rm -rf x && scripts/agent/...` is fine.
@@ -108,6 +110,9 @@ if $is_edit || $is_read; then
       decide deny "That file holds credentials or a saved login session. Agents never need to read or change it."
     fi
     if $is_edit; then
+      if grep -qE '(^|/)verified-head$' <<<"$p"; then
+        decide deny "verified-head is written only by run-checks.sh when every check passes."
+      fi
       if grep -qE 'evidence/(APPROVED|UPLOADED)$' <<<"$p"; then
         decide deny "evidence/APPROVED and evidence/UPLOADED are managed by the user's approval and the upload script only."
       fi

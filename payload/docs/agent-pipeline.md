@@ -14,9 +14,15 @@
                                                        evidence ─► (YOU approve-evidence.sh)
                                                                              ▼
              review-responder ◄─(Duo reviews)◄─ shipper ─► MR + approved evidence to ClickUp
-                 │  (you approve triage)            ▲
-                 └──────────── fixes ───────────────┘ (via verifier)
+                 │  (you approve triage)
+                 └─ fixes committed ─► verifier ─► review-responder pushes + replies
 ```
+
+**Only verified code is pushed.** When `run-checks.sh <id> all` passes on a
+tree with no uncommitted changes, it records that commit in
+`.work/<id>/verified-head`. `create-mr.sh` and `push-branch.sh` refuse to push
+any other commit, so a commit added after verification can't slip out. A new
+MR also needs the evidence approved at that same commit.
 
 Each stage writes one file into `.work/<task-id>/`, and the next stage reads it.
 **Moving between stages:** every agent ends its reply with a **Next:** line
@@ -126,10 +132,11 @@ Follow the **Next:** line at the end of each reply. The usual path:
 | 7 | **evidence** | `Capture evidence for 86c1abcde`, then review, tick and run `approve-evidence.sh` |
 | 8 | **shipper** | `Ship 86c1abcde`. Confirm the push when VS Code asks. |
 | 9 | `/fetch-review 86c1abcde` | When Duo has reviewed: hands over to review-responder |
-| 10 | **review-responder** | `Triage 86c1abcde`, approve the table, confirm the push, then back to the verifier |
+| 10 | **review-responder** | `Triage 86c1abcde`, then approve the table. It commits the fixes without pushing. |
+| 11 | **verifier**, then **review-responder** | `Re-verify 86c1abcde`, then `Push and reply 86c1abcde`. Confirm the push. |
 
 After `MAX_REVIEW_ROUNDS` Duo rounds, the fetch script stops and leaves the
-rest to you. Picking a later agent too early is safe: each one checks that the
+rest to you. Fetching the same set of threads again doesn't count as a new round. Picking a later agent too early is safe: each one checks that the
 earlier stages are done, and tells you what's missing.
 
 **Start a new chat for each stage** when you pick the next agent. The files
@@ -145,12 +152,12 @@ instructions into enforcement:
 | Decision | What |
 |---|---|
 | **Ask you** | Anything that publishes: `create-mr.sh`, `push-branch.sh`, `upload-evidence.sh`, and `clickup.sh comment / status / attach`. VS Code shows a confirm prompt, which is your final go-ahead. |
-| **Deny** | Running `approve-evidence.sh`, or touching `evidence/APPROVED` or `evidence/UPLOADED` |
+| **Deny** | Running `approve-evidence.sh`, or touching `evidence/APPROVED`, `evidence/UPLOADED` or `verified-head` |
 | **Deny** | Reading or printing secrets: token variables, `printenv`/`env`, `.auth/` sessions, `~/.ssh`, `.netrc`, `.npmrc`, literal `pk_`/`glpat-` tokens |
 | **Deny** | Destructive git: force push, remote branch delete, `reset --hard`, `clean -f`, `branch -D`, `checkout -- .`, `--no-verify` |
 | **Deny** | Raw `git push`, `glab` write commands, or direct ClickUp API calls (the scripts must be used) |
 | **Deny** | Raw test, lint and typecheck commands (`npm test`, `npx vitest`, `npx playwright test`, `npx tsc`…), so output always goes through the condensed `run-checks.sh` |
-| **Deny** | Agent edits to pipeline config: agent files (including their pinned models), hooks, the pipeline's skills, `copilot-instructions.md`, `scripts/agent/`, `.agent.env` |
+| **Deny** | Agent changes to pipeline config, through edit tools or the shell: agent files (including their pinned models), hooks, the pipeline's skills, `copilot-instructions.md`, `scripts/agent/`, `.agent.env`. Copying a pipeline file elsewhere (`cp scripts/agent/x.sh /tmp`) is refused too: the guard can't tell which way a copy goes. |
 
 The agent sees the reason and adjusts. Every ask or deny is logged to
 `.work/hooks.log`, so you can see what was blocked. **You** can still edit all
@@ -232,7 +239,8 @@ short text file for non-UI ones), then writes
 How the gate holds:
 - The approval stores a SHA-256 fingerprint of each approved file and of the manifest.
 - The shipper runs `upload-evidence.sh --check` first and stops if there's no
-  approval, or if anything changed after you approved it.
+  approval, if anything changed after you approved it, or if new commits
+  landed after you approved it.
 - Re-capturing evidence deletes the old approval.
 - Only ticked items are uploaded. Unticked ones stay on your machine.
 - Agents are told never to tick boxes or run the approve script, and the script

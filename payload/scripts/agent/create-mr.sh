@@ -3,6 +3,8 @@
 # Pushes the task branch and creates the GitLab MR, or updates its description
 # if one is already open. Reads .work/<task-id>/mr.md: the first line is
 # "# <title>" and the rest is the description. Saves MR_IID to state.env.
+# Refuses unless HEAD is the verified commit. A new MR also needs evidence
+# approved at that same commit (upload-evidence.sh --check).
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 require git glab jq
@@ -22,9 +24,12 @@ find_mr() {
     | jq -r '.[0] | if . == null then empty else "\(.iid) \(.web_url)" end'
 }
 
-git push --quiet -u origin "$BRANCH"
-
+[ "$(git branch --show-current)" = "$BRANCH" ] || { echo "Not on $BRANCH. Not pushing." >&2; exit 1; }
+require_verified_head "$TASK"
 existing="$(find_mr)"
+[ -n "$existing" ] || "$(dirname "$0")/upload-evidence.sh" "$TASK" --check >/dev/null
+
+git push --quiet -u origin "$BRANCH"
 if [ -n "$existing" ]; then
   IID="${existing%% *}"
   glab api -X PUT "projects/:id/merge_requests/$IID" \
