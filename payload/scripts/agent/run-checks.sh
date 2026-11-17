@@ -12,6 +12,7 @@
 # Exit code: 0 all passed, 1 something failed, 2 bad arguments.
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
+source "$(dirname "$0")/ship-gate.sh"
 
 TASK="${1:?usage: run-checks.sh <task-id> [checks...]}"
 shift
@@ -77,16 +78,5 @@ done
 
 full=true
 for c in lint types unit integration e2e; do case "$ran" in *" $c "*) ;; *) full=false ;; esac; done
-if $full; then
-  marker="$(task_dir "$TASK")/verified-head"
-  if [ "$overall" -ne 0 ]; then
-    rm -f "$marker"
-  elif [ -n "$(git -C "$REPO_ROOT" status --porcelain --untracked-files=no)" ]; then
-    rm -f "$marker"
-    echo "NOTE  all checks passed, but there are uncommitted changes, so this isn't recorded as verified. Commit, then run all again."
-  else
-    git -C "$REPO_ROOT" rev-parse HEAD > "$marker"
-    echo "VERIFIED $(git -C "$REPO_ROOT" rev-parse --short HEAD): the only commit create-mr.sh and push-branch.sh will push."
-  fi
-fi
+$full && gate_record_run "$TASK" "$overall"
 exit "$overall"

@@ -48,10 +48,5 @@ echo
 read -r -p "Type 'approve' to approve exactly this set: " answer </dev/tty
 [ "$answer" = "approve" ] || { echo "Not approved. Nothing recorded."; exit 1; }
 
-{
-  echo "# approved $(date -u +%Y-%m-%dT%H:%M:%SZ) by $(git config user.name || echo unknown) at commit $(git rev-parse HEAD)"
-  echo "$(sha256 "$MAN")  evidence.md"
-  for f in ${approved[@]+"${approved[@]}"}; do echo "$(sha256 "$EV/$f")  $f"; done
-} > "$EV/APPROVED"
-rm -f "$EV/UPLOADED"
+approval_write "$TASK" ${approved[@]+"${approved[@]}"}
 echo "Recorded approval of ${#approved[@]} file(s). The shipper can go ahead."

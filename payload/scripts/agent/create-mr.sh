@@ -3,10 +3,11 @@
 # Pushes the task branch and creates the GitLab MR, or updates its description
 # if one is already open. Reads .work/<task-id>/mr.md: the first line is
 # "# <title>" and the rest is the description. Saves MR_IID to state.env.
-# Refuses unless HEAD is the verified commit. A new MR also needs evidence
-# approved at that same commit (upload-evidence.sh --check).
+# Refuses unless the ship gate allows it (scripts/agent/ship-gate.sh): updating
+# an MR is a push; a new MR also needs evidence approved at that same commit.
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
+source "$(dirname "$0")/ship-gate.sh"
 require git glab jq
 
 TASK="${1:?usage: create-mr.sh <task-id>}"
@@ -24,10 +25,9 @@ find_mr() {
     | jq -r '.[0] | if . == null then empty else "\(.iid) \(.web_url)" end'
 }
 
-[ "$(git branch --show-current)" = "$BRANCH" ] || { echo "Not on $BRANCH. Not pushing." >&2; exit 1; }
-require_verified_head "$TASK"
+gate_require "$TASK" push
 existing="$(find_mr)"
-[ -n "$existing" ] || "$(dirname "$0")/upload-evidence.sh" "$TASK" --check >/dev/null
+[ -n "$existing" ] || gate_require "$TASK" new-mr
 
 git push --quiet -u origin "$BRANCH"
 if [ -n "$existing" ]; then
