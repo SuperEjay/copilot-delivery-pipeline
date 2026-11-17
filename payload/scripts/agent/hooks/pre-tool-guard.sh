@@ -9,7 +9,8 @@
 #   deny  destructive git (force push, reset --hard, clean -f, branch -D, --no-verify)
 #   deny  raw git push / glab write calls (scripts must be used)
 #   deny  raw test commands (run-checks.sh / capture-evidence.sh must be used)
-#   deny  agent edits to pipeline config (agents, hooks, prompts, instructions, scripts, .agent.env)
+#   deny  agent edits to pipeline config (agents, hooks, prompts, instructions, scripts, .agent.env),
+#         through edit tools or the shell
 #   ask   anything that publishes: create-mr, push-branch, upload-evidence, ClickUp writes
 #
 # Every decision other than allow is logged to .work/hooks.log.
@@ -53,6 +54,17 @@ if $is_shell; then
     decide deny "Evidence approval is the user's job. Ask them to review evidence.md and run approve-evidence.sh themselves."
   has 'evidence/(APPROVED|UPLOADED)' &&
     decide deny "evidence/APPROVED and evidence/UPLOADED are managed by the user's approval and the upload script only."
+
+  # Shell writes to pipeline config (the edit-tool rule below, applied to the
+  # shell). Checked per command segment, so `rm -rf x && scripts/agent/...` is fine.
+  protected='(\.github/(agents|hooks|prompts)/|\.github/skills/(start-task|fetch-review)(/|[[:space:]"'"'"']|$)|\.github/copilot-instructions\.md|scripts/agent(/|[[:space:]"'"'"']|$)|\.agent\.env([^.A-Za-z]|$))'
+  writer='(^|[[:space:]/(])(tee|cp|mv|rm|rmdir|ln|chmod|chown|truncate|install|dd|patch|unlink|shred|rsync|sed[[:space:]]+([^|;&]*[[:space:]])?(-[a-zA-Z]*i|--in-place)|perl[[:space:]]+-[a-zA-Z]*i|(python[0-9.]*|node|ruby|perl)[[:space:]]+-[a-zA-Z]*[ce]|git[[:space:]]+(checkout|restore|rm|mv|apply|stash))([[:space:]]|$)'
+  while IFS= read -r seg; do
+    if grep -qE -- ">[|]?[[:space:]]*[\"']?[^[:space:];&|]*$protected" <<<"$seg" ||
+       { grep -qE -- "$writer" <<<"$seg" && grep -qE -- "$protected" <<<"$seg"; }; then
+      decide deny "Pipeline config (agents, hooks, prompts, instructions, scripts, .agent.env) is user-owned, from the shell too. Tell the user what you'd change and why."
+    fi
+  done < <(sed -E 's/(&&|\|\||[;|&])/\n/g' <<<"$cmd")
 
   has '(\$\{?[A-Za-z_]*(TOKEN|SECRET|PASSWORD|API_KEY)|(^|[;&|[:space:]])(printenv|env|set|export -p)([[:space:]]*($|[;&|>]))|\.auth/|\.ssh/|pk_[A-Za-z0-9]{6,}|glpat-|\.netrc|\.npmrc)' &&
     decide deny "This command could read or print a secret (token, saved login session or credentials). Agents never need those values; the scripts use them directly."

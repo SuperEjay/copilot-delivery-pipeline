@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The hook guard now blocks agents from changing pipeline config through the shell too (redirects, `sed -i`, `cp`, `mv`, `rm`, `chmod`, `tee`, inline `python -c` and similar), not only through edit tools. Before this, a shell command could rewrite or switch off the guard itself.
+- New `tests/test-guard.sh`: a table of tool calls and the decision the guard must make for each.
+
 ## v1.1.0
 
 Works with Copilot (Agent Host) sessions, the default in current VS Code.
