@@ -58,6 +58,8 @@ Follow this section only when the prompt starts with `AUTO RUN`. The orchestrato
 - **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
 - **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
 - **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+- **The task state already exists** (the user ran `/start-task`), so skip the slug question in step 1.
+- **Open questions stay in the file:** leave each one under `## Open questions` in requirements.md, and don't use the grill-me skill. The requirements stop shows them to the user, and their answers come back to you as a reply from a stop.
 
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:

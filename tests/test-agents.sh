@@ -33,6 +33,12 @@ for a in "${AGENTS[@]}"; do
   check "$a: ends with a Result line, not Next" 'auto $a "one \`\*\*Result:\*\*\` line"'
   check "$a: Next step points to the Result line in an auto run" 'section $a "Next step" | grep -q "In an auto run, end with the \*\*Result:\*\* line instead"'
 done
+# ---------- each agent's own auto-run rules ----------
+check "requirements: no slug question, task state exists" 'auto requirements "skip the slug question"'
+check "requirements: no grill-me; open questions stay in the file" 'auto requirements "grill-me" && auto requirements "## Open questions"'
+check "planner: open questions don't stop it" 'auto planner "Skip step 1" && auto planner "still write the plan"'
+check "planner: blocking questions become Requirement gaps: yes" 'auto planner "## Requirement gaps" && auto planner "\- Requirement gaps: yes"'
+check "planner: Stop flags kept current on an update or a re-plan" 'auto planner "Keep the Stop flags current" && auto planner "update plan.md" && auto planner "Re-plan the review findings"'
 check "evidence: no approval steps in an auto run; the pre-ship stop gives them" 'auto evidence "pre-ship stop"'
 
 echo "passed=$pass failed=$fail"

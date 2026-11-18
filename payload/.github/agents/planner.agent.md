@@ -77,6 +77,8 @@ Follow this section only when the prompt starts with `AUTO RUN`. The orchestrato
 - **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
 - **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
 - **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+- **Open questions don't stop you.** Skip step 1. List each open question that blocks planning under `## Requirement gaps`, set `- Requirement gaps: yes`, and still write the plan. Do the same for a review finding you can't plan without a behaviour decision, instead of using the requirements handoff.
+- **Keep the Stop flags current** on every run: a first plan, "Requirements … changed; update plan.md" (keep done slices ticked and change only what the new requirements touch), and "Re-plan the review findings" (Re-planning from code review, above). Any `yes` stops the run for the user; otherwise the plan goes on as an auto-decision.
 
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
