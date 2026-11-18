@@ -6,7 +6,8 @@
 # It turns the pipeline's rules into enforced ones:
 #   deny  approving evidence, touching evidence/APPROVED|UPLOADED or verified-head
 #   deny  running next-stage.sh from a subagent (only the orchestrator runs the router)
-#   deny  agent changes to the task state (.work/<id>/state.env); reading it is fine
+#   deny  agent changes to the task state (.work/<id>/state.env) or the auto run's record
+#         (.work/<id>/status.md, which holds stop approvals); reading them is fine
 #   deny  sourcing the pipeline's scripts (their functions would skip the scripts' checks)
 #   deny  reading or printing secrets (tokens, .auth/ sessions, ~/.ssh)
 #   deny  destructive git (force push, reset --hard, clean -f, branch -D, --no-verify)
@@ -28,7 +29,10 @@
 #   config  denied when a write targets  denied     allowed
 #   state   denied when a write targets  denied     allowed
 # Entries are literal paths; a folder ends in "/" and covers itself and
-# everything in it. A match starts at a path segment, anywhere in the path.
+# everything in it. A "*" segment stands for any one path segment (a task id).
+# A match starts at a path segment, anywhere in the path.
+# An entry of more than one segment can't see a write made after a cd
+# (cd .work/T-1 && echo x >> status.md): the guard is a backstop, not a sandbox.
 PROTECTED='
 secret  .auth/
 secret  .ssh/
@@ -46,10 +50,11 @@ config  .github/copilot-instructions.md
 config  scripts/agent/
 config  .agent.env
 state   state.env
+state   .work/*/status.md
 '
 REASON_secret="That file holds credentials or a saved login session. Agents never need to read or change it."
 REASON_record="verified-head and evidence/APPROVED|UPLOADED are written only by the pipeline's scripts: run-checks.sh records the verified commit, and the user approves evidence with approve-evidence.sh. Run scripts/agent/run-checks.sh <task-id> all to re-verify."
-REASON_state="state.env is the task's state, written only by the pipeline's scripts (start-task.sh, create-mr.sh, fetch-duo-review.sh, review-signals.sh --mark-reviewed). Read it if you need to; don't change it."
+REASON_state="state.env (the task's state) and .work/<id>/status.md (the auto run's record, including stop approvals) are written only by the pipeline's scripts: start-task.sh, create-mr.sh, fetch-duo-review.sh and review-signals.sh --mark-reviewed write state.env, next-stage.sh writes status.md. Read them if you need to; don't change them. Only the user approves a stop."
 REASON_config="Pipeline config (agents and their models, hooks, prompts, instructions, scripts, .agent.env) is user-owned, from the shell too. Tell the user what you'd change and why."
 
 if [ "${1:-}" = "--list-protected" ]; then
@@ -67,9 +72,10 @@ re_escape() {   # re_escape <text>: escape ERE metacharacters into $REPLY (no su
   done
 }
 PATHS_secret=''; PATHS_record=''; PATHS_config=''; PATHS_state=''
+ANY_SEG='[^/[:space:]]+'   # what a "*" entry segment matches
 while read -r kind entry; do
   [ -n "$kind" ] || continue
-  re_escape "${entry%/}"; alt="$REPLY"
+  re_escape "${entry%/}"; alt="${REPLY//\\\*/$ANY_SEG}"
   case "$kind" in
     secret) PATHS_secret+="${PATHS_secret:+|}$alt" ;;
     record) PATHS_record+="${PATHS_record:+|}$alt" ;;

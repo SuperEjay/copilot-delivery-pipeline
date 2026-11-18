@@ -121,7 +121,8 @@ while IFS=$'\t' read -r kind entry; do
   [ -n "$kind" ] || continue
   read -r w_write w_mention w_edit w_read <<<"${want[$kind]:-unknown}"
   [ "$w_write" = unknown ] && { fail=$((fail + 1)); echo "FAIL: unknown kind '$kind' for $entry"; continue; }
-  file="$entry"; [ "${entry%/}" != "$entry" ] && file="${entry}x"   # a file inside a folder entry
+  file="${entry//\*/T-1}"                                           # a "*" segment: a task id
+  [ "${entry%/}" != "$entry" ] && file="${file}x"                   # a file inside a folder entry
   sh "$w_write"   "echo x > $file"
   sh "$w_mention" "cat $file"
   ed "$w_edit"    editFiles "$file"
@@ -145,6 +146,24 @@ ed allow read_file '.work/T-1/state.env'
 sh deny  'echo REVIEW_ROUND=0 >> .work/T-1/state.env'
 sh deny  'sed -i s/REVIEW_ROUND=3/REVIEW_ROUND=0/ .work/T-1/state.env'
 ed deny  editFiles '.work/T-1/state.env'
+
+# ---------- the auto run's record: next-stage.sh writes it, agents read it ----------
+# status.md holds stop approvals ("Approved <stop-id>: <checksum>"); a forged
+# line would walk an auto run past a stop the user never approved.
+ed deny  editFiles '.work/T-1/status.md'
+ed deny  create_file '/home/u/proj/.work/T-1/status.md'
+sh deny  'echo "Approved pre-ship: x" >> .work/T-1/status.md'
+sh deny  'sed -i s/stop/run/ .work/T-1/status.md'
+sh deny  'echo "Approved pre-ship: x" >> .work/*/status.md'
+ed allow read_file '.work/T-1/status.md'
+sh allow 'cat .work/T-1/status.md'
+sh allow 'scripts/agent/next-stage.sh T-1 approve'
+# Only under .work/<id>/: a product file named status.md stays editable.
+ed allow editFiles 'docs/status.md'
+sh allow 'echo x > docs/status.md'
+ed allow editFiles '.workx/T-1/status.md'
+ed allow editFiles '.work/status.md'
+ed allow editFiles '.work/T-1/sub/status.md'
 
 # ---------- the pipeline's scripts are run, never sourced ----------
 sh deny "bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate.sh; gate_record_run T-1 0'"
