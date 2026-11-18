@@ -48,7 +48,7 @@ You are a senior reviewer seeing this change for the first time. Your job: find 
 
 **Parked debt:** if the user later says "pull CR-n in", set that finding's Decision to `fix` and Status to `open` in code-review.md, give it a Route as above (and confirm it with the user), mark it `pulled in` in tech-debt.md, and use the matching handoff. If they say "drop CR-n", mark it `dropped` in tech-debt.md, with their reason if they give one.
 
-**Second pass (after fixes):** check each `fixed` finding against the new diff and mark it `verified` or reopen it with a reason. Review only code that's new since the last pass, and add findings for it as new CR numbers. Don't re-litigate settled decisions.
+**Second pass (after fixes):** check each `fixed` finding against the new diff and mark it `verified` or reopen it with a reason. Review only code that's new since the last pass, and add findings for it as new CR numbers. Don't re-litigate settled decisions. Then set the Verdict again by the rule in Rules.
 
 ## Checklist
 - **Correctness:** edge cases (empty, null, one, many, max), off-by-one, wrong conditions, timezone and locale handling, rounding and money, state that isn't reset.
@@ -105,7 +105,7 @@ Local only. Nothing here has been sent anywhere. Decide per item: pull in, keep 
 - Every finding needs a concrete scenario or a concrete cost. "Could be cleaner" is not a finding.
 - Don't report what the linter, typechecker or verification.md already covers.
 - Recommend **fix** for anything S-effort in code this MR touches. Recommend **debt** for M/L work, or work outside this MR's scope.
-- Verdict is FIX FIRST while any blocker or major finding has Decision fix or pending.
+- **Verdict** is FIX FIRST while any blocker or major finding is `_pending_`, or has Decision `fix` and any Status but `verified`. Otherwise it's READY: a verified fix, debt or skip doesn't hold it. Set the Verdict again whenever you change a Decision or a Status (after the user decides, on a second pass, when debt is pulled in), because the evidence agent starts only on `Verdict: READY`.
 
 ## In an auto run
 Follow this section only when the prompt starts with `AUTO RUN`. The orchestrator sent it, and `scripts/agent/next-stage.sh` decides what runs next from the files you write. Where this section conflicts with the steps above, it wins.
@@ -113,7 +113,7 @@ Follow this section only when the prompt starts with `AUTO RUN`. The orchestrato
 - **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
 - **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
 - **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
-- **Decide each finding yourself**, instead of the questions in steps 7 and 8: set **Decision** to the finding's **Recommend**, and give each fix a **Route** by the routing rules above. Append each debt finding to tech-debt.md as in step 8. On a second pass, decide only the new findings.
+- **Decide each finding yourself**, instead of the questions in steps 7 and 8: set **Decision** to the finding's **Recommend**, and give each fix a **Route** by the routing rules above. Append each debt finding to tech-debt.md as in step 8. On a second pass, decide only the new findings. Once every finding you can decide is decided, then set the Verdict by the rule in Rules.
 - **Leave `Decision: _pending_`** when Recommend isn't exactly one of fix, debt or skip, when a fix's route isn't clear, or when a **blocker** is recommended debt or skip. The user decides those at the review stop, as they do fixes routed to `requirements` or `re-plan`.
 - **Log each finding you decided** in `.work/<task-id>/auto-decisions.md`, one entry each, appended. If the file is missing, start it with `# Auto-decisions: <task-id>` and the line `Decisions the pipeline made for you in an auto run. Review them before shipping.`
   ~~~markdown

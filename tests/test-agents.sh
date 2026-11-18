@@ -44,6 +44,12 @@ check "reviewer: Decision from Recommend, a Route for each fix, no questions" 'a
 check "reviewer: unclear findings stay _pending_" 'auto reviewer "Leave \`Decision: _pending_\`"'
 check "reviewer: a blocker is never parked or skipped without the user" 'auto reviewer "\*\*blocker\*\* is recommended debt or skip"'
 check "reviewer: debt still goes to tech-debt.md" 'auto reviewer "tech-debt.md"'
+# Evidence needs Verdict: READY. A fix that's verified, or a finding parked as
+# debt or skipped, must not hold the Verdict at FIX FIRST.
+check "reviewer: Verdict counts a fix only until its Status is verified" 'section reviewer Rules | grep -q "Decision \`fix\` and any Status but \`verified\`"'
+check "reviewer: Verdict set again whenever a Decision or Status changes" 'section reviewer Rules | grep -q "Set the Verdict again whenever you change a Decision or a Status"'
+check "reviewer: second pass sets the Verdict again" 'section reviewer Steps | grep -q "Second pass.*set the Verdict again"'
+check "reviewer: in an auto run, the Verdict is set after deciding" 'auto reviewer "then set the Verdict"'
 check "reviewer: each decision logged to auto-decisions.md in the router's format" 'auto reviewer "auto-decisions.md" && [ "$(for k in When What Why Rule; do auto reviewer "^  - \*\*$k:\*\*" && echo $k; done | wc -l)" -eq 4 ]'
 check "shipper: the write-mr.md run does steps 1-3 only, no evidence check" 'auto shipper "\"Write mr.md for <task-id>. Don.t push or create the MR.\"" && auto shipper "steps 1–3 only" && auto shipper "Skip 1b"'
 check "shipper: the ship run takes the pre-ship stop as the go-ahead, mr.md unchanged" 'auto shipper "\"Ship <task-id>. The user confirmed the push at the pre-ship stop.\"" && auto shipper "skip step 4" && auto shipper "don.t change mr.md"'
