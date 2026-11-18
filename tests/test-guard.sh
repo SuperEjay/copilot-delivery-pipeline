@@ -290,6 +290,12 @@ sh deny  'true; cp /tmp/s.md .work/T-1/status.md'
 sh allow 'rm -rf .work/T-1/tmp && scripts/agent/run-checks.sh T-1 test'
 sh allow 'cp a b; cat scripts/agent/config.sh'
 PATH="$gnu_path"
+# A redirect to a descriptor (2>&1, >&2) doesn't split a segment at its "&":
+# that would part a writer from the path it writes.
+sh deny  'cp /tmp/s.md 2>&1 .work/T-1/status.md'
+sh deny  'rm 2>&1 scripts/agent/config.sh'
+sh deny  'cp /tmp/x >&2 .agent.env'
+sh allow 'rm -rf .work/T-1/tmp 2>&1 && cat scripts/agent/config.sh 2>&1'
 
 # ---------- switch ----------
 got="$(jq -n '{toolName: "bash", toolArgs: {command: "git push"}}' | PIPELINE_GUARD=off bash "$GUARD")"
