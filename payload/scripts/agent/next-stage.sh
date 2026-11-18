@@ -145,8 +145,40 @@ decide() {
 }
 
 # check_duo: the MR is open.
+# check_duo: the MR is open. /fetch-review moves the Duo round on; each round
+# is triaged, re-verified, and pushed and replied to, with one stop before the
+# push when there are ASK threads or commits to push.
 check_duo() {
-  _end "MR open. Run /fetch-review $TASK after Duo has reviewed it."
+  local round tr head pushed asks fp why=""
+  round="$(state_review_round "$TASK")"
+  if [ "$round" = 0 ]; then _end "MR open. Run /fetch-review $TASK after Duo has reviewed it."; return; fi
+  if [ -f "$DIR/review-triage.md" ]; then
+    tr="$(_field review-triage.md Round)"
+    case "$tr" in
+      ''|*[!0-9]*) _unreadable duo "$REL/review-triage.md has no 'Round: <n>' line. The review-responder must write the round it triaged."; return ;;
+    esac
+  fi
+  if [ "${tr:-0}" -lt "$round" ]; then
+    RESET_ROUNDS=1; _run review-responder "Triage $TASK."; return
+  fi
+  if [ "$(_field review-triage.md Replied)" = yes ]; then
+    _end "Duo round $round is answered. Run /fetch-review $TASK after the next review."; return
+  fi
+
+  check_verified "Re-verify" || return
+
+  head="$(git rev-parse HEAD)"
+  pushed="$(git rev-parse --verify -q "refs/remotes/origin/$(state_branch "$TASK")" || true)"
+  asks="$(awk -F'|' '{ for (i = 2; i < NF; i++) { c = $i; gsub(/^[ \t]+|[ \t]+$/, "", c); if (c == "ASK") { n++; break } } } END { print n + 0 }' "$DIR/review-triage.md")"
+  if [ "$asks" -gt 0 ] || [ "$pushed" != "$head" ]; then
+    fp="$(_fp @HEAD review-triage.md)"
+    if ! _approved duo "$fp"; then
+      [ "$asks" -gt 0 ] && why=" $asks ASK thread(s) wait for you; they get no reply."
+      [ "$pushed" != "$head" ] && why="$why Approving confirms the push of the verified fixes."
+      _stop duo "$fp" "Review $REL/review-triage.md.$why"; return
+    fi
+  fi
+  _run review-responder "Push and reply $TASK."
 }
 
 # _field <file> <Key>: the value after the last "Key:" line, first word only.
@@ -155,10 +187,10 @@ _field() {
   awk -v k="$2:" 'index($0, k) == 1 { split(substr($0, length(k) + 1), w, " "); v = w[1] } END { print v }' "$DIR/$1"
 }
 
-# check_verified: HEAD is verified (verification.md PASS at HEAD, and HEAD is
+# check_verified [verb]: HEAD is verified (verification.md PASS at HEAD, and HEAD is
 # the verified commit), or set a run/stop and return 1.
 check_verified() {
-  local head vc vr
+  local verb="${1:-Verify}" head vc vr
   head="$(git rev-parse HEAD)"
   if [ -f "$DIR/verification.md" ]; then
     vc="$(_field verification.md Commit)"; vr="$(_field verification.md Result)"
@@ -173,7 +205,7 @@ check_verified() {
       esac
     fi
   fi
-  _run verifier "Verify $TASK."; return 1
+  _run verifier "$verb $TASK."; return 1
 }
 
 # _findings: "<CR-n>\t<decision>\t<route>\t<status>" for each finding in

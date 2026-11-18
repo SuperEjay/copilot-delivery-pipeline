@@ -54,6 +54,17 @@ evidence_md() {
 approve_evidence() { bash -c 'source scripts/agent/config.sh; source scripts/agent/evidence-lib.sh; approval_write T1 AC-1.md'; }
 mr_opened() { bash -c 'source scripts/agent/config.sh; state_set_mr_iid T1 7'; }
 
+# duo_round <n>: what fetch-duo-review.sh records for a new Duo round.
+duo_round() { bash -c 'source scripts/agent/config.sh; state_set_review T1 "$1" "ids$1"' _ "$1"; }
+# triage_md <round> <replied yes|no> <verdict>...: review-triage.md with one thread per verdict.
+triage_md() {
+  local round="$1" replied="$2" v i=0; shift 2
+  { echo "# Duo review triage: T1"; echo "Round: $round"; [ "$replied" = yes ] && echo "Replied: yes"
+    echo "| Thread | File:line | Verdict | Reason | Commit |"; echo "|---|---|---|---|---|"
+    for v in "$@"; do i=$((i + 1)); echo "| d$i | a.txt:$i | $v | r | |"; done
+  } > $W/review-triage.md
+}
+
 # next <args>: run next-stage.sh, output in $T/out.txt and $out, exit code in $rc.
 next() { $S/next-stage.sh "$@" > "$T/out.txt" 2>&1; rc=$?; out="$(cat "$T/out.txt")"; }
 
@@ -226,6 +237,32 @@ next T1; next T1 approve; next T1
 check "approved with the evidence approved: the shipper ships" '[ "$out" = "run shipper AUTO RUN. Ship T1. The user confirmed the push at the pre-ship stop." ]'
 mr_opened; next T1
 check "MR open: the run ends until Duo has reviewed" '[ "$out" = "end MR open. Run /fetch-review T1 after Duo has reviewed it." ]'
+
+# ---------- the Duo round ----------
+TRIAGE="run review-responder AUTO RUN. Triage T1."
+PUSH="run review-responder AUTO RUN. Push and reply T1."
+duo_round 1; next T1
+check "a new Duo round: triage it" '[ "$out" = "$TRIAGE" ]'
+triage_md 1 no FIX ASK; commit_change; next T1
+check "triaged with a fix committed: re-verify" '[ "$out" = "run verifier AUTO RUN. Re-verify T1." ]'
+verify FAIL; next T1
+check "re-verify FAIL: back to the implementer as a fix round" '[ "$out" = "$FIX" ] && grep -qx "Fix round: 1/2" $W/status.md'
+commit_change; verify PASS; next T1
+check "verified, an ASK thread and a commit to push: the duo stop" '[[ "$out" == "stop duo "*"1 ASK"*"push"* ]]'
+next T1 approve; next T1
+check "approved: push and reply" '[ "$out" = "$PUSH" ]'
+git push -q origin HEAD; triage_md 1 yes FIX ASK; next T1
+check "replied: the round is done, the run ends" '[ "$out" = "end Duo round 1 is answered. Run /fetch-review T1 after the next review." ]'
+duo_round 2; next T1
+check "round 2: triage again" '[ "$out" = "$TRIAGE" ]'
+triage_md 2 no "PUSH BACK"; next T1
+check "no ASK, nothing to push: push and reply without a stop" '[ "$out" = "$PUSH" ]'
+triage_md 2 no FIX; commit_change; verify FAIL; next T1
+check "a fix round in Duo round 2" 'grep -qx "Fix round: 1/2" $W/status.md'
+duo_round 3; next T1
+check "a new Duo round starts the fix rounds over" '[ "$out" = "$TRIAGE" ] && grep -qx "Fix round: 0/2" $W/status.md'
+printf '# Duo review triage: T1\n| d1 | a.txt:1 | FIX | r | |\n' > $W/review-triage.md; next T1
+check "review-triage.md without a Round line: a stop no approval passes" '[[ "$out" == "stop duo "*"Round:"* ]] && { next T1 approve; [ $rc -eq 1 ]; }'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
