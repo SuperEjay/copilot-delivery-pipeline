@@ -30,5 +30,13 @@ check "no task state: exit 1, pointing at /start-task" '[ $rc -eq 1 ] && grep -q
 
 $S/start-task.sh T1 router > "$T/out.txt" 2>&1
 
+# ---------- requirements: always stops ----------
+next T1
+check "no requirements.md: run the requirements agent" '[ $rc -eq 0 ] && [ "$out" = "run requirements AUTO RUN. Analyse T1." ]'
+printf '# T1: Export\n## Acceptance criteria\n- AC-1: x\n' > $W/requirements.md
+next T1
+check "requirements.md written: stop for the user" '[ $rc -eq 0 ] && [[ "$out" == "stop requirements "*"requirements.md"* ]]'
+check "status.md records the pending stop" 'grep -q "^Pending stop: requirements " $W/status.md'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
