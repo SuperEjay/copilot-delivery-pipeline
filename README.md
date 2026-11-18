@@ -72,6 +72,7 @@ tests/test-install.sh     # installs into a scratch repo, then updates, forces a
 tests/test-guard.sh       # checks the hook guard's allow / deny / ask decision for each tool call
 tests/test-gates.sh       # checks that only the verified commit can be pushed (stub glab, local remote)
 tests/test-task-state.sh  # checks that .work/<id>/state.env is read as data and written in one format
+tests/test-next-stage.sh  # checks the auto run's router: the next stage or stop for fixture .work/ folders
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release
