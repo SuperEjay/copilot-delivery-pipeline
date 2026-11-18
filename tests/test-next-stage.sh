@@ -29,6 +29,21 @@ verify() {
   if [ "$1" = PASS ]; then git rev-parse HEAD > $W/verified-head; else rm -f $W/verified-head; fi
 }
 
+# mark_reviewed: the reviewer reviewed HEAD (what review-signals.sh --mark-reviewed records).
+mark_reviewed() { bash -c 'source scripts/agent/config.sh; state_set_reviewed_sha T1 "$(git rev-parse HEAD)"'; }
+# review_md "<decision> <route> <status>"...: code-review.md with one finding per argument.
+review_md() {
+  local i=0 f d r st
+  { echo "# Code review: T1"; echo "Verdict: FIX FIRST"; echo "## Findings"
+    for f in "$@"; do
+      i=$((i + 1)); read -r d r st <<< "$f"
+      echo "### CR-$i · major · Correctness · \`a.txt:$i\`"
+      echo "- **Problem:** p"; echo "- **Effort:** S · **Recommend:** fix"
+      echo "- **Decision:** $d · **Route:** $r"; echo "- **Status:** $st"
+    done
+  } > $W/code-review.md
+}
+
 # next <args>: run next-stage.sh, output in $T/out.txt and $out, exit code in $rc.
 next() { $S/next-stage.sh "$@" > "$T/out.txt" 2>&1; rc=$?; out="$(cat "$T/out.txt")"; }
 
@@ -145,6 +160,37 @@ commit_change; verify PASS; rm $W/verified-head; next T1
 check "PASS without the verified commit recorded: verify again" '[ "$out" = "$VERIFY" ]'
 verify PASS; next T1
 check "PASS at the verified commit: past the verifier" '[ "$out" != "$VERIFY" ] && [ "$out" != "$FIX" ]'
+
+# ---------- code review ----------
+REVIEW="run reviewer AUTO RUN. Review T1."
+QUICK="run implementer AUTO RUN. Fix the review findings for T1 (Decision: fix, Route: quick, Status: open in code-review.md)."
+check "verified, not reviewed at HEAD: run the reviewer" '[ "$out" = "$REVIEW" ]'
+mark_reviewed; next T1
+check "reviewed at HEAD but no code-review.md: a stop no approval passes" '[[ "$out" == "stop review "*"code-review.md"* ]] && { next T1 approve; [ $rc -eq 1 ]; }'
+review_md "fix quick open" "debt _ open" "skip _ open"
+next T1
+check "an open quick fix: back to the implementer as a fix round" '[ "$out" = "$QUICK" ] && grep -qx "Fix round: 1/2" $W/status.md'
+commit_change; verify PASS; next T1
+check "after the fix: verify passed, a delta review" '[ "$out" = "$REVIEW" ]'
+mark_reviewed; review_md "fix quick fixed" "_pending_ _(set_if_fix)_ open"
+next T1
+check "a finding without a decision: stop review" '[[ "$out" == "stop review "*"CR-2"* ]]'
+next T1 approve
+check "approve refuses while a finding has no decision" '[ $rc -eq 1 ] && grep -q "CR-2" "$T/out.txt"'
+review_md "fix quick verified" "fix re-plan open"
+next T1
+check "a re-plan route: stop review" '[[ "$out" == "stop review "*"re-plan"* ]]'
+next T1 approve; next T1
+check "approved: the planner adds review slices" '[ "$out" = "run planner AUTO RUN. Re-plan the review findings for T1 (Route: re-plan in code-review.md)." ]'
+review_md "fix re-plan open" "fix requirements open"
+next T1; next T1 approve; next T1
+check "a requirements route goes furthest back: the requirements agent" '[ "$out" = "run requirements AUTO RUN. Update requirements for T1 from the code review (Route: requirements in code-review.md)." ]'
+review_md "fix quick open"; next T1
+check "another quick fix: fix round 1" 'grep -qx "Fix round: 1/2" $W/status.md'
+commit_change; verify PASS; mark_reviewed
+review_md "fix quick verified" "debt _ open" "skip _ open"
+next T1
+check "settled review: past the reviewer, fix rounds start over" '[ "$out" != "$REVIEW" ] && [[ "$out" != "stop review"* ]] && grep -qx "Fix round: 0/2" $W/status.md'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

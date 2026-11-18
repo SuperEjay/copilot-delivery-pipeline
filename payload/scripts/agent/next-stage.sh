@@ -116,6 +116,9 @@ decide() {
 
   STAGE=verify
   check_verified || return
+
+  STAGE=review
+  check_review || return
   _end "not built yet"
 }
 
@@ -146,11 +149,71 @@ check_verified() {
   _run verifier "Verify $TASK."; return 1
 }
 
+# _findings: "<CR-n>\t<decision>\t<route>\t<status>" for each finding in
+# code-review.md, from its "- **Decision:** x · **Route:** y" and
+# "- **Status:** z" lines. _pending_ and _(set if fix…)_ placeholders read as empty.
+_findings() {
+  awk '
+    function val(s, key,   i) { i = index(s, key); if (!i) return ""; s = substr(s, i + length(key))
+      sub(/·.*/, "", s); gsub(/[*_]/, "", s); sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s)
+      if (s ~ /^\(/ || s == "pending") s = ""; split(s, w, " "); return tolower(w[1]) }
+    function flush() { if (id != "") print id "\t" d "\t" r "\t" st }
+    /^### CR-[0-9]+/ { flush(); id = $2; d = r = st = "" }
+    id != "" && /\*\*Decision:\*\*/ { d = val($0, "**Decision:**"); r = val($0, "**Route:**") }
+    id != "" && /\*\*Status:\*\*/ { st = val($0, "**Status:**") }
+    END { flush() }' "$DIR/code-review.md"
+}
+
+# check_review: the review at HEAD is settled, or set a run/stop and return 1.
+# Open quick fixes go back to the implementer; a finding with no decision, or
+# a fix routed to requirements or re-plan, stops for the user. Approving that
+# stop sends the run to the furthest-back route.
+check_review() {
+  local head id d r st pending=() req=() replan=() quick=() fp
+  head="$(git rev-parse HEAD)"
+  if [ "$(state_reviewed_sha "$TASK")" != "$head" ]; then _run reviewer "Review $TASK."; return 1; fi
+  if [ ! -f "$DIR/code-review.md" ]; then
+    _unreadable review "HEAD was reviewed, but there's no $REL/code-review.md. Run the reviewer again by hand."; return 1
+  fi
+  while IFS=$'\t' read -r id d r st; do
+    case "$d" in
+      fix) [ "$st" = open ] || continue
+           case "$r" in quick) quick+=("$id") ;; requirements) req+=("$id") ;; re-plan) replan+=("$id") ;; *) pending+=("$id") ;; esac ;;
+      debt|skip) ;;
+      *) pending+=("$id") ;;
+    esac
+  done < <(_findings)
+
+  if [ $(( ${#pending[@]} + ${#req[@]} + ${#replan[@]} )) -gt 0 ]; then
+    fp="$(_fp code-review.md)"
+    if [ "${#pending[@]}" -eq 0 ] && _approved review "$fp"; then
+      if [ "${#req[@]}" -gt 0 ]; then
+        _run requirements "Update requirements for $TASK from the code review (Route: requirements in code-review.md)."
+      else
+        _run planner "Re-plan the review findings for $TASK (Route: re-plan in code-review.md)."
+      fi
+      return 1
+    fi
+    local why=""
+    [ "${#pending[@]}" -gt 0 ] && why="$why no clear decision or route: ${pending[*]};" && APPROVE_BLOCK="Decide ${pending[*]} first (fix with a route, debt or skip); approval can't decide for you."
+    [ "${#req[@]}" -gt 0 ] && why="$why routed to requirements: ${req[*]};"
+    [ "${#replan[@]}" -gt 0 ] && why="$why routed to re-plan: ${replan[*]};"
+    _stop review "$fp" "Review $REL/code-review.md:${why%;}."
+    return 1
+  fi
+  if [ "${#quick[@]}" -gt 0 ]; then
+    _fix_run "review:$head" "Fix the review findings for $TASK (Decision: fix, Route: quick, Status: open in code-review.md)."
+    return 1
+  fi
+  RESET_ROUNDS=1
+}
+
 # apply_fix_round: count a new fix round, or turn it into the fix-limit stop.
 apply_fix_round() {
   local round key
   round="$(_st "Fix round")"; round="${round%%/*}"; round="${round:-0}"; key="$(_st "Fix key")"
   NEW_ROUND="$round"; NEW_KEY="$key"
+  [ -n "$RESET_ROUNDS" ] && NEW_ROUND=0
   [ "$VERB" = run ] && [ -n "$FIX_KEY" ] && [ "$FIX_KEY" != "$key" ] || return 0
   if [ "$round" -ge "$MAX_AUTO_FIX_ROUNDS" ]; then
     _stop fix-limit "$FIX_KEY" "$MAX_AUTO_FIX_ROUNDS fix rounds used (MAX_AUTO_FIX_ROUNDS) and the work still needs fixing: $TEXT Approve to allow more rounds, or tell me how to go on."
@@ -217,7 +280,7 @@ if [ -f "$STATUS" ]; then
   done < <(grep '^Approved [a-z-]*: ' "$STATUS")
 fi
 
-PLAN_ACCEPTED=""; AUTO_PLAN=""; FIX_KEY=""; LAST_RUN=""; LAST_RUN_FP=""
+PLAN_ACCEPTED=""; AUTO_PLAN=""; FIX_KEY=""; LAST_RUN=""; LAST_RUN_FP=""; RESET_ROUNDS=""; APPROVE_BLOCK=""
 decide
 apply_fix_round
 check_stall
@@ -227,6 +290,9 @@ if [ "$CMD" = approve ]; then
   if [ -z "$pending" ]; then echo "No stop is waiting for an approval." >&2; exit 1; fi
   if [ "$VERB" = stop ] && [ -z "$STOP_FP" ]; then
     echo "This stop can't be approved: $TEXT" >&2; exit 1
+  fi
+  if [ "$VERB" = stop ] && [ -n "$APPROVE_BLOCK" ]; then
+    echo "Not approved: $APPROVE_BLOCK" >&2; exit 1
   fi
   if [ "$VERB" != stop ] || [ "$pending" != "$WHAT $STOP_FP" ]; then
     echo "The stop changed since it was shown. Run next-stage.sh $TASK again and show the user the new stop." >&2
