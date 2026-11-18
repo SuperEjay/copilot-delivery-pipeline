@@ -10,6 +10,7 @@
 - **Re-fetching a Duo review doesn't use up a round.** `fetch-duo-review.sh` counts a new round only when the set of threads changes.
 - The verifier now commits its new tests first and runs `run-checks.sh all` last.
 - New `tests/test-gates.sh` covers the push gates and round counting.
+- The ship gate's rules (right branch, verified commit, evidence approved at that commit) now live in one module, `scripts/agent/ship-gate.sh`, and the evidence approval record is written and checked only in `evidence-lib.sh`. No behaviour change: `create-mr.sh` and `push-branch.sh` call the gate, `run-checks.sh` records verification through it, and `tests/test-gates.sh` tests the rules against the gate directly.
 
 ## v1.1.0
 

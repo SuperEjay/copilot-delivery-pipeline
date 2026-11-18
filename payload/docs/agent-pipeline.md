@@ -22,7 +22,9 @@
 tree with no uncommitted changes, it records that commit in
 `.work/<id>/verified-head`. `create-mr.sh` and `push-branch.sh` refuse to push
 any other commit, so a commit added after verification can't slip out. A new
-MR also needs the evidence approved at that same commit.
+MR also needs the evidence approved at that same commit. All three rules (right
+branch, verified commit, evidence approved at it) are the **ship gate**, in one
+file: `scripts/agent/ship-gate.sh`.
 
 Each stage writes one file into `.work/<task-id>/`, and the next stage reads it.
 **Moving between stages:** every agent ends its reply with a **Next:** line

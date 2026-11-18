@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests the push gates in a scratch repo with a local bare remote and a stub
-# glab: only the verified commit can be pushed, a new MR needs evidence
-# approved at that commit, and re-fetching the same Duo review isn't a new round.
+# glab: the ship gate's rules (called directly), that push-branch, create-mr and
+# upload-evidence go through it, and re-fetching the same Duo review isn't a new round.
 # Usage: tests/test-gates.sh     (exit 0 = all passed)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -54,37 +54,63 @@ $S/run-checks.sh T1 all > "$T/out.txt" 2>&1
 check "failing full run clears it" '[ ! -f $W/verified-head ]'
 env_with true
 
-# ---------- push-branch only pushes the verified commit ----------
-echo two >> a.txt; git commit -qam "slice 1"
-$S/push-branch.sh T1 > "$T/out.txt" 2>&1
-check "push refused without verification" '[ $? -ne 0 ] && ! git ls-remote --exit-code origin feature/T1-gate >/dev/null'
-$S/run-checks.sh T1 all > /dev/null 2>&1
-echo three >> a.txt; git commit -qam "unverified"
-$S/push-branch.sh T1 > "$T/out.txt" 2>&1
-check "push refused with commits after verification" '[ $? -ne 0 ] && grep -q "1 commit(s) since" "$T/out.txt"'
-$S/run-checks.sh T1 all > /dev/null 2>&1
-$S/push-branch.sh T1 > "$T/out.txt" 2>&1
-check "verified commit pushes" '[ $? -eq 0 ] && [ "$(git ls-remote origin feature/T1-gate | cut -f1)" = "$(git rev-parse HEAD)" ]'
-
-# ---------- create-mr needs evidence approved at the same commit ----------
-printf '# feat: gate [T1]\n\nbody\n' > $W/mr.md
+# ---------- ship gate: the rules, called directly ----------
+gate() { bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate.sh; gate_require "$@"' _ "$@" > "$T/out.txt" 2>&1; }
+approve() { bash -c 'source scripts/agent/config.sh; source scripts/agent/evidence-lib.sh; approval_write T1 AC-1.md' > /dev/null; }
 mkdir -p $W/evidence; printf -- '- [x] AC-1 · `AC-1.md` · works\n' > $W/evidence/evidence.md; echo ok > $W/evidence/AC-1.md
-approve_at() {  # what approve-evidence.sh writes, at a given commit
-  { echo "# approved 2026-01-01T00:00:00Z by t at commit $1"
-    echo "$(sha256sum $W/evidence/evidence.md | cut -d' ' -f1)  evidence.md"
-    echo "$(sha256sum $W/evidence/AC-1.md | cut -d' ' -f1)  AC-1.md"; } > $W/evidence/APPROVED; }
+
+echo two >> a.txt; git commit -qam "slice 1"
+gate T1 push
+check "gate: push refused without a verified commit" '[ $? -ne 0 ] && grep -q "No verified commit" "$T/out.txt"'
+$S/run-checks.sh T1 all > /dev/null 2>&1
+gate T1 push
+check "gate: verified commit may be pushed" '[ $? -eq 0 ]'
+echo three >> a.txt; git commit -qam "unverified"
+gate T1 push
+check "gate: push refused with commits after verification" '[ $? -ne 0 ] && grep -q "1 commit(s) since" "$T/out.txt"'
+$S/run-checks.sh T1 all > /dev/null 2>&1
+git switch -q -c other
+gate T1 push
+check "gate: push refused on another branch" '[ $? -ne 0 ] && grep -q "expected feature/T1-gate" "$T/out.txt"'
+git switch -q feature/T1-gate
+gate T1 new-mr
+check "gate: new MR refused without evidence approval" '[ $? -ne 0 ] && grep -q "not approved" "$T/out.txt"'
+approve
+echo four >> a.txt; git commit -qam "after approval"; $S/run-checks.sh T1 all > /dev/null 2>&1
+gate T1 new-mr
+check "gate: new MR refused when evidence is from an older commit" '[ $? -ne 0 ] && grep -q "approved at commit" "$T/out.txt"'
+approve
+gate T1 new-mr
+check "gate: new MR allowed with evidence approved at the verified commit" '[ $? -eq 0 ]'
+echo changed > $W/evidence/AC-1.md
+gate T1 new-mr
+check "gate: new MR refused when an approved file changed" '[ $? -ne 0 ] && grep -q "changed after approval" "$T/out.txt"'
+echo ok > $W/evidence/AC-1.md
+{ echo "# approved 2026-01-01T00:00:00Z by t at commit $(git rev-parse --short HEAD)"   # the v1.1.0 format
+  echo "$(sha256sum $W/evidence/evidence.md | cut -d' ' -f1)  evidence.md"
+  echo "$(sha256sum $W/evidence/AC-1.md | cut -d' ' -f1)  AC-1.md"; } > $W/evidence/APPROVED
+gate T1 new-mr
+check "gate: short-sha approvals (v1.1.0 format) still match" '[ $? -eq 0 ]'
+gate T1 deploy
+check "gate: unknown action is refused" '[ $? -eq 2 ]'
+
+# ---------- the scripts go through the gate ----------
+echo five >> a.txt; git commit -qam "slice 2"
+$S/push-branch.sh T1 > "$T/out.txt" 2>&1
+check "push-branch refuses an unverified commit" '[ $? -ne 0 ] && ! git ls-remote --exit-code origin feature/T1-gate >/dev/null'
+$S/run-checks.sh T1 all > /dev/null 2>&1
+$S/push-branch.sh T1 > "$T/out.txt" 2>&1
+check "push-branch pushes the verified commit" '[ $? -eq 0 ] && [ "$(git ls-remote origin feature/T1-gate | cut -f1)" = "$(git rev-parse HEAD)" ]'
+printf '# feat: gate [T1]\n\nbody\n' > $W/mr.md
+rm -f $W/evidence/APPROVED
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
-check "new MR refused without evidence approval" '[ $? -ne 0 ] && [ ! -f "$STUB/mr" ]'
-approve_at "$(git rev-parse HEAD~1)"
-$S/create-mr.sh T1 > "$T/out.txt" 2>&1
-check "new MR refused when evidence is from an older commit" '[ $? -ne 0 ] && grep -q "approved at commit" "$T/out.txt" && [ ! -f "$STUB/mr" ]'
-approve_at "$(git rev-parse --short HEAD)"
+check "create-mr refuses a new MR without evidence approval" '[ $? -ne 0 ] && [ ! -f "$STUB/mr" ]'
+approve
 $S/upload-evidence.sh T1 --check > "$T/out.txt" 2>&1
-check "short-sha approvals (v1.1.0 format) still match" '[ $? -eq 0 ]'
-approve_at "$(git rev-parse HEAD)"
+check "upload-evidence --check accepts the approval" '[ $? -eq 0 ] && grep -q "valid: 1 file" "$T/out.txt"'
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
 check "MR created at the verified, approved commit" '[ $? -eq 0 ] && [ -f "$STUB/mr" ] && grep -q "^MR_IID=7$" $W/state.env'
-echo four >> a.txt; git commit -qam "duo fix"
+echo six >> a.txt; git commit -qam "duo fix"
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
 check "MR update refused before re-verification" '[ $? -ne 0 ]'
 $S/run-checks.sh T1 all > /dev/null 2>&1

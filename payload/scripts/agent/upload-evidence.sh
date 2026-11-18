@@ -15,33 +15,14 @@ MODE="${2:-}"
 EV="$(task_dir "$TASK")/evidence"
 APPROVED="$EV/APPROVED"
 
-if [ ! -f "$APPROVED" ]; then
-  echo "Evidence is not approved yet. Review ${EV#"$REPO_ROOT"/}/evidence.md, then run:" >&2
-  echo "  scripts/agent/approve-evidence.sh $TASK" >&2
-  exit 1
-fi
-
-at="$(sed -nE '1s/.* at commit ([0-9a-f]{7,40}).*/\1/p' "$APPROVED")"
-head="$(git rev-parse HEAD)"
-if [ -z "$at" ] || [ "${head#"$at"}" = "$head" ]; then
-  echo "Evidence was approved at commit ${at:-(unknown)}, but HEAD is now ${head:0:7}." >&2
-  echo "The screenshots may not show the code that ships. Re-capture with the evidence agent and approve again." >&2
-  exit 1
-fi
-
 files=()
-while read -r hash name; do
-  case "$hash" in "#"*|"") continue ;; esac
-  [ -f "$EV/$name" ] || { echo "Approved file is gone: $name. Re-approve." >&2; exit 1; }
-  if [ "$(sha256 "$EV/$name")" != "$hash" ]; then
-    echo "$name changed after approval. Review it again and re-run approve-evidence.sh." >&2
-    exit 1
-  fi
-  [ "$name" = "evidence.md" ] || files+=("$EV/$name")
-done < "$APPROVED"
+approved_files="$(approval_verify "$TASK")" || exit 1
+while IFS= read -r name; do
+  [ -n "$name" ] && files+=("$EV/$name")
+done <<<"$approved_files"
 
 if [ "$MODE" = "--check" ]; then
-  echo "Evidence approval is valid: ${#files[@]} file(s). $(head -n1 "$APPROVED" | sed 's/^# //')"
+  echo "Evidence approval is valid: ${#files[@]} file(s). $(approval_summary "$TASK")"
   exit 0
 fi
 
@@ -60,7 +41,7 @@ fi
 
 msg="$EV/.clickup-evidence-comment.md"
 {
-  echo "Development evidence ($(head -n1 "$APPROVED" | sed 's/^# //'))"
+  echo "Development evidence ($(approval_summary "$TASK"))"
   echo
   while IFS=$'\t' read -r mark file caption; do
     [ "$mark" = "x" ] && echo "• $(printf '%s' "$caption" | tr -d '`')"
