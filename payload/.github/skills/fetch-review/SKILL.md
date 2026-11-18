@@ -9,7 +9,8 @@ disable-model-invocation: true
 The user gave a task id. If it's missing, ask for it and stop.
 
 1. Run `scripts/agent/fetch-duo-review.sh <task-id>`. If it stops at the review-round limit, pass on its message and stop. The user decides whether to continue with `--force`.
-2. If you are the **review-responder** agent, continue with your "Triage and fix" steps from step 2.
+2. If you are the **pipeline** agent, continue the auto run for `<task-id>`: follow your loop now.
+   If you are the **review-responder** agent, continue with your "Triage and fix" steps from step 2.
    Otherwise reply with exactly this, filled in, and stop:
    > Fetched `<n>` unresolved thread(s) into `.work/<task-id>/review.json`.
    > **Next:** pick the **review-responder** agent and say `Triage <task-id>`.

@@ -5,6 +5,7 @@
 #
 # It turns the pipeline's rules into enforced ones:
 #   deny  approving evidence, touching evidence/APPROVED|UPLOADED or verified-head
+#   deny  running next-stage.sh from a subagent (only the orchestrator runs the router)
 #   deny  agent changes to the task state (.work/<id>/state.env); reading it is fine
 #   deny  sourcing the pipeline's scripts (their functions would skip the scripts' checks)
 #   deny  reading or printing secrets (tokens, .auth/ sessions, ~/.ssh)
@@ -102,6 +103,8 @@ cwd="$(jq -r '.cwd // empty' <<<"$input" 2>/dev/null)"
 [ -n "$cwd" ] && cd "$cwd" 2>/dev/null
 
 tool="$(jq -r '.toolName // .tool_name // ""' <<<"$input")"
+# Set only for a call made inside a subagent; a top-level call names no agent.
+subagent="$(jq -r '.agentId // empty' <<<"$input")"
 args="$(jq -c '(.toolArgs // .tool_input // {}) | if type == "string" then (fromjson? // {command: .}) else . end' <<<"$input")"
 
 # Tool families, covering Copilot harness names and older/alternate names.
@@ -124,6 +127,29 @@ if $is_shell; then
   has 'approve-evidence\.sh' &&
     decide deny "Evidence approval is the user's job. Ask them to review evidence.md and run approve-evidence.sh themselves."
   [[ $cmd =~ $SHELL_START$PATHS_record ]] && decide deny "$REASON_record"
+
+  # Only the top level (the orchestrator) runs the auto run's router. A call
+  # from a subagent carries agentId; a stage agent running next-stage.sh could
+  # approve a stop itself or upset the stall detection. Any spelling counts: the
+  # name is matched with quotes and backslashes taken out, a glob (next-st*.sh)
+  # or a variable holding it (x=next-stage) too. A subagent's command that names
+  # it is denied unless every part of it only reads (cat, grep, git diff ...)
+  # and nothing is substituted into it.
+  if [ -n "$subagent" ]; then
+    bare="${cmd//[\"\'\\]/}"
+    router_name='(^|[/[:space:]=<>(`])next-(stage|s[a-z]*[*?[])'
+    if [[ $bare =~ $router_name ]]; then
+      reader='^[[:space:]]*(cat|head|tail|less|more|grep|egrep|fgrep|wc|ls|stat|file|nl|diff|git[[:space:]]+(diff|log|show|blame|grep|status))([[:space:]]|$)'
+      substituted='\$\(|`|[<>]\('
+      only_reads=true
+      [[ $cmd =~ $substituted ]] && only_reads=false
+      while IFS= read -r seg; do
+        [[ -z "${seg//[[:space:]]/}" || $seg =~ $reader ]] || only_reads=false
+      done < <(sed -E 's/[0-9]*>&[0-9-]+//g; s/(&&|\|\||[;|&])/\n/g' <<<"$cmd")
+      $only_reads ||
+        decide deny "Only the orchestrator runs next-stage.sh. Finish your stage, end with your **Result:** line and return. (Reading it with cat, grep or git diff is fine.)"
+    fi
+  fi
 
   # `source` or `.` in command position (start, after ;&|({ or a backtick, or
   # just inside a quote as in bash -c '. x'), then a path into scripts/agent/.

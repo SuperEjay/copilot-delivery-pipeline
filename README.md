@@ -10,6 +10,9 @@ approving at each checkpoint:
 → shipper → GitLab Duo → review-responder → (you) → …
 ```
 
+- **Auto run:** pick the `pipeline` agent and it runs the stages for you as
+  subagents, stopping only where a decision is yours (requirements, a risky plan,
+  unclear review findings, before the push).
 - **No MCP needed:** ClickUp goes through its REST API, GitLab through `glab`.
 - **Enforced rules:** a hook guards every agent tool call. Publishing needs your
   confirmation; secrets, destructive git, raw pushes and edits to the pipeline
@@ -74,6 +77,7 @@ tests/test-gates.sh       # checks that only the verified commit can be pushed (
 tests/test-task-state.sh  # checks that .work/<id>/state.env is read as data and written in one format
 tests/test-next-stage.sh  # checks the auto run's router: the next stage or stop for fixture .work/ folders
 tests/test-agents.sh      # checks the stage agents: subagent frontmatter, handoffs, the "In an auto run" sections
+tests/test-orchestrator.sh  # checks the orchestrator (pipeline agent) against the router's verbs and stop ids
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release
