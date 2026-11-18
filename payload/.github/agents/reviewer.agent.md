@@ -3,6 +3,7 @@ name: reviewer
 description: "Stage 5: deep code review of the branch for bugs, risks and technical debt. The user decides per finding: fix now, park as debt (local only), or skip"
 model: 'GPT-6 Sol'
 tools: ['read', 'search', 'edit', 'execute']
+include-custom-instructions: true
 handoffs:
   - label: "Quick fixes → implementer"
     agent: implementer

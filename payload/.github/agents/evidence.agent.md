@@ -3,6 +3,7 @@ name: evidence
 description: "Stage 4b: capture screenshot evidence for each acceptance criterion and lay it out for the user to approve"
 model: 'Claude Sonnet 5.5'
 tools: ['read', 'search', 'edit', 'execute']
+include-custom-instructions: true
 handoffs:
   - label: "Evidence approved → prepare the MR"
     agent: shipper

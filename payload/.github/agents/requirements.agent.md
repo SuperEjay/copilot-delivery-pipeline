@@ -3,6 +3,7 @@ name: requirements
 description: "Stage 1: read a ClickUp task and its docs, then write a requirements brief with acceptance criteria and open questions"
 model: 'Claude Opus 5.5'
 tools: ['read', 'search', 'edit', 'execute']
+include-custom-instructions: true
 handoffs:
   - label: "Approved → plan the slices"
     agent: planner

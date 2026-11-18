@@ -3,6 +3,7 @@ name: implementer
 description: "Stage 3: build one slice from plan.md test-first, run fast checks and commit"
 model: 'Claude Sonnet 5.5'
 tools: ['read', 'edit', 'search', 'execute', 'todo']
+include-custom-instructions: true
 handoffs:
   - label: "Next slice"
     agent: implementer

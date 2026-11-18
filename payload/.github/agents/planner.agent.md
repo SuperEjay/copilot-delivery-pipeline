@@ -3,6 +3,7 @@ name: planner
 description: "Stage 2: slice approved requirements into thin end-to-end slices with affected modules and a test plan per slice"
 model: 'Claude Opus 5.5'
 tools: ['read', 'search', 'edit', 'todo']
+include-custom-instructions: true
 handoffs:
   - label: "Plan approved → build slice 1"
     agent: implementer

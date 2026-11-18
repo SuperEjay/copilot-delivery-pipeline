@@ -3,6 +3,7 @@ name: review-responder
 description: "Stage 6: fetch GitLab Duo's unresolved MR comments, triage them, fix or reply, and resolve threads"
 model: 'Grok 4.7'
 tools: ['read', 'search', 'edit', 'execute']
+include-custom-instructions: true
 handoffs:
   - label: "Fixes committed → re-verify"
     agent: verifier

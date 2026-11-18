@@ -3,6 +3,7 @@ name: verifier
 description: "Stage 4: run unit, integration and e2e checks, fill test gaps, and grade every acceptance criterion"
 model: 'GPT-6 Sol'
 tools: ['read', 'search', 'edit', 'execute']
+include-custom-instructions: true
 handoffs:
   - label: "FAIL → back to implementer"
     agent: implementer

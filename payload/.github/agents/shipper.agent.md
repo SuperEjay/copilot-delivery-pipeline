@@ -3,6 +3,7 @@ name: shipper
 description: "Stage 5: write the change summary, open or update the GitLab MR, and update ClickUp"
 model: 'GPT-6 Luna'
 tools: ['read', 'search', 'edit', 'execute']
+include-custom-instructions: true
 handoffs:
   - label: "Duo has reviewed → respond"
     agent: review-responder
