@@ -121,7 +121,10 @@ check "all slices built: run the verifier" '[ "$out" = "$VERIFY" ]'
 verify FAIL; next T1
 check "FAIL at HEAD: back to the implementer, fix round 1" '[ "$out" = "$FIX" ] && grep -qx "Fix round: 1/2" $W/status.md'
 next T1
-check "asking again doesn't count the round twice" '[ "$out" = "$FIX" ] && grep -qx "Fix round: 1/2" $W/status.md'
+check "the same run again with nothing changed: stop stalled" '[[ "$out" == "stop stalled implementer "* ]]'
+check "and the round isn't counted twice" 'grep -qx "Fix round: 1/2" $W/status.md'
+next T1
+check "asked again without an approval: still stalled" '[[ "$out" == "stop stalled implementer "* ]]'
 commit_change; next T1
 check "HEAD moved since the FAIL: verify again" '[ "$out" = "$VERIFY" ]'
 verify FAIL; next T1
@@ -130,6 +133,11 @@ commit_change; verify FAIL; next T1
 check "third FAIL: stop at MAX_AUTO_FIX_ROUNDS (default 2)" '[[ "$out" == "stop fix-limit "*"2 fix rounds"* ]]'
 next T1 approve; next T1
 check "approving the fix-limit stop allows another round" '[ "$out" = "$FIX" ] && grep -qx "Fix round: 1/2" $W/status.md'
+next T1
+next T1 approve; next T1
+check "approving the stalled stop runs the stage once more" '[ "$out" = "$FIX" ]'
+next T1
+check "still nothing changed: stalled again" '[[ "$out" == "stop stalled implementer "* ]]'
 printf '# Verification: T1\nResult: FAIL\n' > $W/verification.md
 next T1
 check "verification.md without a Commit line: a stop no approval passes" '[[ "$out" == "stop verify "*"Commit:"* ]] && { next T1 approve; [ $rc -eq 1 ]; }'

@@ -159,6 +159,20 @@ apply_fix_round() {
   NEW_ROUND=$(( round + 1 )); NEW_KEY="$FIX_KEY"
 }
 
+# check_stall: the same run as last time, with none of its inputs changed,
+# means the stage ran and changed nothing: stop instead of looping. Approving
+# that stop lets the stage run once more.
+INPUTS=(@HEAD requirements.md plan.md verification.md code-review.md evidence/evidence.md
+        evidence/APPROVED mr.md review-triage.md state.env verified-head)
+check_stall() {
+  [ "$VERB" = run ] || return 0
+  INPUTS_FP="$(_fp "${INPUTS[@]}")"
+  LAST_RUN="run $WHAT $TEXT"; LAST_RUN_FP="$INPUTS_FP"
+  [ "$LAST_RUN" = "$(_st "Last run")" ] && [ "$INPUTS_FP" = "$(_st "Last run inputs")" ] || return 0
+  if _approved stalled "$INPUTS_FP"; then unset 'APPROVED[stalled]'; return 0; fi
+  _stop stalled "$INPUTS_FP" "$WHAT ran but changed nothing in $REL or the code. Approve to run it once more, or tell me how to go on. It would get: $TEXT"
+}
+
 # ---------- auto-decisions.md ----------
 _auto_decision() {
   local f="$DIR/auto-decisions.md"
@@ -184,6 +198,8 @@ write_status() {
     echo
     echo "Stage: $STAGE"
     echo "Last decision: $LINE"
+    echo "Last run: ${LAST_RUN:-$(_st "Last run")}"
+    echo "Last run inputs: ${LAST_RUN_FP:-$(_st "Last run inputs")}"
     echo "Pending stop: $pending"
     echo "Fix round: $NEW_ROUND/$MAX_AUTO_FIX_ROUNDS"
     echo "Fix key: $NEW_KEY"
@@ -201,9 +217,10 @@ if [ -f "$STATUS" ]; then
   done < <(grep '^Approved [a-z-]*: ' "$STATUS")
 fi
 
-PLAN_ACCEPTED=""; AUTO_PLAN=""; FIX_KEY=""
+PLAN_ACCEPTED=""; AUTO_PLAN=""; FIX_KEY=""; LAST_RUN=""; LAST_RUN_FP=""
 decide
 apply_fix_round
+check_stall
 
 if [ "$CMD" = approve ]; then
   pending="$(_st "Pending stop")"
