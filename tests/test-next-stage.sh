@@ -38,5 +38,21 @@ next T1
 check "requirements.md written: stop for the user" '[ $rc -eq 0 ] && [[ "$out" == "stop requirements "*"requirements.md"* ]]'
 check "status.md records the pending stop" 'grep -q "^Pending stop: requirements " $W/status.md'
 
+# ---------- approve: tied to what the stop was about ----------
+echo "- AC-2: y" >> $W/requirements.md
+next T1 approve
+check "approve refuses a stop that changed since it was shown" '[ $rc -eq 1 ] && grep -q "changed" "$T/out.txt"'
+next T1; next T1 approve
+check "approve records the shown stop" '[ $rc -eq 0 ] && grep -q "^Approved requirements: " $W/status.md'
+next T1
+check "approved requirements: run the planner" '[ "$out" = "run planner AUTO RUN. Plan T1." ]'
+next T1 approve
+check "approve with no pending stop: exit 1" '[ $rc -eq 1 ] && grep -q "No stop" "$T/out.txt"'
+echo "- AC-3: z" >> $W/requirements.md
+next T1
+check "requirements changed after approval: the stop repeats" '[[ "$out" == "stop requirements "* ]]'
+next T1; next T1 approve; next T1
+check "approved again: on to the planner" '[ "$out" = "run planner AUTO RUN. Plan T1." ]'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

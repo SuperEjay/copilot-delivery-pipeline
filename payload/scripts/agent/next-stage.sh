@@ -14,6 +14,8 @@ set -uo pipefail
 source "$(dirname "$0")/config.sh"
 
 TASK="${1:?usage: next-stage.sh <task-id> [approve]}"
+CMD="${2:-}"
+case "$CMD" in ""|approve) ;; *) echo "usage: next-stage.sh <task-id> [approve]" >&2; exit 1 ;; esac
 
 state_branch "$TASK" > /dev/null 2>&1 || {
   echo "No task state for $TASK. Run /start-task $TASK <slug> first." >&2
@@ -42,6 +44,9 @@ _fp() {
   done | sha256sum | cut -c1-16
 }
 
+# _approved <stop-id> <fp>: the user approved this stop at this fingerprint.
+_approved() { [ -n "$2" ] && [ "$(_st "Approved $1")" = "$2" ]; }
+
 # ---------- the decision ----------
 # decide sets VERB (run|stop|end), WHAT (agent or stop id), TEXT (prompt or
 # reason), STAGE, and for a stop STOP_FP: the fingerprint an approval is tied to.
@@ -52,8 +57,14 @@ _end()  { VERB=end;  WHAT=""; TEXT="$1"; }
 decide() {
   STAGE=requirements
   if [ ! -f "$DIR/requirements.md" ]; then _run requirements "Analyse $TASK."; return; fi
-  _stop requirements "$(_fp requirements.md)" \
-    "Review $REL/requirements.md: answer its open questions here, or approve it."
+  local fp; fp="$(_fp requirements.md)"
+  if ! _approved requirements "$fp"; then
+    _stop requirements "$fp" "Review $REL/requirements.md: answer its open questions here, or approve it."; return
+  fi
+
+  STAGE=plan
+  if [ ! -f "$DIR/plan.md" ]; then _run planner "Plan $TASK."; return; fi
+  _end "not built yet"
 }
 
 # ---------- status.md writer ----------
@@ -68,11 +79,35 @@ write_status() {
     echo "Stage: $STAGE"
     echo "Last decision: $LINE"
     echo "Pending stop: $pending"
+    for id in "${!APPROVED[@]}"; do echo "Approved $id: ${APPROVED[$id]}"; done
   } > "$STATUS.tmp"
   mv "$STATUS.tmp" "$STATUS"
 }
 
+# Approvals: one fingerprint per stop id.
+declare -A APPROVED=()
+if [ -f "$STATUS" ]; then
+  while IFS= read -r l; do
+    id="${l#Approved }"; id="${id%%: *}"; APPROVED[$id]="${l#*: }"
+  done < <(grep '^Approved [a-z-]*: ' "$STATUS")
+fi
+
 decide
+
+if [ "$CMD" = approve ]; then
+  pending="$(_st "Pending stop")"
+  if [ -z "$pending" ]; then echo "No stop is waiting for an approval." >&2; exit 1; fi
+  if [ "$VERB" != stop ] || [ "$pending" != "$WHAT $STOP_FP" ]; then
+    echo "The stop changed since it was shown. Run next-stage.sh $TASK again and show the user the new stop." >&2
+    exit 1
+  fi
+  APPROVED[$WHAT]="$STOP_FP"
+  LINE="$(_st "Last decision")"
+  write_status
+  echo "Approved the $WHAT stop."
+  exit 0
+fi
+
 case "$VERB" in
   run)  LINE="run $WHAT $TEXT" ;;
   stop) LINE="stop $WHAT $TEXT" ;;
