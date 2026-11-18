@@ -64,5 +64,35 @@ for r in state_branch state_mr_iid state_review_round state_review_ids state_rev
   check "$r: no state file is an error" '[ $? -eq 1 ] && out "" && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first."'
 done
 
+# ---------- writers ----------
+W2=.work/T2
+st state_init T2 feature/T2-x
+check "state_init writes the v1.1.0 format" '[ $? -eq 0 ] && [ "$(cat $W2/state.env)" = "$(printf "TASK=T2\nBRANCH=feature/T2-x\nREVIEW_ROUND=0")" ]'
+st state_init T2 feature/T2-other
+check "state_init leaves an existing file alone" '[ $? -eq 0 ] && grep -qx BRANCH=feature/T2-x $W2/state.env && ! grep -q other $W2/state.env'
+st state_set_mr_iid T2 7; st state_set_mr_iid T2 8; st state_mr_iid T2
+check "state_set_mr_iid replaces the value, one line per key" 'out 8 && [ "$(grep -c "^MR_IID=" $W2/state.env)" -eq 1 ]'
+st state_set_review T2 1 999; st state_review_round T2
+check "state_set_review writes the round" 'out 1'
+st state_review_ids T2;       check "state_set_review writes the thread ids" 'out 999'
+st state_set_reviewed_sha T2 abc123; st state_reviewed_sha T2
+check "state_set_reviewed_sha writes the commit" 'out abc123'
+st state_branch T2;           check "setters keep the other keys" 'out feature/T2-x'
+check "no temp file is left behind" '[ ! -e $W2/state.env.tmp ]'
+st state_set_reviewed_sha T2 '$(touch pwned3)'; st state_reviewed_sha T2
+check "a written \$(...) reads back as text" 'out "\$(touch pwned3)" && [ ! -e pwned3 ]'
+
+cp $W2/state.env "$T/before"
+st state_set_mr_iid T2 $'9\nBASE_BRANCH=x'
+check "a value with a newline is refused" '[ $? -eq 1 ] && err "Not writing MR_IID to .work/T2/state.env: the value contains a newline." && cmp -s $W2/state.env "$T/before"'
+st state_set_review T2 2 $'1\n2'
+check "state_set_review writes neither key when one has a newline" '[ $? -eq 1 ] && grep -q "Not writing REVIEW_IDS" "$T/err.txt" && cmp -s $W2/state.env "$T/before"'
+st state_init T3 $'feature/T3\nMR_IID=1'
+check "state_init refuses a branch with a newline" '[ $? -eq 1 ] && [ ! -e .work/T3/state.env ]'
+for w in "state_set_mr_iid T9 1" "state_set_review T9 1 2" "state_set_reviewed_sha T9 abc"; do
+  st $w
+  check "${w%% *}: no state file is an error" '[ $? -eq 1 ] && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first." && [ ! -e .work/T9/state.env ]'
+done
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

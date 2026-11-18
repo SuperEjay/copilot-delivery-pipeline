@@ -12,9 +12,17 @@
 #   state_review_ids <task>     checksum of the last thread ids   default empty
 #   state_reviewed_sha <task>   commit the reviewer last reviewed default empty
 #
+#   state_init <task> <branch>             create the file (no-op if it exists)
+#   state_set_mr_iid <task> <iid>
+#   state_set_review <task> <round> <ids>  both review keys, always together
+#   state_set_reviewed_sha <task> <sha>
+#
 # A reader prints the value on stdout. A missing file, or a missing or empty
 # required key, prints the reason on stderr and returns 1. Call it as
 #   MR_IID="$(state_mr_iid "$TASK")" || exit 1
+# A setter returns 1 with the reason on stderr when there's no file, or when a
+# value contains a newline (it would break the one-key-per-line format); it
+# then writes nothing.
 
 _state_file() { echo "$(task_dir "$1")/state.env"; }
 _state_name() { local f; f="$(_state_file "$1")"; echo "${f#"$REPO_ROOT"/}"; }
@@ -58,3 +66,38 @@ state_mr_iid() {
 state_review_round() { _state_optional "$1" REVIEW_ROUND 0; }
 state_review_ids()   { _state_optional "$1" REVIEW_IDS ""; }
 state_reviewed_sha() { _state_optional "$1" REVIEWED_SHA ""; }
+
+# _state_check <task> <KEY> <value>: refuse a value that would break the format.
+_state_check() {
+  case "$3" in *$'\n'*)
+    echo "Not writing $2 to $(_state_name "$1"): the value contains a newline." >&2; return 1 ;;
+  esac
+}
+
+# _state_put <task> <KEY> <value>: replace KEY's line (portable: no sed -i).
+_state_put() {
+  local file tmp
+  file="$(_state_file "$1")"; tmp="$file.tmp"
+  { grep -v "^$2=" "$file" || true; printf '%s=%s\n' "$2" "$3"; } > "$tmp"
+  mv "$tmp" "$file"
+}
+
+state_init() {
+  local file; file="$(_state_file "$1")"
+  [ -f "$file" ] && return 0
+  _state_check "$1" TASK "$1" && _state_check "$1" BRANCH "$2" || return 1
+  mkdir -p "$(dirname "$file")"
+  printf 'TASK=%s\nBRANCH=%s\nREVIEW_ROUND=0\n' "$1" "$2" > "$file"
+}
+state_set_mr_iid() {
+  _state_require_file "$1" && _state_check "$1" MR_IID "$2" || return 1
+  _state_put "$1" MR_IID "$2"
+}
+state_set_review() {
+  _state_require_file "$1" && _state_check "$1" REVIEW_ROUND "$2" && _state_check "$1" REVIEW_IDS "$3" || return 1
+  _state_put "$1" REVIEW_ROUND "$2" && _state_put "$1" REVIEW_IDS "$3"
+}
+state_set_reviewed_sha() {
+  _state_require_file "$1" && _state_check "$1" REVIEWED_SHA "$2" || return 1
+  _state_put "$1" REVIEWED_SHA "$2"
+}
