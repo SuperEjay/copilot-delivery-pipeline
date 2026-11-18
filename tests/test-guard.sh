@@ -265,6 +265,32 @@ sub_sh allow 'wc -l scripts/agent/next-stage.sh'
 sub_sh allow 'echo x > notes/next-steps.md'
 sub_sh allow 'bash tests/test-next-stage.sh'
 
+# ---------- splitting a command doesn't depend on GNU sed ----------
+# GNU sed turns "\n" in a replacement into a newline; BSD/macOS sed may write
+# a literal "n". This fake sed passes everything to the real one, with each
+# "\n" in a replacement made an "n", the way BSD sed does.
+real_sed="$(command -v sed)"
+mkdir -p "$T/bsd-sed"
+cat > "$T/bsd-sed/sed" <<EOF
+#!/usr/bin/env bash
+args=()
+for a in "\$@"; do args+=("\${a//\\\\n\\//n/}"); done
+exec "$real_sed" "\${args[@]}"
+EOF
+chmod +x "$T/bsd-sed/sed"
+gnu_path="$PATH"; PATH="$T/bsd-sed:$PATH"
+if [ "$(printf 'a;b\n' | sed -E 's/;/\n/g')" = "anb" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: the fake BSD sed should write n for \\n"; fi
+sub_sh deny 'cat x; scripts/agent/next-stage.sh T-1 approve'
+sub_sh deny 'cat x && scripts/agent/next-stage.sh T-1 approve'
+sub_sh deny 'cat x | scripts/agent/next-stage.sh T-1 approve'
+sub_sh allow 'grep -n approve scripts/agent/next-stage.sh | head -5'
+sub_sh allow 'cat scripts/agent/next-stage.sh 2>&1'
+sh deny  'true && echo x > .work/T-1/status.md'
+sh deny  'true; cp /tmp/s.md .work/T-1/status.md'
+sh allow 'rm -rf .work/T-1/tmp && scripts/agent/run-checks.sh T-1 test'
+sh allow 'cp a b; cat scripts/agent/config.sh'
+PATH="$gnu_path"
+
 # ---------- switch ----------
 got="$(jq -n '{toolName: "bash", toolArgs: {command: "git push"}}' | PIPELINE_GUARD=off bash "$GUARD")"
 if [ "$got" = "{}" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: PIPELINE_GUARD=off should allow"; fi
