@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **The guard catches `>|` and `>&file` redirects.** `echo x >| scripts/agent/config.sh` (clobber) and `cat a >&scripts/agent/config.sh` (csh-style) got past the shell check for pipeline config and task state (`.work/<id>/status.md`, `state.env`), because the command was split at `;`, `|` and `&` before the redirect was matched, cutting the redirect in half. Redirects are now matched on the whole command.
 - The hook guard now blocks agents from changing pipeline config through the shell too (redirects, `sed -i`, `cp`, `mv`, `rm`, `chmod`, `tee`, inline `python -c` and similar), not only through edit tools. Before this, a shell command could rewrite or switch off the guard itself.
 - New `tests/test-guard.sh`: a table of tool calls and the decision the guard must make for each.
 - **Only verified code is pushed.** `run-checks.sh <id> all` records the commit it passed on a clean tree in `.work/<id>/verified-head`, and `create-mr.sh` and `push-branch.sh` refuse to push anything else. Before this, the shipper only checked that `verification.md` said PASS, so a commit added after verification could ship unverified.
