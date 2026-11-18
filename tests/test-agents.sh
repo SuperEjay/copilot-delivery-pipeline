@@ -39,6 +39,7 @@ check "requirements: no grill-me; open questions stay in the file" 'auto require
 check "planner: open questions don't stop it" 'auto planner "Skip step 1" && auto planner "still write the plan"'
 check "planner: blocking questions become Requirement gaps: yes" 'auto planner "## Requirement gaps" && auto planner "\- Requirement gaps: yes"'
 check "planner: Stop flags kept current on an update or a re-plan" 'auto planner "Keep the Stop flags current" && auto planner "update plan.md" && auto planner "Re-plan the review findings"'
+check "implementer: a quick fix bigger than its estimate is routed to re-plan, left open" 'auto implementer "bigger than its estimate" && auto implementer "Route.* to \`re-plan\`" && auto implementer "Status.*\`open\`"'
 check "evidence: no approval steps in an auto run; the pre-ship stop gives them" 'auto evidence "pre-ship stop"'
 
 echo "passed=$pass failed=$fail"
