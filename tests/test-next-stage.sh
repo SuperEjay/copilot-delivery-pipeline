@@ -123,6 +123,12 @@ next T1
 check "7 slices stop the plan" '[[ "$out" == "stop plan "*"7 slices"* ]]'
 next T1 approve; next T1
 check "an approved plan goes on" '[[ "$out" != stop* ]] && [ ! -f $W/auto-decisions.md ]'
+sed -i 's/^- \[ \] S1:/- [x] S1:/' $W/plan.md; next T1
+check "a ticked slice doesn't bring the approved plan's stop back" '[[ "$out" == "run implementer "* ]]'
+sed -i 's/^- \[ \] S2:/- [X] S2:/' $W/plan.md; next T1
+check "nor does a second one" '[[ "$out" == "run implementer "* ]]'
+sed -i 's/^- \[ \] S7: slice 7/- [ ] S7: slice 7 (changed)/' $W/plan.md; next T1
+check "a changed slice does bring it back" '[[ "$out" == "stop plan "*"7 slices"* ]]'
 plan_md 3
 next T1
 BUILD="run implementer AUTO RUN. Build T1: implement the next unchecked slice in plan.md."
@@ -141,6 +147,7 @@ check "updated plan: accepted again" '[ "$out" = "$BUILD" ] && [ "$(grep -c "Pla
 sed -i 's/^- \[ \] S1:/- [x] S1:/; s/^- \[ \] S2:/- [x] S2:/; s/^- \[ \] S3:/- [x] S3:/' $W/plan.md
 next T1
 check "one slice left: still the implementer" '[ "$out" = "$BUILD" ]'
+check "ticked slices don't add another plan auto-decision" '[ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 2 ]'
 sed -i 's/^- \[ \] S4:/- [x] S4:/' $W/plan.md
 next T1
 check "every slice ticked: not the implementer" '[ "$out" != "$BUILD" ]'
@@ -198,6 +205,9 @@ next T1
 check "a finding without a decision: stop review" '[[ "$out" == "stop review "*"CR-2"* ]]'
 next T1 approve
 check "approve refuses while a finding has no decision" '[ $rc -eq 1 ] && grep -q "CR-2" "$T/out.txt"'
+review_md "fix quick verified" "fix _(set_if_fix)_ open"
+next T1
+check "an open fix without a route: stop review" '[[ "$out" == "stop review "*"CR-2"* ]]'
 review_md "fix quick verified" "fix re-plan open"
 next T1
 check "a re-plan route: stop review" '[[ "$out" == "stop review "*"re-plan"* ]]'
@@ -231,10 +241,16 @@ next T1
 check "mr.md written: the one pre-ship stop" '[[ "$out" == "stop pre-ship "*"evidence.md"*"mr.md"*"auto-decisions.md"*"approve-evidence.sh"* ]]'
 next T1 approve
 check "approve refuses until the evidence is approved" '[ $rc -eq 1 ] && grep -q "approve-evidence.sh" "$T/out.txt"'
+sed -i 's/^- \[x\] AC-1/- [ ] AC-1/' $W/evidence/evidence.md; next T1
+sed -i 's/^- \[ \] AC-1/- [x] AC-1/' $W/evidence/evidence.md
 approve_evidence; next T1 approve
-check "evidence approved after the stop was shown: show it again first" '[ $rc -eq 1 ] && grep -q "changed" "$T/out.txt"'
-next T1; next T1 approve; next T1
+check "evidence ticked and approved after the stop was shown: one approve passes" '[ $rc -eq 0 ] && grep -q "^Approved pre-ship: " $W/status.md'
+next T1
 check "approved with the evidence approved: the shipper ships" '[ "$out" = "run shipper AUTO RUN. Ship T1. The user confirmed the push at the pre-ship stop." ]'
+echo "retaken" > $W/evidence/AC-1.md; echo "- note" >> $W/evidence/evidence.md; next T1
+check "evidence.md changed beyond its ticks after approval: the pre-ship stop again" '[[ "$out" == "stop pre-ship "* ]]'
+approve_evidence; next T1; next T1 approve; next T1
+check "approved again: the shipper ships" '[ "$out" = "run shipper AUTO RUN. Ship T1. The user confirmed the push at the pre-ship stop." ]'
 mr_opened; next T1
 check "MR open: the run ends until Duo has reviewed" '[ "$out" = "end MR open. Run /fetch-review T1 after Duo has reviewed it." ]'
 

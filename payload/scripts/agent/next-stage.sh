@@ -58,6 +58,9 @@
 # Approvals are tied to a checksum of what the stop is about (requirements.md;
 # plan.md and requirements.md; code-review.md; HEAD, mr.md and the evidence;
 # HEAD and review-triage.md), so a change after approval brings the stop back.
+# Ticks don't count as a change: building a slice ticks plan.md, and the user
+# ticks evidence.md and runs approve-evidence.sh after the pre-ship stop is
+# shown (approve then checks the evidence approval itself).
 # Fix rounds (MAX_AUTO_FIX_ROUNDS) count each return to the implementer once per
 # commit, and start over when a review settles, a Duo round starts or the user
 # approves a stop. The same run with none of its inputs changed is the stalled
@@ -87,12 +90,16 @@ _st() {
   awk -v k="$1: " 'index($0, k) == 1 { v = substr($0, length(k) + 1) } END { print v }' "$STATUS"
 }
 
-# _fp <file|@HEAD>...: one checksum over these inputs (a missing file counts too).
+# _fp <file|@HEAD|@unticked:file>...: one checksum over these inputs (a missing
+# file counts too). @unticked:<file> reads every "- [x]" as "- [ ]", so ticking
+# a slice in plan.md or an item in evidence.md isn't a change to what was approved.
 _fp() {
   local f
   for f in "$@"; do
     echo "== $f"
     if [ "$f" = @HEAD ]; then git rev-parse HEAD
+    elif [ "${f#@unticked:}" != "$f" ] && [ -f "$DIR/${f#@unticked:}" ]; then
+      sed -E 's/^([[:space:]]*- )\[[xX]\]/\1[ ]/' "$DIR/${f#@unticked:}"
     elif [ -f "$DIR/$f" ]; then cat "$DIR/$f"
     else echo "(none)"; fi
   done | sha256 /dev/stdin | cut -c1-16
@@ -123,7 +130,7 @@ _plan_flag() {
 # and AUTO_PLAN), or set a run/stop. Returns 1 when it set a decision.
 check_plan() {
   local rfp="$1" pfp acc name v n reasons=() sfp
-  pfp="$(_fp plan.md)"; acc="$(_st "Plan accepted")"
+  pfp="$(_fp @unticked:plan.md)"; acc="$(_st "Plan accepted")"
   if [ -n "$acc" ] && [ "${acc% *}" = "$pfp" ] && [ "${acc#* }" != "$rfp" ]; then
     _run planner "Requirements for $TASK changed; update plan.md."; return 1
   fi
@@ -141,7 +148,7 @@ check_plan() {
   [ "$n" -gt 6 ] && reasons+=("$n slices (more than 6)")
 
   if [ "${#reasons[@]}" -gt 0 ]; then
-    sfp="$(_fp plan.md requirements.md)"
+    sfp="$(_fp @unticked:plan.md requirements.md)"
     if ! _approved plan "$sfp"; then
       local IFS=,; _stop plan "$sfp" "Review $REL/plan.md: it flags ${reasons[*]}."; return 1
     fi
@@ -187,7 +194,7 @@ decide() {
 
   STAGE=ship
   if [ ! -f "$DIR/mr.md" ]; then _run shipper "Write mr.md for $TASK. Don't push or create the MR."; return; fi
-  fp="$(_fp @HEAD mr.md evidence/evidence.md evidence/APPROVED)"
+  fp="$(_fp @HEAD mr.md @unticked:evidence/evidence.md)"
   if ! _approved pre-ship "$fp"; then
     local why
     why="$(approval_verify "$TASK" 2>&1 > /dev/null)" || APPROVE_BLOCK="$why"
@@ -268,7 +275,7 @@ _findings() {
     function val(s, key,   i) { i = index(s, key); if (!i) return ""; s = substr(s, i + length(key))
       sub(/·.*/, "", s); gsub(/[*_]/, "", s); sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s)
       if (s ~ /^\(/ || s == "pending") s = ""; split(s, w, " "); return tolower(w[1]) }
-    function flush() { if (id != "") print id "\t" d "\t" r "\t" st }
+    function flush() { if (id != "") print id "\037" d "\037" r "\037" st }
     /^### CR-[0-9]+/ { flush(); id = $2; d = r = st = "" }
     id != "" && /\*\*Decision:\*\*/ { d = val($0, "**Decision:**"); r = val($0, "**Route:**") }
     id != "" && /\*\*Status:\*\*/ { st = val($0, "**Status:**") }
@@ -286,7 +293,7 @@ check_review() {
   if [ ! -f "$DIR/code-review.md" ]; then
     _unreadable review "HEAD was reviewed, but there's no $REL/code-review.md. Run the reviewer again by hand."; return 1
   fi
-  while IFS=$'\t' read -r id d r st; do
+  while IFS=$'\037' read -r id d r st; do
     case "$d" in
       fix) [ "$st" = open ] || continue
            case "$r" in quick) quick+=("$id") ;; requirements) req+=("$id") ;; re-plan) replan+=("$id") ;; *) pending+=("$id") ;; esac ;;
