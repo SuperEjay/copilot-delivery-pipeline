@@ -6,6 +6,7 @@
 # It turns the pipeline's rules into enforced ones:
 #   deny  approving evidence, touching evidence/APPROVED|UPLOADED or verified-head
 #   deny  agent changes to the task state (.work/<id>/state.env); reading it is fine
+#   deny  sourcing the pipeline's scripts (their functions would skip the scripts' checks)
 #   deny  reading or printing secrets (tokens, .auth/ sessions, ~/.ssh)
 #   deny  destructive git (force push, reset --hard, clean -f, branch -D, --no-verify)
 #   deny  raw git push / glab write calls (scripts must be used)
@@ -123,6 +124,14 @@ if $is_shell; then
   has 'approve-evidence\.sh' &&
     decide deny "Evidence approval is the user's job. Ask them to review evidence.md and run approve-evidence.sh themselves."
   [[ $cmd =~ $SHELL_START$PATHS_record ]] && decide deny "$REASON_record"
+
+  # `source` or `.` in command position (start, after ;&|({ or a backtick, or
+  # just inside a quote as in bash -c '. x'), then a path into scripts/agent/.
+  # Sourcing gives the shell functions like gate_record_run, approval_write and
+  # state_set_review, which write records and task state without the scripts' checks.
+  sourced="(^|[;&|({\`\"'])[[:space:]]*(source|\.)[[:space:]]+[\"']?([^[:space:];&|]*/)?scripts/agent/"
+  [[ $cmd =~ $sourced ]] &&
+    decide deny "Run the pipeline's scripts (scripts/agent/<name>.sh); don't source them. Their functions write the verified commit, evidence approvals and task state, which only the scripts and the user may change."
 
   # Shell writes to pipeline config and task state. Checked per command
   # segment, so `rm -rf x && scripts/agent/...` is fine. A redirect may put a

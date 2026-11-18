@@ -156,6 +156,7 @@ instructions into enforcement:
 | **Ask you** | Anything that publishes: `create-mr.sh`, `push-branch.sh`, `upload-evidence.sh`, and `clickup.sh comment / status / attach`. VS Code shows a confirm prompt, which is your final go-ahead. |
 | **Deny** | Running `approve-evidence.sh`, or touching `evidence/APPROVED`, `evidence/UPLOADED` or `verified-head` |
 | **Deny** | Changing `.work/<id>/state.env`, the task state, through edit tools or the shell. Agents may read it; only the scripts write it. |
+| **Deny** | Sourcing the pipeline's scripts (`source scripts/agent/config.sh`, `. scripts/agent/ship-gate.sh`…). Their functions would record a verified commit, approve evidence or change the task state without the scripts' checks. Agents run the scripts instead. |
 | **Deny** | Reading or printing secrets: token variables, `printenv`/`env`, `.auth/` sessions, `~/.ssh`, `.netrc`, `.npmrc`, literal `pk_`/`glpat-` tokens |
 | **Deny** | Destructive git: force push, remote branch delete, `reset --hard`, `clean -f`, `branch -D`, `checkout -- .`, `--no-verify` |
 | **Deny** | Raw `git push`, `glab` write commands, or direct ClickUp API calls (the scripts must be used) |

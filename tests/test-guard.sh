@@ -146,6 +146,19 @@ sh deny  'echo REVIEW_ROUND=0 >> .work/T-1/state.env'
 sh deny  'sed -i s/REVIEW_ROUND=3/REVIEW_ROUND=0/ .work/T-1/state.env'
 ed deny  editFiles '.work/T-1/state.env'
 
+# ---------- the pipeline's scripts are run, never sourced ----------
+sh deny "bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate.sh; gate_record_run T-1 0'"
+sh deny "bash -c 'source scripts/agent/config.sh; source scripts/agent/evidence-lib.sh; approval_write T-1 AC-1.md'"
+sh deny "bash -c 'source scripts/agent/config.sh; state_set_review T-1 0 x'"
+sh deny '. ./scripts/agent/config.sh && set_state T-1 REVIEW_ROUND 0'
+sh deny 'bash -c ". \"$PWD/scripts/agent/config.sh\"; state_set_mr_iid T-1 1"'
+sh deny 'cd src; source ../scripts/agent/task-state.sh'
+sh deny 'source Scripts/Agent/config.sh'   # case-insensitive file systems
+sh allow 'ls . scripts/agent'
+sh allow 'source .venv/bin/activate && python app.py'
+sh allow 'bash scripts/agent/run-checks.sh T-1 unit'
+sh allow 'grep -n source scripts/agent/config.sh'
+
 # ---------- protected paths: a match starts at a path segment, the same in both channels ----------
 sh allow 'echo x > my.agent.env'
 ed allow editFiles 'my.agent.env'
