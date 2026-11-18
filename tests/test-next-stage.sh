@@ -44,6 +44,12 @@ review_md() {
   } > $W/code-review.md
 }
 
+# evidence_md [sha]: an evidence manifest captured at this commit (default HEAD).
+evidence_md() {
+  mkdir -p $W/evidence; echo "AC-1 output" > $W/evidence/AC-1.md
+  printf '# Evidence: T1\nCommit: %s\n- [x] AC-1 · `AC-1.md` · works\n' "${1:-$(git rev-parse HEAD)}" > $W/evidence/evidence.md
+}
+
 # next <args>: run next-stage.sh, output in $T/out.txt and $out, exit code in $rc.
 next() { $S/next-stage.sh "$@" > "$T/out.txt" 2>&1; rc=$?; out="$(cat "$T/out.txt")"; }
 
@@ -191,6 +197,17 @@ commit_change; verify PASS; mark_reviewed
 review_md "fix quick verified" "debt _ open" "skip _ open"
 next T1
 check "settled review: past the reviewer, fix rounds start over" '[ "$out" != "$REVIEW" ] && [[ "$out" != "stop review"* ]] && grep -qx "Fix round: 0/2" $W/status.md'
+
+# ---------- evidence ----------
+EVIDENCE="run evidence AUTO RUN. Capture evidence for T1."
+check "settled review: capture evidence" '[ "$out" = "$EVIDENCE" ]'
+mkdir -p $W/evidence; printf '# Evidence: T1\n- [ ] AC-1 · `AC-1.md` · works\n' > $W/evidence/evidence.md
+next T1
+check "evidence.md without a Commit line: a stop no approval passes" '[[ "$out" == "stop evidence "*"Commit:"* ]] && { next T1 approve; [ $rc -eq 1 ]; }'
+evidence_md 0000000000000000000000000000000000000000; next T1
+check "evidence captured at another commit: capture again" '[ "$out" = "$EVIDENCE" ]'
+evidence_md; next T1
+check "evidence at HEAD: past the evidence agent" '[ "$out" != "$EVIDENCE" ] && [[ "$out" != "stop evidence"* ]]'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

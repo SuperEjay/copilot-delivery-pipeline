@@ -119,6 +119,15 @@ decide() {
 
   STAGE=review
   check_review || return
+
+  STAGE=evidence
+  if [ -f "$DIR/evidence/evidence.md" ]; then
+    local ec; ec="$(_field evidence/evidence.md Commit)"
+    if [ -z "$ec" ]; then
+      _unreadable evidence "$REL/evidence/evidence.md has no 'Commit:' line. The evidence agent must write the HEAD it captured."; return
+    fi
+  fi
+  if [ "${ec:-}" != "$(git rev-parse HEAD)" ]; then _run evidence "Capture evidence for $TASK."; return; fi
   _end "not built yet"
 }
 
