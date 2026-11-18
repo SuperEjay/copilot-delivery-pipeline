@@ -106,6 +106,10 @@ case "$tool" in
   view|Read|readFile|read_file|NotebookRead) is_read=true ;;
 esac
 
+# From here on, [[ =~ ]] ignores case: on macOS and Windows, Scripts/Agent/x.sh
+# is the same file as scripts/agent/x.sh. (grep-based command rules don't change.)
+shopt -s nocasematch
+
 # ---------- shell commands ----------
 if $is_shell; then
   cmd="$(jq -r '.command // .cmd // .script // ([.. | strings] | join(" "))' <<<"$args")"

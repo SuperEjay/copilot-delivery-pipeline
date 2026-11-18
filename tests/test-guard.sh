@@ -128,6 +128,8 @@ while IFS=$'\t' read -r kind entry; do
   ed "$w_edit"    editFiles "C:\\proj\\${file//\//\\}"   # Windows path
   ed "$w_read"    read_file "$file"
   ed "$w_read"    read_file "C:\\proj\\${file//\//\\}"
+  sh "$w_write"   "echo x > ${file^^}"                  # case-insensitive file systems (macOS, Windows)
+  ed "$w_edit"    editFiles "${file^^}"
   if [ "${entry%/}" != "$entry" ]; then   # the folder itself
     sh deny "rm -rf ${entry%/}"
     ed deny editFiles "${entry%/}"
