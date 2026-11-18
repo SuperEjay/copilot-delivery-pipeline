@@ -191,19 +191,22 @@ if $is_shell; then
   [[ $cmd =~ $sourced ]] &&
     decide deny "Run the pipeline's scripts (scripts/agent/<name>.sh); don't source them. Their functions write the verified commit, evidence approvals and task state, which only the scripts and the user may change."
 
-  # Shell writes to pipeline config and task state. Checked per command
-  # segment, so `rm -rf x && scripts/agent/...` is fine. A redirect may put a
-  # relative prefix (./, ../, dir/) before the path.
+  # Shell writes to pipeline config and task state. A redirect is checked on
+  # the whole command: splitting at ; | & first would cut the clobber `>|` and
+  # the csh-style `>&word` in half. It may put a relative prefix (./, ../,
+  # dir/) before the path. A writer command (cp, rm, sed -i ...) is checked per
+  # segment, so `rm -rf x && scripts/agent/...` is fine.
+  for kind in config state; do
+    v="PATHS_$kind"; r="REASON_$kind"
+    redirect=">[|&]?[[:space:]]*[\"']?([^[:space:];&|]*/)?${!v}"
+    [[ $path_cmd =~ $redirect ]] && decide deny "${!r}"
+  done
   split_parts "$path_cmd"; path_parts="$REPLY"
   writer='(^|[[:space:]/(])(tee|cp|mv|rm|rmdir|ln|chmod|chown|truncate|install|dd|patch|unlink|shred|rsync|sed[[:space:]]+([^|;&]*[[:space:]])?(-[a-zA-Z]*i|--in-place)|perl[[:space:]]+-[a-zA-Z]*i|(python[0-9.]*|node|ruby|perl)[[:space:]]+-[a-zA-Z]*[ce]|git[[:space:]]+(checkout|restore|rm|mv|apply|stash))([[:space:]]|$)'
   while IFS= read -r seg; do
     for kind in config state; do
       v="PATHS_$kind"; r="REASON_$kind"
-      redirect=">[|]?[[:space:]]*[\"']?([^[:space:];&|]*/)?${!v}"
-      if [[ $seg =~ $redirect ]] ||
-         { [[ $seg =~ $writer ]] && [[ $seg =~ $SHELL_START${!v} ]]; }; then
-        decide deny "${!r}"
-      fi
+      [[ $seg =~ $writer ]] && [[ $seg =~ $SHELL_START${!v} ]] && decide deny "${!r}"
     done
   done <<<"$path_parts"
 

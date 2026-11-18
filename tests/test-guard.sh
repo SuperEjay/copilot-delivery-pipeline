@@ -87,6 +87,17 @@ sh deny "python3 -c \"open('scripts/agent/config.sh','w')\""
 sh deny "perl -pi -e s/a/b/ .github/agents/reviewer.agent.md"
 sh deny 'git checkout -- .github/agents/planner.agent.md'
 sh deny 'cd src && rm ../scripts/agent/run-checks.sh'
+# Redirects with | or & in them: the clobber >| and csh-style >&word (and
+# >& word) write the file too, and must not be cut in half at that | or &.
+sh deny 'echo x >| scripts/agent/config.sh'
+sh deny 'echo x >|./scripts/agent/config.sh'
+sh deny 'cat a >&scripts/agent/config.sh'
+sh deny 'cat a >& scripts/agent/config.sh'
+sh deny 'cat a &>scripts/agent/config.sh'
+sh deny 'true && echo x >| .agent.env'
+sh allow 'cat scripts/agent/config.sh >| /tmp/x'
+sh allow 'scripts/agent/run-checks.sh T-1 test >&2'
+sh allow 'scripts/agent/run-checks.sh T-1 test >| .work/T-1/checks.txt 2>&1'
 
 # ---------- verified commit marker ----------
 sh deny 'git rev-parse HEAD > .work/T-1/verified-head'
@@ -155,6 +166,10 @@ ed deny  create_file '/home/u/proj/.work/T-1/status.md'
 sh deny  'echo "Approved pre-ship: x" >> .work/T-1/status.md'
 sh deny  'sed -i s/stop/run/ .work/T-1/status.md'
 sh deny  'echo "Approved pre-ship: x" >> .work/*/status.md'
+sh deny  'echo "Approved pre-ship: x" >| .work/T-1/status.md'
+sh deny  'echo "Approved pre-ship: x" >&.work/T-1/status.md'
+sh deny  'echo REVIEW_ROUND=0 >| .work/T-1/state.env'
+sh deny  'echo REVIEW_ROUND=0 >&.work/T-1/state.env'
 ed allow read_file '.work/T-1/status.md'
 sh allow 'cat .work/T-1/status.md'
 sh allow 'scripts/agent/next-stage.sh T-1 approve'
