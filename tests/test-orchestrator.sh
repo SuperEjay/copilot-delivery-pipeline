@@ -86,6 +86,8 @@ check "/fetch-review: the round limit still stops first" 'awk "/round limit/ { r
 stops_before() { awk '/If it fails.*pass on its message and stop/ { if (!p) n++ } /pipeline\*\* agent/ { p = 1 } END { exit !(p && n == '"$2"') }' "$SK/$1/SKILL.md"; }
 check "/start-task: either script failing stops before the hand-over" 'stops_before start-task 2'
 check "/fetch-review: the fetch failing stops before the hand-over" 'stops_before fetch-review 1'
+check "/fetch-review: takes an optional --force" 'grep -qx "argument-hint: \"<clickup-task-id> \[--force\]\"" "$SK/fetch-review/SKILL.md"'
+check "/fetch-review: passes --force on only when the user typed it" 'grep -q "fetch-duo-review.sh <task-id> \[--force\]\`.*only when the user typed it" "$SK/fetch-review/SKILL.md" && grep -q "Never add \`--force\` yourself" "$SK/fetch-review/SKILL.md"'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
