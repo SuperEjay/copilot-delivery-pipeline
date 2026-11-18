@@ -5,6 +5,7 @@
 #
 # It turns the pipeline's rules into enforced ones:
 #   deny  approving evidence, touching evidence/APPROVED|UPLOADED or verified-head
+#   deny  agent changes to the task state (.work/<id>/state.env); reading it is fine
 #   deny  reading or printing secrets (tokens, .auth/ sessions, ~/.ssh)
 #   deny  destructive git (force push, reset --hard, clean -f, branch -D, --no-verify)
 #   deny  raw git push / glab write calls (scripts must be used)
@@ -23,6 +24,7 @@
 #   secret  denied if mentioned at all   denied     denied
 #   record  denied if mentioned at all   denied     allowed
 #   config  denied when a write targets  denied     allowed
+#   state   denied when a write targets  denied     allowed
 # Entries are literal paths; a folder ends in "/" and covers itself and
 # everything in it. A match starts at a path segment, anywhere in the path.
 PROTECTED='
@@ -41,9 +43,11 @@ config  .github/skills/fetch-review/
 config  .github/copilot-instructions.md
 config  scripts/agent/
 config  .agent.env
+state   state.env
 '
 REASON_secret="That file holds credentials or a saved login session. Agents never need to read or change it."
 REASON_record="verified-head and evidence/APPROVED|UPLOADED are written only by the pipeline's scripts: run-checks.sh records the verified commit, and the user approves evidence with approve-evidence.sh. Run scripts/agent/run-checks.sh <task-id> all to re-verify."
+REASON_state="state.env is the task's state, written only by the pipeline's scripts (start-task.sh, create-mr.sh, fetch-duo-review.sh, review-signals.sh --mark-reviewed). Read it if you need to; don't change it."
 REASON_config="Pipeline config (agents and their models, hooks, prompts, instructions, scripts, .agent.env) is user-owned, from the shell too. Tell the user what you'd change and why."
 
 if [ "${1:-}" = "--list-protected" ]; then
@@ -60,7 +64,7 @@ re_escape() {   # re_escape <text>: escape ERE metacharacters into $REPLY (no su
     case "$c" in [].\\[*^\$+?\(\)\{\}\|/]) REPLY+="\\$c" ;; *) REPLY+="$c" ;; esac
   done
 }
-PATHS_secret=''; PATHS_record=''; PATHS_config=''
+PATHS_secret=''; PATHS_record=''; PATHS_config=''; PATHS_state=''
 while read -r kind entry; do
   [ -n "$kind" ] || continue
   re_escape "${entry%/}"; alt="$REPLY"
@@ -68,10 +72,11 @@ while read -r kind entry; do
     secret) PATHS_secret+="${PATHS_secret:+|}$alt" ;;
     record) PATHS_record+="${PATHS_record:+|}$alt" ;;
     config) PATHS_config+="${PATHS_config:+|}$alt" ;;
+    state)  PATHS_state+="${PATHS_state:+|}$alt" ;;
   esac
 done <<<"$PROTECTED"
 SEG_END='([^A-Za-z0-9._-]|$)'
-for kind in secret record config; do
+for kind in secret record config state; do
   v="PATHS_$kind"; printf -v "$v" '(%s)%s' "${!v}" "$SEG_END"
 done
 SHELL_START='(^|[/[:space:]"'"'"'=<>(`])'   # where a path can start inside a command
@@ -119,16 +124,19 @@ if $is_shell; then
     decide deny "Evidence approval is the user's job. Ask them to review evidence.md and run approve-evidence.sh themselves."
   [[ $cmd =~ $SHELL_START$PATHS_record ]] && decide deny "$REASON_record"
 
-  # Shell writes to pipeline config. Checked per command segment, so
-  # `rm -rf x && scripts/agent/...` is fine. A redirect may put a relative
-  # prefix (./, ../, dir/) before the path.
-  redirect_to_config=">[|]?[[:space:]]*[\"']?([^[:space:];&|]*/)?$PATHS_config"
+  # Shell writes to pipeline config and task state. Checked per command
+  # segment, so `rm -rf x && scripts/agent/...` is fine. A redirect may put a
+  # relative prefix (./, ../, dir/) before the path.
   writer='(^|[[:space:]/(])(tee|cp|mv|rm|rmdir|ln|chmod|chown|truncate|install|dd|patch|unlink|shred|rsync|sed[[:space:]]+([^|;&]*[[:space:]])?(-[a-zA-Z]*i|--in-place)|perl[[:space:]]+-[a-zA-Z]*i|(python[0-9.]*|node|ruby|perl)[[:space:]]+-[a-zA-Z]*[ce]|git[[:space:]]+(checkout|restore|rm|mv|apply|stash))([[:space:]]|$)'
   while IFS= read -r seg; do
-    if [[ $seg =~ $redirect_to_config ]] ||
-       { [[ $seg =~ $writer ]] && [[ $seg =~ $SHELL_START$PATHS_config ]]; }; then
-      decide deny "$REASON_config"
-    fi
+    for kind in config state; do
+      v="PATHS_$kind"; r="REASON_$kind"
+      redirect=">[|]?[[:space:]]*[\"']?([^[:space:];&|]*/)?${!v}"
+      if [[ $seg =~ $redirect ]] ||
+         { [[ $seg =~ $writer ]] && [[ $seg =~ $SHELL_START${!v} ]]; }; then
+        decide deny "${!r}"
+      fi
+    done
   done < <(sed -E 's/(&&|\|\||[;|&])/\n/g' <<<"$cmd")
 
   [[ $cmd =~ $SHELL_START$PATHS_secret ]] && decide deny "$REASON_secret"
@@ -175,6 +183,7 @@ if $is_edit || $is_read; then
     if $is_edit; then
       [[ $p =~ $PATH_START$PATHS_record ]] && decide deny "$REASON_record"
       [[ $p =~ $PATH_START$PATHS_config ]] && decide deny "$REASON_config"
+      [[ $p =~ $PATH_START$PATHS_state ]] && decide deny "$REASON_state"
     fi
   done <<<"$paths"
 fi

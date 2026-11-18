@@ -111,9 +111,10 @@ declare -A want=(
   [secret]='deny deny deny deny'
   [record]='deny deny deny allow'
   [config]='deny allow deny allow'
+  [state]='deny allow deny allow'
 )
 list="$(bash "$GUARD" --list-protected)"
-for kind in secret record config; do
+for kind in secret record config state; do
   if grep -q "^$kind	" <<<"$list"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: --list-protected has no $kind entries"; fi
 done
 while IFS=$'\t' read -r kind entry; do
@@ -135,6 +136,15 @@ while IFS=$'\t' read -r kind entry; do
     ed deny editFiles "${entry%/}"
   fi
 done <<<"$list"
+
+# ---------- task state: agents read it, only the scripts write it ----------
+sh allow 'ls .work/T-1/state.env'
+sh allow 'grep MR_IID .work/T-1/state.env'
+sh allow 'scripts/agent/start-task.sh T-1 login-form'
+ed allow read_file '.work/T-1/state.env'
+sh deny  'echo REVIEW_ROUND=0 >> .work/T-1/state.env'
+sh deny  'sed -i s/REVIEW_ROUND=3/REVIEW_ROUND=0/ .work/T-1/state.env'
+ed deny  editFiles '.work/T-1/state.env'
 
 # ---------- protected paths: a match starts at a path segment, the same in both channels ----------
 sh allow 'echo x > my.agent.env'
