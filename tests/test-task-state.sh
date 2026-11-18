@@ -94,5 +94,26 @@ for w in "state_set_mr_iid T9 1" "state_set_review T9 1 2" "state_set_reviewed_s
   check "${w%% *}: no state file is an error" '[ $? -eq 1 ] && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first." && [ ! -e .work/T9/state.env ]'
 done
 
+# ---------- deprecated load_state / set_state, for scripts --update kept ----------
+# lst '<code after load_state T1>': run it in a script that sourced config.sh.
+lst() { bash -c 'set -eu; source scripts/agent/config.sh; load_state T1; eval "$1"' _ "$1" > "$T/out.txt" 2> "$T/err.txt"; }
+state TASK=T1 BRANCH=feature/T1-gate MR_IID=7 REVIEW_ROUND=2 REVIEW_IDS=123 REVIEWED_SHA=abc
+lst 'echo "$TASK|$BRANCH|$MR_IID|$REVIEW_ROUND|$REVIEW_IDS|$REVIEWED_SHA"'
+check "load_state still sets the known keys" '[ $? -eq 0 ] && out "T1|feature/T1-gate|7|2|123|abc"'
+state BRANCH=b
+lst 'echo "${MR_IID-unset}"'
+check "load_state leaves a missing key unset, so \${MR_IID:?} still fails" 'out unset'
+state 'BRANCH=feature/T1-$(touch pwned4)' MAX_REVIEW_ROUNDS=99 BASE_BRANCH=release
+lst 'echo "$BRANCH|$MAX_REVIEW_ROUNDS|$BASE_BRANCH"'
+check "load_state parses: nothing runs, unknown keys don't override settings" 'out "feature/T1-\$(touch pwned4)|3|main" && [ ! -e pwned4 ]'
+rm $W/state.env   # without set -e, as review-signals.sh runs
+bash -c 'source scripts/agent/config.sh; load_state T1; echo reached' > "$T/out.txt" 2> "$T/err.txt"
+check "load_state with no file exits the script" '[ $? -eq 1 ] && out "" && err "No .work/T1/state.env. Run scripts/agent/start-task.sh first."'
+st set_state T2 MR_IID 5; st state_mr_iid T2
+check "set_state still writes a key" 'out 5'
+cp $W2/state.env "$T/before"
+bash -c 'source scripts/agent/config.sh; set_state T2 MR_IID "$1"; echo reached' _ $'6\nBASE_BRANCH=x' > "$T/out.txt" 2> "$T/err.txt"
+check "set_state refuses a newline and exits the script" '[ $? -eq 1 ] && out "" && cmp -s $W2/state.env "$T/before"'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

@@ -33,22 +33,6 @@ require() {
   done
 }
 
-load_state() {
-  local file
-  file="$(task_dir "$1")/state.env"
-  [ -f "$file" ] || { echo "No $file. Run scripts/agent/start-task.sh first." >&2; exit 1; }
-  # shellcheck disable=SC1090
-  source "$file"
-}
-
-# Set KEY=VALUE in a task's state.env (portable: no sed -i).
-set_state() {
-  local file tmp
-  file="$(task_dir "$1")/state.env"; tmp="$file.tmp"
-  grep -v "^$2=" "$file" > "$tmp" || true
-  echo "$2=$3" >> "$tmp"
-  mv "$tmp" "$file"
-}
-
+# The task state readers and writers (.work/<id>/state.env).
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/task-state.sh"
