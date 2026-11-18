@@ -3,6 +3,7 @@ name: planner
 description: "Stage 2: slice approved requirements into thin end-to-end slices with affected modules and a test plan per slice"
 model: 'Claude Opus 5.5'
 tools: ['read', 'search', 'edit', 'todo']
+include-custom-instructions: true
 handoffs:
   - label: "Plan approved → build slice 1"
     agent: implementer
@@ -70,8 +71,19 @@ When handed findings with `Route: re-plan` from `code-review.md`:
 |---|---|
 ~~~
 
+## In an auto run
+Follow this section only when the prompt starts with `AUTO RUN`. The orchestrator sent it, and `scripts/agent/next-stage.sh` decides what runs next from the files you write. Where this section conflicts with the steps above, it wins.
+- **Never ask the user anything.** Write open questions and decisions into your files in `.work/<task-id>/` and return. Only the orchestrator talks to the user.
+- **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
+- **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
+- **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+- **Open questions don't stop you.** Skip step 1. List each open question that blocks planning under `## Requirement gaps`, set `- Requirement gaps: yes`, and still write the plan. Do the same for a review finding you can't plan without a behaviour decision, instead of using the requirements handoff.
+- **Keep the Stop flags current** on every run: a first plan, "Requirements … changed; update plan.md" (keep done slices ticked and change only what the new requirements touch), and "Re-plan the review findings" (Re-planning from code review, above). Any `yes` stops the run for the user; otherwise the plan goes on as an auto-decision.
+
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
 - Plan written → `**Next:** review .work/<task-id>/plan.md. When it's right, pick the **implementer** agent and say "Build <task-id>".`
 - Requirement gaps found → `**Next:** pick the **requirements** agent and say "Update requirements for <task-id> from the plan gaps".`
 - Review slices added → `**Next:** pick the **implementer** agent and say "Build <task-id>".`
+
+In an auto run, end with the **Result:** line instead (see In an auto run).
