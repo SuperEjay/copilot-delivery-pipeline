@@ -121,7 +121,8 @@ while IFS=$'\t' read -r kind entry; do
   [ -n "$kind" ] || continue
   read -r w_write w_mention w_edit w_read <<<"${want[$kind]:-unknown}"
   [ "$w_write" = unknown ] && { fail=$((fail + 1)); echo "FAIL: unknown kind '$kind' for $entry"; continue; }
-  file="$entry"; [ "${entry%/}" != "$entry" ] && file="${entry}x"   # a file inside a folder entry
+  file="${entry//\*/T-1}"                                           # a "*" segment: a task id
+  [ "${entry%/}" != "$entry" ] && file="${file}x"                   # a file inside a folder entry
   sh "$w_write"   "echo x > $file"
   sh "$w_mention" "cat $file"
   ed "$w_edit"    editFiles "$file"
@@ -145,6 +146,39 @@ ed allow read_file '.work/T-1/state.env'
 sh deny  'echo REVIEW_ROUND=0 >> .work/T-1/state.env'
 sh deny  'sed -i s/REVIEW_ROUND=3/REVIEW_ROUND=0/ .work/T-1/state.env'
 ed deny  editFiles '.work/T-1/state.env'
+
+# ---------- the auto run's record: next-stage.sh writes it, agents read it ----------
+# status.md holds stop approvals ("Approved <stop-id>: <checksum>"); a forged
+# line would walk an auto run past a stop the user never approved.
+ed deny  editFiles '.work/T-1/status.md'
+ed deny  create_file '/home/u/proj/.work/T-1/status.md'
+sh deny  'echo "Approved pre-ship: x" >> .work/T-1/status.md'
+sh deny  'sed -i s/stop/run/ .work/T-1/status.md'
+sh deny  'echo "Approved pre-ship: x" >> .work/*/status.md'
+ed allow read_file '.work/T-1/status.md'
+sh allow 'cat .work/T-1/status.md'
+sh allow 'scripts/agent/next-stage.sh T-1 approve'
+# Only under .work/<id>/: a product file named status.md stays editable.
+ed allow editFiles 'docs/status.md'
+sh allow 'echo x > docs/status.md'
+ed allow editFiles '.workx/T-1/status.md'
+ed allow editFiles '.work/status.md'
+ed allow editFiles '.work/T-1/sub/status.md'
+# Other shapes of the same path: doubled slashes, "." and ".." segments.
+ed deny  editFiles '.work//T-1/status.md'
+ed deny  editFiles '.work/T-1//status.md'
+ed deny  editFiles '.work/./T-1/status.md'
+ed deny  editFiles '.work/T-1/./status.md'
+ed deny  editFiles '.work/T-1/../T-1/status.md'
+ed deny  editFiles '../proj/.work/T-1/status.md'
+sh deny  'echo x >> .work//T-1/status.md'
+sh deny  'echo x >> .work/./T-1/status.md'
+sh deny  'echo x >> .work/T-1/../T-1/status.md'
+sh deny  'cp /tmp/s.md .work/T-1//status.md'
+ed deny  editFiles 'scripts//agent/config.sh'
+sh deny  'echo x > scripts/./agent/config.sh'
+ed allow editFiles '.work/T-1/../status.md'
+sh allow 'echo x > .work/T-1/../../docs/status.md'
 
 # ---------- the pipeline's scripts are run, never sourced ----------
 sh deny "bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate.sh; gate_record_run T-1 0'"
@@ -190,6 +224,31 @@ sub_sh deny 'scripts/agent/next-stage.sh T-1'
 sub_sh deny 'bash ./scripts/agent/next-stage.sh T-1 approve'
 sub_sh allow 'cat scripts/agent/next-stage.sh'
 sub_sh allow 'scripts/agent/run-checks.sh T-1 all'
+# Other spellings of running it: a quoted path, a variable, a glob, split
+# quotes, a pipe into xargs or a shell, a command substitution, find -exec.
+sub_sh deny '"scripts/agent/next-stage.sh" T-1 approve'
+sub_sh deny "'scripts/agent/next-stage.sh' T-1 approve"
+sub_sh deny 'N=scripts/agent/next-stage.sh; $N T-1 approve'
+sub_sh deny 'x=next-stage; scripts/agent/$x.sh T-1 approve'
+sub_sh deny 'scripts/agent/next-st*.sh T-1 approve'
+sub_sh deny 'scripts/agent/next-sta""ge.sh T-1 approve'
+sub_sh deny 'scripts/agent/next-stage\.sh T-1 approve'
+sub_sh deny 'echo T-1 approve | xargs scripts/agent/next-stage.sh'
+sub_sh deny 'cat scripts/agent/next-stage.sh | bash -s T-1 approve'
+sub_sh deny 'cat $(scripts/agent/next-stage.sh T-1 approve)'
+sub_sh deny 'find scripts -name next-stage.sh -exec {} T-1 approve \;'
+sub_sh deny 'bash -c "scripts/agent/next-stage.sh T-1 approve"'
+sub_sh deny 'cd scripts/agent && ./next-stage.sh T-1 approve'
+# Reading it is fine: the name in a read-only command.
+sub_sh allow 'cat scripts/agent/next-stage.sh 2>/dev/null'
+sub_sh allow 'head -n 40 scripts/agent/next-stage.sh'
+sub_sh allow 'grep -rn next-stage.sh docs/'
+sub_sh allow 'grep -n approve scripts/agent/next-stage.sh | head -5'
+sub_sh allow 'git diff main -- scripts/agent/next-stage.sh tests/test-next-stage.sh'
+sub_sh allow 'git log --oneline -- scripts/agent/next-stage.sh'
+sub_sh allow 'wc -l scripts/agent/next-stage.sh'
+sub_sh allow 'echo x > notes/next-steps.md'
+sub_sh allow 'bash tests/test-next-stage.sh'
 
 # ---------- switch ----------
 got="$(jq -n '{toolName: "bash", toolArgs: {command: "git push"}}' | PIPELINE_GUARD=off bash "$GUARD")"

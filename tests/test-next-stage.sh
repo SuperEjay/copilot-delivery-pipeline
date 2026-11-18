@@ -123,6 +123,12 @@ next T1
 check "7 slices stop the plan" '[[ "$out" == "stop plan "*"7 slices"* ]]'
 next T1 approve; next T1
 check "an approved plan goes on" '[[ "$out" != stop* ]] && [ ! -f $W/auto-decisions.md ]'
+sed -i 's/^- \[ \] S1:/- [x] S1:/' $W/plan.md; next T1
+check "a ticked slice doesn't bring the approved plan's stop back" '[[ "$out" == "run implementer "* ]]'
+sed -i 's/^- \[ \] S2:/- [X] S2:/' $W/plan.md; next T1
+check "nor does a second one" '[[ "$out" == "run implementer "* ]]'
+sed -i 's/^- \[ \] S7: slice 7/- [ ] S7: slice 7 (changed)/' $W/plan.md; next T1
+check "a changed slice does bring it back" '[[ "$out" == "stop plan "*"7 slices"* ]]'
 plan_md 3
 next T1
 BUILD="run implementer AUTO RUN. Build T1: implement the next unchecked slice in plan.md."
@@ -133,6 +139,10 @@ check "the auto-decision is recorded once per plan" '[ "$(grep -c "Plan accepted
 echo "- AC-4: w" >> $W/requirements.md
 next T1; next T1 approve; next T1
 check "requirements changed after the plan: run the planner to update it" '[ "$out" = "run planner AUTO RUN. Requirements for T1 changed; update plan.md." ]'
+next T1
+check "the planner changed nothing for the new requirements: stop stalled, offering to keep the plan" '[[ "$out" == "stop stalled planner "*"keep plan.md as it is"* ]]'
+next T1 approve; next T1
+check "approved: the plan is kept for the new requirements, no planner loop" '[ "$out" = "run implementer AUTO RUN. Build T1: implement the next unchecked slice in plan.md." ]'
 plan_md 4
 next T1
 check "updated plan: accepted again" '[ "$out" = "$BUILD" ] && [ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 2 ]'
@@ -141,6 +151,7 @@ check "updated plan: accepted again" '[ "$out" = "$BUILD" ] && [ "$(grep -c "Pla
 sed -i 's/^- \[ \] S1:/- [x] S1:/; s/^- \[ \] S2:/- [x] S2:/; s/^- \[ \] S3:/- [x] S3:/' $W/plan.md
 next T1
 check "one slice left: still the implementer" '[ "$out" = "$BUILD" ]'
+check "ticked slices don't add another plan auto-decision" '[ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 2 ]'
 sed -i 's/^- \[ \] S4:/- [x] S4:/' $W/plan.md
 next T1
 check "every slice ticked: not the implementer" '[ "$out" != "$BUILD" ]'
@@ -172,6 +183,7 @@ check "approving the fix-limit stop allows another round" '[ "$out" = "$FIX" ] &
 next T1
 next T1 approve; next T1
 check "approving the stalled stop runs the stage once more" '[ "$out" = "$FIX" ]'
+check "approving the stalled stop doesn't start the fix rounds over" 'grep -qx "Fix round: 1/2" $W/status.md'
 next T1
 check "still nothing changed: stalled again" '[[ "$out" == "stop stalled implementer "* ]]'
 printf '# Verification: T1\nResult: FAIL\n' > $W/verification.md
@@ -190,7 +202,7 @@ mark_reviewed; next T1
 check "reviewed at HEAD but no code-review.md: a stop no approval passes" '[[ "$out" == "stop review "*"code-review.md"* ]] && { next T1 approve; [ $rc -eq 1 ]; }'
 review_md "fix quick open" "debt _ open" "skip _ open"
 next T1
-check "an open quick fix: back to the implementer as a fix round" '[ "$out" = "$QUICK" ] && grep -qx "Fix round: 1/2" $W/status.md'
+check "an open quick fix: back to the implementer, a fix round on the same count as verify" '[ "$out" = "$QUICK" ] && grep -qx "Fix round: 2/2" $W/status.md'
 commit_change; verify PASS; next T1
 check "after the fix: verify passed, a delta review" '[ "$out" = "$REVIEW" ]'
 mark_reviewed; review_md "fix quick fixed" "_pending_ _(set_if_fix)_ open"
@@ -198,6 +210,9 @@ next T1
 check "a finding without a decision: stop review" '[[ "$out" == "stop review "*"CR-2"* ]]'
 next T1 approve
 check "approve refuses while a finding has no decision" '[ $rc -eq 1 ] && grep -q "CR-2" "$T/out.txt"'
+review_md "fix quick verified" "fix _(set_if_fix)_ open"
+next T1
+check "an open fix without a route: stop review" '[[ "$out" == "stop review "*"CR-2"* ]]'
 review_md "fix quick verified" "fix re-plan open"
 next T1
 check "a re-plan route: stop review" '[[ "$out" == "stop review "*"re-plan"* ]]'
@@ -207,7 +222,7 @@ review_md "fix re-plan open" "fix requirements open"
 next T1; next T1 approve; next T1
 check "a requirements route goes furthest back: the requirements agent" '[ "$out" = "run requirements AUTO RUN. Update requirements for T1 from the code review (Route: requirements in code-review.md)." ]'
 review_md "fix quick open"; next T1
-check "another quick fix: fix round 1" 'grep -qx "Fix round: 1/2" $W/status.md'
+check "after approving a review stop, another quick fix: the count started over, fix round 1" 'grep -qx "Fix round: 1/2" $W/status.md'
 commit_change; verify PASS; mark_reviewed
 review_md "fix quick verified" "debt _ open" "skip _ open"
 next T1
@@ -231,10 +246,16 @@ next T1
 check "mr.md written: the one pre-ship stop" '[[ "$out" == "stop pre-ship "*"evidence.md"*"mr.md"*"auto-decisions.md"*"approve-evidence.sh"* ]]'
 next T1 approve
 check "approve refuses until the evidence is approved" '[ $rc -eq 1 ] && grep -q "approve-evidence.sh" "$T/out.txt"'
+sed -i 's/^- \[x\] AC-1/- [ ] AC-1/' $W/evidence/evidence.md; next T1
+sed -i 's/^- \[ \] AC-1/- [x] AC-1/' $W/evidence/evidence.md
 approve_evidence; next T1 approve
-check "evidence approved after the stop was shown: show it again first" '[ $rc -eq 1 ] && grep -q "changed" "$T/out.txt"'
-next T1; next T1 approve; next T1
+check "evidence ticked and approved after the stop was shown: one approve passes" '[ $rc -eq 0 ] && grep -q "^Approved pre-ship: " $W/status.md'
+next T1
 check "approved with the evidence approved: the shipper ships" '[ "$out" = "run shipper AUTO RUN. Ship T1. The user confirmed the push at the pre-ship stop." ]'
+echo "retaken" > $W/evidence/AC-1.md; echo "- note" >> $W/evidence/evidence.md; next T1
+check "evidence.md changed beyond its ticks after approval: the pre-ship stop again" '[[ "$out" == "stop pre-ship "* ]]'
+approve_evidence; next T1; next T1 approve; next T1
+check "approved again: the shipper ships" '[ "$out" = "run shipper AUTO RUN. Ship T1. The user confirmed the push at the pre-ship stop." ]'
 mr_opened; next T1
 check "MR open: the run ends until Duo has reviewed" '[ "$out" = "end MR open. Run /fetch-review T1 after Duo has reviewed it." ]'
 
@@ -270,6 +291,21 @@ check "planner template: the four Stop flags" 'grep -qx "## Stop flags" $A/plann
 check "verifier template: Commit is the HEAD it checked, PASS or FAIL" 'grep -q "^Commit: <the HEAD you checked" $A/verifier.agent.md && ! grep -q "or none>" $A/verifier.agent.md'
 check "evidence template: Commit line" 'grep -q "^Commit: <the HEAD" $A/evidence.agent.md'
 check "review-responder: Round and Replied lines in review-triage.md" 'grep -q "Round: <n>" $A/review-responder.agent.md && grep -q "Replied: yes" $A/review-responder.agent.md'
+
+# ---------- the header's contract names every stop the script raises ----------
+NS="$ROOT/payload/scripts/agent/next-stage.sh"
+# stop_doc: the header's "stop <stop-id> <reason>" entry as one line.
+stop_doc() { awk '/^#  +stop <stop-id> <reason>/ { on = 1 } /^#  +end <reason>/ { on = 0 } on' "$NS" | sed 's/^#//' | tr -s ' \n' '  '; }
+ids() { grep -oE "_$1 [a-z-]+ " "$NS" | awk '{ print $2 }' | sort -u; }
+for id in $(ids stop); do
+  check "header: the $id stop is listed" 'stop_doc | sed "s/no approval passes.*//" | grep -qw -- "$id"'
+done
+for id in $(ids unreadable); do
+  check "header: the $id stop is listed as one no approval passes" 'stop_doc | grep -q "no approval passes" && stop_doc | sed "s/.*no approval passes//" | grep -qw -- "$id"'
+done
+# macOS ships bash 3.2: no associative arrays, mapfile or ${x,,}.
+check "runs on bash 3.2: no bash 4 features" '! grep -nE "(declare|local) -A|mapfile|readarray|\$\{[A-Za-z_]+(,,|\^\^)\}" "$NS"'
+check "header: end names both ends of a run" 'grep -E "^#  +end <reason>" -A1 "$NS" | grep -q "Duo round"'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

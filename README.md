@@ -78,6 +78,7 @@ tests/test-guard.sh       # checks the hook guard's allow / deny / ask decision 
 tests/test-gates.sh       # checks that only the verified commit can be pushed (stub glab, local remote)
 tests/test-task-state.sh  # checks that .work/<id>/state.env is read as data and written in one format
 tests/test-next-stage.sh  # checks the auto run's router: the next stage or stop for fixture .work/ folders
+tests/test-agents.sh      # checks the stage agents: subagent frontmatter, handoffs, the "In an auto run" sections
 tests/test-orchestrator.sh  # checks the orchestrator (pipeline agent) against the router's verbs and stop ids
 ```
 

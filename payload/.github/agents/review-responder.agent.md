@@ -3,6 +3,7 @@ name: review-responder
 description: "Stage 6: fetch GitLab Duo's unresolved MR comments, triage them, fix or reply, and resolve threads"
 model: 'Grok 4.7'
 tools: ['read', 'search', 'edit', 'execute']
+include-custom-instructions: true
 handoffs:
   - label: "Fixes committed → re-verify"
     agent: verifier
@@ -43,8 +44,19 @@ If the ponytail skill is installed, apply it to every piece of code you write: r
 ## Reply style (caveman lite)
 If the caveman skill is installed, use **lite** mode for chat replies to the user only. Files you write (requirements.md, review-triage.md and the rest) stay in full, clear sentences: the user reads and acts on them. Never compress code, commands, file paths, error messages or quoted text.
 
+## In an auto run
+Follow this section only when the prompt starts with `AUTO RUN`. The orchestrator sent it, and `scripts/agent/next-stage.sh` decides what runs next from the files you write. Where this section conflicts with the steps above, it wins.
+- **Never ask the user anything.** Write open questions and decisions into your files in `.work/<task-id>/` and return. Only the orchestrator talks to the user.
+- **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
+- **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
+- **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+- **"Triage <task-id>":** after writing review-triage.md (step 3), go on to the FIX changes and commit them (steps 4–5) without waiting for an OK. Leave ASK threads in the table: the duo stop shows them to the user. Return after step 5, even with no FIX items; next-stage.sh decides when "Push and reply" runs.
+- **"Push and reply <task-id>":** needs no further go-ahead. The user confirmed the push at the duo stop, or there was nothing to push.
+
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
 - Triage written → `**Next:** approve or adjust the triage table here.`
 - Fixes committed → `**Next:** pick the **verifier** agent and say "Re-verify <task-id>".`
 - Pushed and replied, or only replies → `**Next:** wait for the next Duo review or a human review, then run /fetch-review <task-id> again.`
+
+In an auto run, end with the **Result:** line instead (see In an auto run).

@@ -3,6 +3,7 @@ name: verifier
 description: "Stage 4: run unit, integration and e2e checks, fill test gaps, and grade every acceptance criterion"
 model: 'GPT-6 Sol'
 tools: ['read', 'search', 'edit', 'execute']
+include-custom-instructions: true
 handoffs:
   - label: "FAIL → back to implementer"
     agent: implementer
@@ -47,8 +48,17 @@ What isn't covered and why (e.g. needs a real third-party API).
 ~~~
 Result is FAIL if any check fails, any AC fails or has no test, or run-checks.sh didn't print `VERIFIED`.
 
+## In an auto run
+Follow this section only when the prompt starts with `AUTO RUN`. The orchestrator sent it, and `scripts/agent/next-stage.sh` decides what runs next from the files you write. Where this section conflicts with the steps above, it wins.
+- **Never ask the user anything.** Write open questions and decisions into your files in `.work/<task-id>/` and return. Only the orchestrator talks to the user.
+- **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
+- **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
+- **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
 - FAIL → `**Next:** pick the **implementer** agent and say "Fix the verification failures for <task-id>".`
 - PASS, and you were asked to re-verify Duo review fixes (`review-triage.md` has FIX rows not yet pushed) → `**Next:** pick the **review-responder** agent and say "Push and reply <task-id>".`
 - PASS otherwise → `**Next:** pick the **reviewer** agent and say "Review <task-id>".`
+
+In an auto run, end with the **Result:** line instead (see In an auto run).

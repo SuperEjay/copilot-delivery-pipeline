@@ -89,7 +89,20 @@ check "rules: no stage work of its own" 'sec "Rules" "never do a stage.s work"'
 SK="$ROOT/payload/.github/skills"
 check "/start-task: the pipeline agent starts the auto run" 'grep -q "If you are the \*\*pipeline\*\* agent, start the auto run" "$SK/start-task/SKILL.md"'
 check "/fetch-review: the pipeline agent continues the auto run" 'grep -q "If you are the \*\*pipeline\*\* agent, continue the auto run" "$SK/fetch-review/SKILL.md"'
-check "/fetch-review: the round limit still stops first" 'awk "/round limit/ { r = NR } /pipeline\*\* agent/ { p = NR } END { exit !(r && p && r < p) }" "$SK/fetch-review/SKILL.md"'
+check "/fetch-review: the round limit comes before the hand-over" 'awk "/round limit/ { r = NR } /pipeline\*\* agent/ { p = NR } END { exit !(r && p && r < p) }" "$SK/fetch-review/SKILL.md"'
+# stops_before <skill> <n>: n script steps say "If it fails … pass on its message
+# and end your turn here", all before the pipeline hand-over, so no failure
+# reaches the loop. ("Stop" is kept for the auto run's stops.)
+stops_before() { awk '/If it fails.*pass on its message and end your turn here/ { if (!p) n++ } /pipeline\*\* agent/ { p = 1 } END { exit !(p && n == '"$2"') }' "$SK/$1/SKILL.md"; }
+check "/start-task: either script failing stops before the hand-over" 'stops_before start-task 2'
+check "/fetch-review: the fetch failing stops before the hand-over" 'stops_before fetch-review 1'
+check "/fetch-review: takes an optional --force" 'grep -qx "argument-hint: \"<clickup-task-id> \[--force\]\"" "$SK/fetch-review/SKILL.md"'
+check "/fetch-review: passes --force on only when the user typed it" 'grep -q "fetch-duo-review.sh <task-id> \[--force\]\`.*only when the user typed it" "$SK/fetch-review/SKILL.md" && grep -q "Never add \`--force\` yourself" "$SK/fetch-review/SKILL.md"'
+check "/fetch-review: the round limit isn't an auto-run stop: no decision block, no router" 'grep "round limit" "$SK/fetch-review/SKILL.md" | grep "isn.t an auto-run stop" | grep "DECISION NEEDED" | grep -q "don.t run \`next-stage.sh\`"'
+check "/fetch-review: at the round limit, the exact --force command, task id first" 'grep "round limit" "$SK/fetch-review/SKILL.md" | grep -q "\`/fetch-review <task-id> --force\` (the task id first)"'
+check "/fetch-review: a failure doesn't go on to step 2" 'grep -q "end your turn here, without step 2" "$SK/fetch-review/SKILL.md"'
+check "/start-task: its description names the auto run" 'grep "^description:" "$SK/start-task/SKILL.md" | grep -q "pipeline agent, start the auto run"'
+check "/fetch-review: its description names the auto run" 'grep "^description:" "$SK/fetch-review/SKILL.md" | grep -q "pipeline agent, resume the auto run"'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
