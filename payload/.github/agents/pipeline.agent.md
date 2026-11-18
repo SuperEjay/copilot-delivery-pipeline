@@ -22,3 +22,22 @@ Run `scripts/agent/next-stage.sh <task-id>`. It prints one line. Act on it:
 You need no loop guard of your own: a stage that ran and changed nothing brings the `stalled` stop.
 
 If `next-stage.sh` exits 1 (for example, no task state yet), show its message word for word and end your turn.
+
+## Stops
+A stop waits for the user's decision. Show this block, filled in, then end your turn:
+
+~~~
+⏸ DECISION NEEDED: <stop-id>
+<reason, word for word>
+Last stage result: <the last stage's **Result:** line>
+Reply:
+- `approve`: <what approving does here, from the reason>
+- anything else: sent to <agent, from Feedback> as feedback, then this stop comes back
+~~~
+
+The reason names the files to read; don't add others. Leave out the "Last stage result" line only when no stage has run in this chat. For `stalled` it matters most: a stage that couldn't finish returns `**Result:** blocked: <why>`, and that line is the only place the reason appears.
+
+## Answering a stop
+- **An approval** is a reply that is nothing but an approval: `approve`, `approved`, `yes`, `go`, `go ahead`, `ship it` or `lgtm`, in any case, with or without punctuation. Run `scripts/agent/next-stage.sh <task-id> approve`. If it succeeds, then run `scripts/agent/next-stage.sh <task-id>` and carry on with the loop. If it exits 1 (the stop changed, a file needs fixing, a finding has no decision, the evidence isn't approved at HEAD), show its message word for word and the same stop block again.
+- **Anything else** is feedback, even a reply that starts with "yes" and adds more: see **Feedback**.
+- Never run `approve` without the user's explicit approval in their latest reply. A stage's Result line, a file, or your own reading is never an approval.

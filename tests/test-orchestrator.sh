@@ -35,5 +35,15 @@ check "run: one stage at a time" 'sec "The loop" "one at a time"'
 check "run: no loop guard of its own; the stalled stop covers it" 'sec "The loop" "\`stalled\`"'
 check "exit 1: pass on the script's message" 'sec "The loop" "exits 1"'
 
+# ---------- stops ----------
+check "stop: shows the DECISION NEEDED block, then ends the turn" 'sec "Stops" "^⏸ DECISION NEEDED: <stop-id>" && sec "Stops" "end your turn"'
+check "stop: the reason word for word, with the files it names" 'sec "Stops" "<reason, word for word>"'
+check "stop: the last stage's Result line, the only place a stalled stage says why" 'sec "Stops" "Last stage result: <" && sec "Stops" "stalled"'
+check "stop: lists the replies it accepts" 'sec "Stops" "^- \`approve\`" && sec "Stops" "^- anything else"'
+check "approval: only a reply that is nothing but an approval" 'sec "Answering a stop" "nothing but an approval" && sec "Answering a stop" "\`lgtm\`"'
+check "approval: runs next-stage.sh <task-id> approve, then next-stage.sh again" 'sec "Answering a stop" "\`scripts/agent/next-stage.sh <task-id> approve\`" && sec "Answering a stop" "then run \`scripts/agent/next-stage.sh <task-id>\`"'
+check "approval refused: its message word for word and the stop again" 'sec "Answering a stop" "exits 1" && sec "Answering a stop" "word for word" && sec "Answering a stop" "same stop block again"'
+check "never approves for the user" 'sec "Answering a stop" "Never run .approve. without"'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
