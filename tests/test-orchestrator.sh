@@ -81,6 +81,11 @@ SK="$ROOT/payload/.github/skills"
 check "/start-task: the pipeline agent starts the auto run" 'grep -q "If you are the \*\*pipeline\*\* agent, start the auto run" "$SK/start-task/SKILL.md"'
 check "/fetch-review: the pipeline agent continues the auto run" 'grep -q "If you are the \*\*pipeline\*\* agent, continue the auto run" "$SK/fetch-review/SKILL.md"'
 check "/fetch-review: the round limit still stops first" 'awk "/round limit/ { r = NR } /pipeline\*\* agent/ { p = NR } END { exit !(r && p && r < p) }" "$SK/fetch-review/SKILL.md"'
+# stops_before <skill> <n>: n script steps say "If it fails … pass on its message
+# and stop", all before the pipeline hand-over, so no failure reaches the loop.
+stops_before() { awk '/If it fails.*pass on its message and stop/ { if (!p) n++ } /pipeline\*\* agent/ { p = 1 } END { exit !(p && n == '"$2"') }' "$SK/$1/SKILL.md"; }
+check "/start-task: either script failing stops before the hand-over" 'stops_before start-task 2'
+check "/fetch-review: the fetch failing stops before the hand-over" 'stops_before fetch-review 1'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
