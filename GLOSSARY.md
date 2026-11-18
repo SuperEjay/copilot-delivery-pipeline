@@ -25,8 +25,12 @@ One pass of a task through the pipeline where stages follow each other without t
 _Avoid_: autopilot, continuous mode, YOLO mode
 
 **Orchestrator**:
-The agent that drives an auto run. It starts each stage agent, keeps the run's status, and is the only agent that talks to the user during the run.
+The agent that drives an auto run. It starts each stage agent as the router decides, shows the user each stop, and is the only agent that talks to the user during the run. It changes no files itself.
 _Avoid_: coordinator, conductor, main agent
+
+**Router**:
+The script that decides, from a task's files, which stage of an auto run comes next, or that the run stops or ends. It alone keeps the run's status, including the user's approvals of stops.
+_Avoid_: dispatcher, scheduler
 
 **Stop**:
 A point in an auto run where the pipeline waits for a human decision. Only an explicit approval moves the run on.
