@@ -1,5 +1,5 @@
 ---
-status: proposed (accepted once the subagent spike passes)
+status: accepted (2026-11-18, after the subagent spike in issue #2; the pinned-model check is still unverified, see Consequences)
 ---
 
 # Auto run through an orchestrator and subagents
@@ -12,7 +12,7 @@ We want a task to move through the pipeline without the user picking the next ag
 - **Plan:** stops only on requirement gaps, a migration, a feature flag, work for another team, or more than 6 slices.
 - **Code review:** reviewer recommendations are accepted automatically and recorded as **auto-decisions**. It stops only for findings routed to `requirements` or `re-plan`, or with no clear recommendation.
 - **Fix loops:** verifier→implementer and quick-fix→delta-review loops stop after `MAX_AUTO_FIX_ROUNDS` (default 2).
-- **Before shipping:** one stop. The user reviews `evidence.md`, `mr.md` and the auto-decisions summary, runs `approve-evidence.sh`, and confirms the push. The chat go-ahead that came before the push goes away.
+- **Before shipping:** one stop. The user reviews `evidence.md`, `mr.md` and the auto-decisions summary, runs `approve-evidence.sh`, and confirms the push. The chat go-ahead that came before the push goes away. The orchestrator raises this push confirmation as its own stop: it doesn't rely on the guard's ask prompt, because VS Code can remember an approval for the rest of the session, so a later push would go through without a prompt.
 - **MR open:** the run ends there. `/fetch-review` resumes it after Duo has reviewed. From there it stops only for ASK threads and the push confirmation.
 - **Answering a stop:** only an explicit approval moves the run on. Any other reply is folded in as feedback, and the same stop repeats.
 
@@ -22,7 +22,10 @@ We want a task to move through the pipeline without the user picking the next ag
 - **Subagents return, they don't ask:** a subagent never asks the user anything. It returns to the orchestrator, and only the orchestrator shows the user a `⏸ DECISION NEEDED` block.
 - **How a stage knows it's in a run:** the orchestrator's prompt to each subagent starts with `AUTO RUN`. The signal lives only in the prompt, so manual stage-by-stage use is unchanged and no state file can leave a run stuck in "auto".
 - **Files the orchestrator keeps:** `.work/<id>/status.md` (current stage, fix round, pending stop) and `.work/<id>/auto-decisions.md` (each automatic decision, why it was made, and which rule allowed it).
-- **Orchestrator model:** pinned to the cheapest model (GPT-6 Luna). If subagents turn out to be limited to their parent's cost tier, it moves to Claude Opus 5.5.
+- **Orchestrator model:** pinned to the cheapest model (GPT-6 Luna).
+- **Stage models:** the orchestrator names each stage's model on every subagent call, as well as the stage agent's own `model:` line. A `model:` line the session can't use falls back to the session's model without any error; a model named on the call is applied as an explicit override.
+- **Pipeline rules in subagents:** every stage agent sets `include-custom-instructions: true`, so `copilot-instructions.md` reaches it when it runs as a subagent.
+- **Orchestrator edits only `.work/`:** this rests on the orchestrator's instructions. The guard can tell a subagent's tool call from a top-level one, but not which agent is at the top level, so it can't tell the orchestrator from a stage agent the user runs by hand. The guard's deny rules apply to every agent either way.
 - **Manual mode stays:** the stage agents and their `handoffs:` remain usable on their own until the Local harness is removed.
 
 ## Considered options
@@ -34,14 +37,14 @@ We want a task to move through the pipeline without the user picking the next ag
 ## Consequences
 
 - **The Auto model picker cancels pinned models.** When the session model is Auto, subagents inherit it and ignore their `model:` line. The docs and the orchestrator warn against using Auto.
-- **The design rests on four behaviours not confirmed for VS Code Agent Host.** A throwaway spike must confirm them before anything is built:
-  1. The `preToolUse` guard's **deny** fires inside a subagent. **If it doesn't, this design is abandoned.**
-  2. A guard **ask** inside a subagent shows the user a confirm prompt. If not, every publishing script (`create-mr.sh`, `push-branch.sh`, `upload-evidence.sh`, ClickUp writes) runs in the orchestrator at the top level instead.
-  3. A subagent runs on its own pinned `model:`, and isn't limited by its parent's cost tier.
-  4. `copilot-instructions.md` reaches subagents. The CLI docs say it doesn't unless `include-custom-instructions: true` is set.
-- **Also checked in the spike:**
-  - whether the hook input identifies the top-level agent. If it doesn't, the "orchestrator edits only `.work/`" rule rests on instructions, and the guard's deny rules still apply to every agent.
-  - whether `chat.notifyWindowOnConfirmation` and the `chatUserActionRequired` sound fire in Agent Host sessions.
+- **Spike results** (issue #2, VS Code 1.146.0 Agent Host under WSL, on Copilot Free, so the session ran on Auto). Each result is taken from the session transcript and the hook log:
+  1. **The guard's deny fires inside a subagent.** A subagent's `git push` returned `Denied by preToolUse hook: …`. This was the make-or-break check.
+  2. **A guard ask inside a subagent shows the user a confirm prompt**, so publishing scripts can stay in the shipper and review-responder. The approval can be remembered for the rest of the session, which is why the push confirmation is a stop (see Stop rules).
+  3. **Pinned models: unverified.** Copilot Free offers only Auto, and a `model:` line the plan can't use was ignored without any error. A model named on the subagent call was applied. This needs re-checking on a paid plan.
+  4. **`copilot-instructions.md` reached a subagent only with `include-custom-instructions: true`.** The two subagents compared ran on different models, so this result is indicative, not clean.
+  5. **The hook input names subagents, not the top-level agent.** A subagent's call carries `agentId`, `agentType` and `parentAgentId`; a top-level call carries none of them.
+  6. **Alerts: unverified.**
+- **Agent Host lists every custom agent twice in `task`:** once by name and once as `vscode-agent-<hash>` (microsoft/vscode#345479). The orchestrator calls stages by name.
 
 ## Sources (checked 2026-11-18)
 
