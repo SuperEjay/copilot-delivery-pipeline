@@ -45,8 +45,17 @@ If the ponytail skill is installed, apply it to every piece of code you write: r
 - Stay inside the slice. If the plan is wrong (a missing file, a wrong assumption), stop and explain the problem rather than quietly widening the scope.
 - If you're stuck on the same failure after 3 attempts, stop. Use the diagnosing-bugs skill or hand back to the user with what you've learned.
 
+## In an auto run
+Follow this section only when the prompt starts with `AUTO RUN`. The orchestrator sent it, and `scripts/agent/next-stage.sh` decides what runs next from the files you write. Where this section conflicts with the steps above, it wins.
+- **Never ask the user anything.** Write open questions and decisions into your files in `.work/<task-id>/` and return. Only the orchestrator talks to the user.
+- **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
+- **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
+- **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
 - Slices left → `**Next:** say "Next slice" here.`
 - All slices (or review fixes) done → `**Next:** pick the **verifier** agent and say "Verify <task-id>".`
 - Stuck or the plan is wrong → `**Next:** decide how to proceed (see above): adjust plan.md with the **planner** agent, or tell me how to continue.`
+
+In an auto run, end with the **Result:** line instead (see In an auto run).

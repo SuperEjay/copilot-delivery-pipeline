@@ -52,7 +52,16 @@ Rules: if the task contradicts itself or a comment overrides the description, re
 ## Reply style (caveman lite)
 If the caveman skill is installed, use **lite** mode for chat replies to the user only. Files you write (requirements.md, review-triage.md and the rest) stay in full, clear sentences: the user reads and acts on them. Never compress code, commands, file paths, error messages or quoted text.
 
+## In an auto run
+Follow this section only when the prompt starts with `AUTO RUN`. The orchestrator sent it, and `scripts/agent/next-stage.sh` decides what runs next from the files you write. Where this section conflicts with the steps above, it wins.
+- **Never ask the user anything.** Write open questions and decisions into your files in `.work/<task-id>/` and return. Only the orchestrator talks to the user.
+- **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
+- **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
+- **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
 - Open questions remain → `**Next:** answer the questions above here, or say "approved" if the assumptions are fine.`
 - The user approved → `**Next:** pick the **planner** agent and say "Plan <task-id>".`
+
+In an auto run, end with the **Result:** line instead (see In an auto run).
