@@ -50,6 +50,10 @@ evidence_md() {
   printf '# Evidence: T1\nCommit: %s\n- [x] AC-1 · `AC-1.md` · works\n' "${1:-$(git rev-parse HEAD)}" > $W/evidence/evidence.md
 }
 
+# approve_evidence: what the user's approve-evidence.sh records.  mr_opened: what create-mr.sh records.
+approve_evidence() { bash -c 'source scripts/agent/config.sh; source scripts/agent/evidence-lib.sh; approval_write T1 AC-1.md'; }
+mr_opened() { bash -c 'source scripts/agent/config.sh; state_set_mr_iid T1 7'; }
+
 # next <args>: run next-stage.sh, output in $T/out.txt and $out, exit code in $rc.
 next() { $S/next-stage.sh "$@" > "$T/out.txt" 2>&1; rc=$?; out="$(cat "$T/out.txt")"; }
 
@@ -208,6 +212,20 @@ evidence_md 0000000000000000000000000000000000000000; next T1
 check "evidence captured at another commit: capture again" '[ "$out" = "$EVIDENCE" ]'
 evidence_md; next T1
 check "evidence at HEAD: past the evidence agent" '[ "$out" != "$EVIDENCE" ] && [[ "$out" != "stop evidence"* ]]'
+
+# ---------- the pre-ship stop, and the shipper in two steps ----------
+check "evidence at HEAD, no mr.md: the shipper writes it without pushing" '[ "$out" = "run shipper AUTO RUN. Write mr.md for T1. Don'"'"'t push or create the MR." ]'
+printf 'Export invoices\n## What & why\nx\n' > $W/mr.md
+next T1
+check "mr.md written: the one pre-ship stop" '[[ "$out" == "stop pre-ship "*"evidence.md"*"mr.md"*"auto-decisions.md"*"approve-evidence.sh"* ]]'
+next T1 approve
+check "approve refuses until the evidence is approved" '[ $rc -eq 1 ] && grep -q "approve-evidence.sh" "$T/out.txt"'
+approve_evidence; next T1 approve
+check "evidence approved after the stop was shown: show it again first" '[ $rc -eq 1 ] && grep -q "changed" "$T/out.txt"'
+next T1; next T1 approve; next T1
+check "approved with the evidence approved: the shipper ships" '[ "$out" = "run shipper AUTO RUN. Ship T1. The user confirmed the push at the pre-ship stop." ]'
+mr_opened; next T1
+check "MR open: the run ends until Duo has reviewed" '[ "$out" = "end MR open. Run /fetch-review T1 after Duo has reviewed it." ]'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

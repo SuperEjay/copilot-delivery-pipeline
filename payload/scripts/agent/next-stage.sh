@@ -12,6 +12,7 @@
 # (no task state yet: run /start-task first).
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
+source "$(dirname "$0")/evidence-lib.sh"
 
 TASK="${1:?usage: next-stage.sh <task-id> [approve]}"
 CMD="${2:-}"
@@ -114,6 +115,8 @@ decide() {
     _run implementer "Build $TASK: implement the next unchecked slice in plan.md."; return
   fi
 
+  if state_mr_iid "$TASK" > /dev/null 2>&1; then STAGE=duo; check_duo; return; fi
+
   STAGE=verify
   check_verified || return
 
@@ -128,7 +131,22 @@ decide() {
     fi
   fi
   if [ "${ec:-}" != "$(git rev-parse HEAD)" ]; then _run evidence "Capture evidence for $TASK."; return; fi
-  _end "not built yet"
+
+  STAGE=ship
+  if [ ! -f "$DIR/mr.md" ]; then _run shipper "Write mr.md for $TASK. Don't push or create the MR."; return; fi
+  fp="$(_fp @HEAD mr.md evidence/evidence.md evidence/APPROVED)"
+  if ! _approved pre-ship "$fp"; then
+    local why
+    why="$(approval_verify "$TASK" 2>&1 > /dev/null)" || APPROVE_BLOCK="$why"
+    _stop pre-ship "$fp" "Before the push: review $REL/evidence/evidence.md, $REL/mr.md and $REL/auto-decisions.md. Tick the evidence you approve and run scripts/agent/approve-evidence.sh $TASK in your own terminal. Approving this stop confirms the push."
+    return
+  fi
+  _run shipper "Ship $TASK. The user confirmed the push at the pre-ship stop."
+}
+
+# check_duo: the MR is open.
+check_duo() {
+  _end "MR open. Run /fetch-review $TASK after Duo has reviewed it."
 }
 
 # _field <file> <Key>: the value after the last "Key:" line, first word only.
