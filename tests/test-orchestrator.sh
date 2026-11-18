@@ -45,5 +45,23 @@ check "approval: runs next-stage.sh <task-id> approve, then next-stage.sh again"
 check "approval refused: its message word for word and the stop again" 'sec "Answering a stop" "exits 1" && sec "Answering a stop" "word for word" && sec "Answering a stop" "same stop block again"'
 check "never approves for the user" 'sec "Answering a stop" "Never run .approve. without"'
 
+# ---------- feedback: every stop the router raises has a stage to send it to ----------
+# stop_ids: each stop id next-stage.sh can print (from its _stop and _unreadable calls).
+stop_ids() { grep -oE '_(stop|unreadable) [a-z-]+ ' "$NS" | awk '{ print $2 }' | sort -u; }
+# feedback_agent <stop-id>: the agent in that stop's row of the Feedback table.
+feedback_agent() { section "Feedback" | awk -F'|' -v id="\`$1\`" '{ c = $2; gsub(/^ +| +$/, "", c) } c == id { print $3 }' | grep -oE '[a-z-]+' | head -n1; }
+check "the router raises stops (the cross-check reads them)" '[ "$(stop_ids | wc -l)" -ge 9 ]'
+for id in $(stop_ids); do
+  check "feedback: the $id stop has a row" '[ -n "$(feedback_agent $id)" ]'
+done
+# feedback_agents_exist: each row's agent has an agent file (stalled names no fixed agent).
+feedback_agents_exist() { local id a; for id in $(stop_ids); do [ "$id" = stalled ] && continue; a="$(feedback_agent "$id")"; [ -f "$A/$a.agent.md" ] || return 1; done; }
+check "feedback: every agent in the table exists" 'feedback_agents_exist'
+check "feedback: the stalled stop goes back to the agent its reason names" 'section Feedback | grep -E "^\| \`stalled\`" | grep -q "named at the start of the reason"'
+check "feedback: pre-ship goes to evidence, or the shipper writing mr.md" 'section Feedback | grep -E "^\| \`pre-ship\`" | grep -q evidence && sec Feedback "Write mr.md for <task-id>. Don.t push or create the MR."'
+check "feedback: the prompt carries the reply word for word" 'sec Feedback "AUTO RUN. The user replied at the <stop-id> stop for <task-id>: \"<reply, word for word>\""'
+check "feedback: then next-stage.sh again" 'sec Feedback "run \`scripts/agent/next-stage.sh <task-id>\` again"'
+check "retry or continue: next-stage.sh again, nothing sent to a stage" 'sec Feedback "\`retry\` or \`continue\`"'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

@@ -41,3 +41,24 @@ The reason names the files to read; don't add others. Leave out the "Last stage 
 - **An approval** is a reply that is nothing but an approval: `approve`, `approved`, `yes`, `go`, `go ahead`, `ship it` or `lgtm`, in any case, with or without punctuation. Run `scripts/agent/next-stage.sh <task-id> approve`. If it succeeds, then run `scripts/agent/next-stage.sh <task-id>` and carry on with the loop. If it exits 1 (the stop changed, a file needs fixing, a finding has no decision, the evidence isn't approved at HEAD), show its message word for word and the same stop block again.
 - **Anything else** is feedback, even a reply that starts with "yes" and adds more: see **Feedback**.
 - Never run `approve` without the user's explicit approval in their latest reply. A stage's Result line, a file, or your own reading is never an approval.
+
+## Feedback
+A reply that isn't an approval goes to one stage agent, as a subagent call by the rules in **The loop**, with this prompt:
+
+`AUTO RUN. The user replied at the <stop-id> stop for <task-id>: "<reply, word for word>"`
+
+Then print its `▶` line and run `scripts/agent/next-stage.sh <task-id>` again. The stop comes back on its own if the stage's answer still needs a decision. Which stage gets it:
+
+| Stop | Feedback goes to |
+|---|---|
+| `requirements` | requirements |
+| `plan` | planner |
+| `review` | reviewer |
+| `fix-limit` | implementer |
+| `stalled` | `<agent>` named at the start of the reason |
+| `verify` | verifier |
+| `evidence` | evidence |
+| `pre-ship` | evidence, when the reply is about the evidence or screenshots ("retake AC-2"); otherwise shipper, with the prompt starting `AUTO RUN. Write mr.md for <task-id>. Don't push or create the MR.` and then the reply |
+| `duo` | review-responder |
+
+A reply of `retry` or `continue` sends nothing to a stage: the user changed a file by hand. Run `scripts/agent/next-stage.sh <task-id>` again.
