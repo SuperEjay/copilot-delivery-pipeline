@@ -54,5 +54,43 @@ check "requirements changed after approval: the stop repeats" '[[ "$out" == "sto
 next T1; next T1 approve; next T1
 check "approved again: on to the planner" '[ "$out" = "run planner AUTO RUN. Plan T1." ]'
 
+# ---------- plan: stops only on a flag or more than 6 slices ----------
+# plan_md <slices> [gaps] [migration] [flag] [team]: a plan with unchecked S slices.
+plan_md() {
+  local i
+  { echo "# Plan: T1"; echo "## Slices"
+    for i in $(seq 1 "$1"); do echo "- [ ] S$i: slice $i"; echo "  - Files: \`a.txt\`"; done
+    echo "## Stop flags"
+    echo "- Requirement gaps: ${2:-no}"; echo "- Migration: ${3:-no}"
+    echo "- Feature flag: ${4:-no}"; echo "- Other team: ${5:-no}"
+  } > $W/plan.md
+}
+printf '# Plan: T1\n## Slices\n- [ ] S1: one\n' > $W/plan.md
+next T1
+check "plan.md without Stop flags: stop plan, naming the missing line" '[[ "$out" == "stop plan "*"Stop flags"* ]]'
+next T1 approve
+check "an unreadable plan can't be approved" '[ $rc -eq 1 ]'
+plan_md 3 no yes
+next T1
+check "a migration flag stops the plan" '[[ "$out" == "stop plan "*"Migration"* ]]'
+check "no auto-decision for a plan that stops" '[ ! -f $W/auto-decisions.md ]'
+plan_md 7
+next T1
+check "7 slices stop the plan" '[[ "$out" == "stop plan "*"7 slices"* ]]'
+next T1 approve; next T1
+check "an approved plan goes on" '[[ "$out" != stop* ]] && [ ! -f $W/auto-decisions.md ]'
+plan_md 3
+next T1
+check "a plan with no flags goes on without a stop" '[[ "$out" != stop* ]]'
+check "and records the auto-decision under the Plan rule" '[ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 1 ] && grep -q "Rule:.*Plan" $W/auto-decisions.md'
+next T1
+check "the auto-decision is recorded once per plan" '[ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 1 ]'
+echo "- AC-4: w" >> $W/requirements.md
+next T1; next T1 approve; next T1
+check "requirements changed after the plan: run the planner to update it" '[ "$out" = "run planner AUTO RUN. Requirements for T1 changed; update plan.md." ]'
+plan_md 4
+next T1
+check "updated plan: accepted again" '[[ "$out" != stop* ]] && [ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 2 ]'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
