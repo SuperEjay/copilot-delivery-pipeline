@@ -170,6 +170,7 @@ The second hook, `post-edit-format.sh`, runs `FORMAT_CMD` from `.agent.env`
 `FORMAT_CMD` is empty.
 
 **Good to know:**
+- **Protected paths are matched the same way everywhere.** The guard keeps one list (`scripts/agent/hooks/pre-tool-guard.sh --list-protected`), used for shell commands and edit tools alike, ignoring case and treating `\` as `/`.
 - **Hooks are in preview** in VS Code, and your organization can restrict which
   hooks run. After setup, check they're active: ask any agent to run
   `git push`. It should be refused with the guard's reason.
