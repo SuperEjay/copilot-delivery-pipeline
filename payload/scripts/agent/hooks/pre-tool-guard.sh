@@ -5,6 +5,7 @@
 #
 # It turns the pipeline's rules into enforced ones:
 #   deny  approving evidence, touching evidence/APPROVED|UPLOADED or verified-head
+#   deny  running next-stage.sh from a subagent (only the orchestrator runs the router)
 #   deny  agent changes to the task state (.work/<id>/state.env); reading it is fine
 #   deny  sourcing the pipeline's scripts (their functions would skip the scripts' checks)
 #   deny  reading or printing secrets (tokens, .auth/ sessions, ~/.ssh)
@@ -102,6 +103,8 @@ cwd="$(jq -r '.cwd // empty' <<<"$input" 2>/dev/null)"
 [ -n "$cwd" ] && cd "$cwd" 2>/dev/null
 
 tool="$(jq -r '.toolName // .tool_name // ""' <<<"$input")"
+# Set only for a call made inside a subagent; a top-level call names no agent.
+subagent="$(jq -r '.agentId // empty' <<<"$input")"
 args="$(jq -c '(.toolArgs // .tool_input // {}) | if type == "string" then (fromjson? // {command: .}) else . end' <<<"$input")"
 
 # Tool families, covering Copilot harness names and older/alternate names.
@@ -124,6 +127,12 @@ if $is_shell; then
   has 'approve-evidence\.sh' &&
     decide deny "Evidence approval is the user's job. Ask them to review evidence.md and run approve-evidence.sh themselves."
   [[ $cmd =~ $SHELL_START$PATHS_record ]] && decide deny "$REASON_record"
+
+  # Only the top level (the orchestrator) runs the auto run's router. A call
+  # from a subagent carries agentId; a stage agent running next-stage.sh could
+  # approve a stop itself or upset the stall detection.
+  [ -n "$subagent" ] && has 'next-stage\.sh[[:space:]]+[^[:space:];&|<>]' &&
+    decide deny "Only the orchestrator runs next-stage.sh. Finish your stage, end with your **Result:** line and return."
 
   # `source` or `.` in command position (start, after ;&|({ or a backtick, or
   # just inside a quote as in bash -c '. x'), then a path into scripts/agent/.

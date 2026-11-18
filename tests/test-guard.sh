@@ -174,6 +174,23 @@ sh deny 'grep -rn verified-head docs/'
 sh deny "echo x > './scripts/agent/config.sh'"
 sh deny 'cat --netrc-file=.netrc'
 
+# ---------- the auto run's router: only the top level runs it ----------
+# A subagent's call carries agentId (the top-level call doesn't): a stage agent
+# in an auto run could otherwise approve a stop itself, or upset stall detection.
+sub_sh() {   # sub_sh <allow|deny|ask> <command>: the call comes from a subagent
+  local got
+  got="$(jq -n --arg c "$2" --arg cwd "$T" '{toolName: "bash", toolArgs: {command: $c}, cwd: $cwd, agentId: "a1", agentType: "reviewer", parentAgentId: "p1"}' |
+    PIPELINE_GUARD=on bash "$GUARD" | jq -r '.permissionDecision // "allow"')"
+  if [ "$got" = "$1" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: expected $1, got $got (subagent): $2"; fi
+}
+sh allow 'scripts/agent/next-stage.sh T-1'
+sh allow 'scripts/agent/next-stage.sh T-1 approve'
+sub_sh deny 'scripts/agent/next-stage.sh T-1 approve'
+sub_sh deny 'scripts/agent/next-stage.sh T-1'
+sub_sh deny 'bash ./scripts/agent/next-stage.sh T-1 approve'
+sub_sh allow 'cat scripts/agent/next-stage.sh'
+sub_sh allow 'scripts/agent/run-checks.sh T-1 all'
+
 # ---------- switch ----------
 got="$(jq -n '{toolName: "bash", toolArgs: {command: "git push"}}' | PIPELINE_GUARD=off bash "$GUARD")"
 if [ "$got" = "{}" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: PIPELINE_GUARD=off should allow"; fi
