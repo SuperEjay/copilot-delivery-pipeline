@@ -14,6 +14,7 @@
 - **One protected-path table in the hook guard.** Every protected path (secrets, the verified-commit and evidence records, pipeline config) is listed once, and the shell and edit-tool checks both use it. `pre-tool-guard.sh --list-protected` prints it, and `tests/test-guard.sh` checks every entry from it. The shell check now starts a match at a path segment like the edit check does, so names that only contain a protected path (`my.agent.env`, `vendor/myscripts/agent/`, `.npmrc.example`) are no longer blocked from the shell.
 - **The guard catches Windows paths.** Edit and read tools that pass `C:\repo\scripts\agent\x.sh`-style paths were not matched against protected paths; backslashes are now treated as `/`.
 - **The guard ignores case for protected paths**, so `Scripts/Agent/x.sh` or `.AGENT.ENV` on macOS and Windows are blocked like their lower-case names.
+- **state.env is read, never run.** New `scripts/agent/task-state.sh` reads `.work/<id>/state.env` through one reader per key (`state_branch`, `state_mr_iid`, `state_review_round`, `state_review_ids`, `state_reviewed_sha`). It parses the file instead of sourcing it, so a branch name like `feature/T1-$(cmd)` is just text, and a line like `BASE_BRANCH=x` or `MAX_REVIEW_ROUNDS=99` no longer overrides `.agent.env`. A missing MR or branch gives the same message from every script. Existing state.env files read as before. New `tests/test-task-state.sh`.
 
 ## v1.1.0
 
