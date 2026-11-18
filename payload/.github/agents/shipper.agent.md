@@ -60,6 +60,8 @@ Follow this section only when the prompt starts with `AUTO RUN`. The orchestrato
 - **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
 - **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
 - **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+- **You run twice.** "Write mr.md for <task-id>. Don't push or create the MR.": do steps 1–3 only, then return. Skip 1b: the user approves the evidence at the pre-ship stop, which comes after this run.
+- "Ship <task-id>. The user confirmed the push at the pre-ship stop.": do steps 1, 1b and 5–7. That confirmation is the go-ahead, so skip step 4, and don't change mr.md: the user approved it as it is.
 
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:

@@ -45,6 +45,8 @@ check "reviewer: unclear findings stay _pending_" 'auto reviewer "Leave \`Decisi
 check "reviewer: a blocker is never parked or skipped without the user" 'auto reviewer "\*\*blocker\*\* is recommended debt or skip"'
 check "reviewer: debt still goes to tech-debt.md" 'auto reviewer "tech-debt.md"'
 check "reviewer: each decision logged to auto-decisions.md in the router's format" 'auto reviewer "auto-decisions.md" && [ "$(for k in When What Why Rule; do auto reviewer "^  - \*\*$k:\*\*" && echo $k; done | wc -l)" -eq 4 ]'
+check "shipper: the write-mr.md run does steps 1-3 only, no evidence check" 'auto shipper "\"Write mr.md for <task-id>. Don.t push or create the MR.\"" && auto shipper "steps 1–3 only" && auto shipper "Skip 1b"'
+check "shipper: the ship run takes the pre-ship stop as the go-ahead, mr.md unchanged" 'auto shipper "\"Ship <task-id>. The user confirmed the push at the pre-ship stop.\"" && auto shipper "skip step 4" && auto shipper "don.t change mr.md"'
 check "evidence: no approval steps in an auto run; the pre-ship stop gives them" 'auto evidence "pre-ship stop"'
 
 echo "passed=$pass failed=$fail"
