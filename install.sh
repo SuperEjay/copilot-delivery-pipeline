@@ -6,6 +6,8 @@
 #   --update        update an existing install (keeps files you changed; see --force)
 #   --uninstall     remove the pipeline (keeps .agent.env and .work/)
 #   --force         with --update: overwrite files you changed (a .bak copy is kept)
+#                   (without it, a file you changed is kept and the new version
+#                   is written next to it as <file>.new, for you to merge)
 #   --with-skills   also install the ponytail and caveman skills for Copilot
 #   --yes           don't ask questions (CI, scripts)
 #   --version TAG   install a specific release when downloading (default: this script's version)
@@ -63,7 +65,7 @@ if [ "$MODE" = uninstall ]; then
   confirm "Remove all pipeline files listed in $MANIFEST?" || die "Cancelled."
   while IFS=$'\t' read -r _hash path; do
     case "$_hash" in "#"*|"") continue ;; esac
-    rm -f "$path" && ok "removed $path"
+    rm -f "$path" "$path.new" && ok "removed $path"
   done < "$MANIFEST"
   rm -f "$MANIFEST"
   if [ -f .github/copilot-instructions.md ]; then
@@ -127,11 +129,16 @@ while IFS= read -r rel; do
   if [ -f "$dst" ]; then
     cur_hash="$(sha256 "$dst")"
     if [ "$cur_hash" = "$new_hash" ]; then
+      rm -f "$dst.new"   # merged: the .new is no longer needed
       unchanged=$((unchanged + 1)); printf '%s\t%s\n' "$new_hash" "$dst" >> "$NEW_MANIFEST"; continue
     fi
     recorded="$(old_hash "$dst")"
     if [ -n "$recorded" ] && [ "$cur_hash" != "$recorded" ] && ! $FORCE; then
-      warn "kept your changed $dst (re-run with --force to replace it; a .bak is kept)"
+      # Kept as you changed it; the new version goes next to it as <file>.new,
+      # refreshed on each update. An agent file without the new version's
+      # sections stops an auto run (next-stage.sh names it).
+      cp "$src" "$dst.new"; case "$dst" in *.sh) chmod +x "$dst.new" ;; esac
+      warn "kept your changed $dst; the new version is in $dst.new. Merge it in (an auto run needs the new agent files), or re-run with --force to replace yours (a .bak is kept)"
       skipped=$((skipped + 1)); printf '%s\t%s\n' "$recorded" "$dst" >> "$NEW_MANIFEST"; continue
     fi
     if [ -z "$recorded" ] && [ "$MODE" = install ]; then
@@ -141,7 +148,7 @@ while IFS= read -r rel; do
     fi
   fi
   mkdir -p "$(dirname "$dst")"
-  cp "$src" "$dst"
+  cp "$src" "$dst"; rm -f "$dst.new"
   case "$dst" in *.sh) chmod +x "$dst" ;; esac
   printf '%s\t%s\n' "$new_hash" "$dst" >> "$NEW_MANIFEST"
   written=$((written + 1))
@@ -176,16 +183,32 @@ else
 fi
 
 # ---------- .gitignore ----------
-gi_block="$(printf '%s\n.work/\n.agent.env\n.auth/\n*.bak\n%s' "$GI_BEGIN" "$GI_END")"
+GI_LINES='.work/
+.agent.env
+.auth/
+*.bak
+*.new'
+gi_block="$(printf '%s\n%s\n%s' "$GI_BEGIN" "$GI_LINES" "$GI_END")"
 if [ -f .gitignore ] && grep -qF "$GI_BEGIN" .gitignore; then
-  ok ".gitignore already has the pipeline block"
+  # Replace the block's lines, so an older install gets the ones added since.
+  printf '%s\n' "$GI_LINES" > .gitignore.lines
+  awk -v b="$GI_BEGIN" -v e="$GI_END" -v f=.gitignore.lines '
+    $0==b { print; while ((getline line < f) > 0) print line; skip=1; next }
+    $0==e { skip=0; print; next }
+    !skip' .gitignore > .gitignore.tmp && mv .gitignore.tmp .gitignore
+  rm -f .gitignore.lines
+  ok "updated the pipeline block in .gitignore"
 else
-  printf '\n%s\n' "$gi_block" >> .gitignore; ok "added .work/, .agent.env, .auth/ and *.bak to .gitignore"
+  printf '\n%s\n' "$gi_block" >> .gitignore; ok "added $(printf '%s' "$GI_LINES" | tr '\n' ' ' | sed 's/ /, /g') to .gitignore"
 fi
 
 # ---------- settings ----------
 if [ -f .agent.env ]; then
-  ok ".agent.env exists: left untouched (compare with .agent.env.example for new settings)"
+  ok ".agent.env exists: left untouched"
+  # Settings in the example that .agent.env doesn't set: listed, never written.
+  new_keys="$(sed -nE 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=.*/\2/p' .agent.env.example | while read -r k; do
+    grep -qE "^[[:space:]]*(export[[:space:]]+)?$k=" .agent.env || printf '%s ' "$k"; done)"
+  [ -n "$new_keys" ] && warn ".agent.env doesn't set: ${new_keys% } (new or unset settings: copy any you want from .agent.env.example)"
 else
   cp .agent.env.example .agent.env; ok "created .agent.env from the example: fill in your project's values"
 fi

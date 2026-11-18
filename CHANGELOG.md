@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Upgrading from v1.1.0
+
+1. Run `install.sh --update`.
+2. Merge each `<file>.new` it reports into the file you changed (or re-run with `--force` to take the new version; yours is kept as `.bak`). An auto run needs every stage agent's `## In an auto run` section, and `next-stage.sh` names any agent file that lacks it.
+3. Finish tasks you started before the update stage by stage. Their `plan.md` has no `## Stop flags`, so `next-stage.sh` won't run them.
+4. Optional: add `MAX_AUTO_FIX_ROUNDS` (default 2) to `.agent.env`. `--update` lists every setting in `.agent.env.example` that your `.agent.env` doesn't set, and never writes the file.
+
+### Changes
+
 - **The guard catches `>|` and `>&file` redirects.** `echo x >| scripts/agent/config.sh` (clobber) and `cat a >&scripts/agent/config.sh` (csh-style) got past the shell check for pipeline config and task state (`.work/<id>/status.md`, `state.env`), because the command was split at `;`, `|` and `&` before the redirect was matched, cutting the redirect in half. Redirects are now matched on the whole command.
 - The hook guard now blocks agents from changing pipeline config through the shell too (redirects, `sed -i`, `cp`, `mv`, `rm`, `chmod`, `tee`, inline `python -c` and similar), not only through edit tools. Before this, a shell command could rewrite or switch off the guard itself.
 - New `tests/test-guard.sh`: a table of tool calls and the decision the guard must make for each.
@@ -27,6 +36,10 @@
 - **Agents can't forge a stop approval.** `next-stage.sh` keeps approvals in `.work/<id>/status.md` as `Approved <stop-id>: <checksum>` lines, and an agent could add one with an edit tool or a shell redirect. The hook guard now protects `.work/<id>/status.md` like `state.env`: agents may read it, but edit tools and shell writes are denied, and `next-stage.sh` stays its only writer. Protected-path entries can now use `*` for one path segment (`.work/*/status.md`), so only that file is protected: a product file such as `docs/status.md` stays editable. Paths are squashed before matching, so `.work//T-1/status.md`, `/./` or `<dir>/..` don't get past any protected path.
 - **Docs: the auto run.** `docs/agent-pipeline.md` has a "Hands-off: auto run" section: starting with **pipeline** and `/start-task`, each stop and what to reply, `status.md`, `auto-decisions.md`, `MAX_AUTO_FIX_ROUNDS`, resuming, the warning against Auto in the model picker, and optional alert settings for `.vscode/settings.json`. Pinned models and the alerts are unverified (ADR 0001). The stage-by-stage flow is still documented.
 - **The guard splits commands the same way on macOS.** It used to split a command at `;`, `|` and `&` with `sed`, writing `\n` in the replacement. BSD/macOS sed may write a literal `n` for that, which leaves the command whole. A subagent's `cat x; scripts/agent/next-stage.sh T-1 approve` then looked like a single `cat` that only reads, so the subagent could approve a stop, and harmless commands like `rm -rf .work/T-1/tmp && scripts/agent/run-checks.sh T-1 test` were denied. The split is now done in bash, without sed. `tests/test-guard.sh` runs these cases against a fake sed that behaves like BSD sed.
+- **`--update` writes `<file>.new` next to a file you changed.** It still keeps your version, and now puts the new one beside it to merge, refreshed on each update and deleted by `--force` (or once your file matches it). `*.new` is in the managed `.gitignore` block, and `--update` now refreshes that block, so an older install gets the lines added since.
+- **`--update` lists settings your `.agent.env` doesn't set** that `.agent.env.example` has, such as `MAX_AUTO_FIX_ROUNDS`. It never writes `.agent.env`.
+- **`next-stage.sh` checks first that the task can use an auto run.** It exits 1, with no stop, when a stage agent file has no `## In an auto run` section (naming the file and its `.new`), or when `plan.md` has no `## Stop flags` heading (a task started before auto run: finish it stage by stage). Before this, both ended in a plan stop that no approval could pass. A `## Stop flags` heading missing a line is still that stop.
+- `tests/test-install.sh` updates a real v1.1.0 install (`git archive a7f97a2`) with the current installer, and skips that case when the commit isn't in the clone.
 
 ## v1.1.0
 

@@ -18,7 +18,9 @@
 #                                     printed: record it, so the run moves on
 #
 # Exit 0 for any decision. Exit 1 with the reason on stderr when it can't
-# decide (no task state yet: run /start-task first), or when approve refuses:
+# decide (no task state yet: run /start-task first; a stage agent has no
+# "## In an auto run" section; plan.md has no "## Stop flags" heading, so the
+# task predates auto run and goes on stage by stage), or when approve refuses:
 # no stop is pending, the stop changed since it was shown, a file needs fixing,
 # a review finding has no decision, or the evidence isn't approved at HEAD.
 #
@@ -89,6 +91,24 @@ DIR="$(task_dir "$TASK")"
 STATUS="$DIR/status.md"
 REL="${DIR#"$REPO_ROOT"/}"
 PLAN_UPDATE="Requirements for $TASK changed; update plan.md."   # the planner's prompt when requirements change
+
+# ---------- before deciding: can this task use an auto run at all? ----------
+# A stage agent without its "## In an auto run" section (a file you changed,
+# which install.sh --update keeps) writes none of the lines read below, so
+# every plan would hit a stop no approval passes. So does a plan.md from
+# before auto run, which has no "## Stop flags" heading at all. Neither is a
+# stop: the run can't start until it's fixed.
+for _agent in requirements planner implementer verifier reviewer evidence shipper review-responder; do
+  _af=".github/agents/$_agent.agent.md"
+  grep -qx '## In an auto run' "$REPO_ROOT/$_af" 2>/dev/null || {
+    echo "$_af has no '## In an auto run' section, so an auto run can't use it. Merge $_af.new into it (install.sh --update writes it next to a file you changed), or run install.sh --update --force. Until then, run the stages yourself." >&2
+    exit 1
+  }
+done
+if [ -f "$DIR/plan.md" ] && ! grep -qx '## Stop flags' "$DIR/plan.md"; then
+  echo "$TASK was started before auto run ($REL/plan.md has no '## Stop flags' heading). Finish it stage by stage; auto run works for tasks you start from now on." >&2
+  exit 1
+fi
 
 # ---------- status.md: Key: value lines, parsed, never sourced ----------
 # _st <Key>: the value of the last "Key: value" line, or empty.

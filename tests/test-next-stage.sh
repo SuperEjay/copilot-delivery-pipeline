@@ -15,7 +15,8 @@ git init -q --bare -b main "$T/remote.git"
 git init -q -b main "$T/proj"; cd "$T/proj"
 git config user.email t@t; git config user.name t
 git remote add origin "$T/remote.git"
-mkdir -p scripts; cp -r "$ROOT/payload/scripts/agent" scripts/
+mkdir -p scripts .github; cp -r "$ROOT/payload/scripts/agent" scripts/
+cp -r "$ROOT/payload/.github/agents" .github/   # next-stage.sh checks the stage agents first
 printf '.work/\n.agent.env\n' > .gitignore
 echo one > a.txt; git add -A; git commit -qm init; git push -q origin main
 : > .agent.env   # MAX_AUTO_FIX_ROUNDS stays at its default, 2
@@ -74,6 +75,23 @@ check "no task state: exit 1, pointing at /start-task" '[ $rc -eq 1 ] && grep -q
 
 $S/start-task.sh T1 router > "$T/out.txt" 2>&1
 
+# ---------- the stage agents know an auto run (an old or kept agent file doesn't) ----------
+AG=.github/agents
+cp $AG/planner.agent.md "$T/planner.keep"
+sed -i '/^## In an auto run$/d' $AG/planner.agent.md
+next T1
+check "a stage agent without the auto-run section: exit 1, naming it and its .new" '[ $rc -eq 1 ] && grep -qF "$AG/planner.agent.md" "$T/out.txt" && grep -qF "planner.agent.md.new" "$T/out.txt"'
+check "no decision is recorded for it" '[ ! -f $W/status.md ]'
+next T1 approve
+check "approve checks the agents too" '[ $rc -eq 1 ] && grep -qF "$AG/planner.agent.md" "$T/out.txt"'
+rm $AG/planner.agent.md; next T1
+check "a missing stage agent: exit 1, naming it" '[ $rc -eq 1 ] && grep -qF "$AG/planner.agent.md" "$T/out.txt"'
+cp "$T/planner.keep" $AG/planner.agent.md
+sed -i '/^## In an auto run$/d' $AG/pipeline.agent.md 2>/dev/null
+next T1
+check "only the eight stage agents are checked, not the orchestrator" '[ $rc -eq 0 ]'
+cp "$ROOT/payload/.github/agents/pipeline.agent.md" $AG/; rm -f $W/status.md
+
 # ---------- requirements: always stops ----------
 next T1
 check "no requirements.md: run the requirements agent" '[ $rc -eq 0 ] && [ "$out" = "run requirements AUTO RUN. Analyse T1." ]'
@@ -109,9 +127,16 @@ plan_md() {
     echo "- Feature flag: ${4:-no}"; echo "- Other team: ${5:-no}"
   } > $W/plan.md
 }
+# A plan from before auto run (v1.1.0's planner wrote no Stop flags): finish it stage by stage.
 printf '# Plan: T1\n## Slices\n- [ ] S1: one\n' > $W/plan.md
 next T1
-check "plan.md without Stop flags: stop plan, naming the missing line" '[[ "$out" == "stop plan "*"Stop flags"* ]]'
+check "plan.md with no Stop flags heading: exit 1, finish it stage by stage" '[ $rc -eq 1 ] && grep -q "stage by stage" "$T/out.txt"'
+mv $W/status.md "$T/status.keep"; next T1
+check "the same without status.md (a task from before auto run)" '[ $rc -eq 1 ] && grep -q "stage by stage" "$T/out.txt" && [ ! -f $W/status.md ]'
+mv "$T/status.keep" $W/status.md
+printf '# Plan: T1\n## Slices\n- [ ] S1: one\n## Stop flags\n- Migration: no\n' > $W/plan.md
+next T1
+check "Stop flags heading missing a line: stop plan, naming the missing line" '[[ "$out" == "stop plan "*"Requirement gaps"* ]]'
 next T1 approve
 check "an unreadable plan can't be approved" '[ $rc -eq 1 ]'
 plan_md 3 no yes

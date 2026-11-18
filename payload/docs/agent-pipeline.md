@@ -55,12 +55,13 @@ admin policy that blocks MCP servers doesn't affect any of this.
 
 1. **Install** (from your project's root): run the installer from the pipeline
    repo. It copies the files, makes the scripts executable, merges the rules into
-   `.github/copilot-instructions.md`, adds `.work/`, `.agent.env`, `.auth/` and
-   `*.bak` to `.gitignore`, and creates `.agent.env`. Update later with
+   `.github/copilot-instructions.md`, adds `.work/`, `.agent.env`, `.auth/`,
+   `*.bak` and `*.new` to `.gitignore`, and creates `.agent.env`. Update later with
    `install.sh --update`; remove with `install.sh --uninstall`.
 2. **Commit the pipeline files** so your teammates get the same agents and hooks.
-3. **Don't edit pipeline files casually.** `--update` keeps files you changed,
-   but you'll miss improvements to them. Put project-specific settings in
+3. **Don't edit pipeline files casually.** `--update` keeps files you changed
+   and writes the new version next to each as `<file>.new`; until you merge it,
+   you miss its improvements, and an auto run won't start with an old agent file. Put project-specific settings in
    `.agent.env` instead.
 4. **Configure:** open `.agent.env` (the installer created it) and set your real lint,
    typecheck, unit, integration and e2e commands. Leave a command empty to skip it.
