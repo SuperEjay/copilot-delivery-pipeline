@@ -139,6 +139,10 @@ check "the auto-decision is recorded once per plan" '[ "$(grep -c "Plan accepted
 echo "- AC-4: w" >> $W/requirements.md
 next T1; next T1 approve; next T1
 check "requirements changed after the plan: run the planner to update it" '[ "$out" = "run planner AUTO RUN. Requirements for T1 changed; update plan.md." ]'
+next T1
+check "the planner changed nothing for the new requirements: stop stalled, offering to keep the plan" '[[ "$out" == "stop stalled planner "*"keep plan.md as it is"* ]]'
+next T1 approve; next T1
+check "approved: the plan is kept for the new requirements, no planner loop" '[ "$out" = "run implementer AUTO RUN. Build T1: implement the next unchecked slice in plan.md." ]'
 plan_md 4
 next T1
 check "updated plan: accepted again" '[ "$out" = "$BUILD" ] && [ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 2 ]'
@@ -179,6 +183,7 @@ check "approving the fix-limit stop allows another round" '[ "$out" = "$FIX" ] &
 next T1
 next T1 approve; next T1
 check "approving the stalled stop runs the stage once more" '[ "$out" = "$FIX" ]'
+check "approving the stalled stop doesn't start the fix rounds over" 'grep -qx "Fix round: 1/2" $W/status.md'
 next T1
 check "still nothing changed: stalled again" '[[ "$out" == "stop stalled implementer "* ]]'
 printf '# Verification: T1\nResult: FAIL\n' > $W/verification.md
@@ -197,7 +202,7 @@ mark_reviewed; next T1
 check "reviewed at HEAD but no code-review.md: a stop no approval passes" '[[ "$out" == "stop review "*"code-review.md"* ]] && { next T1 approve; [ $rc -eq 1 ]; }'
 review_md "fix quick open" "debt _ open" "skip _ open"
 next T1
-check "an open quick fix: back to the implementer as a fix round" '[ "$out" = "$QUICK" ] && grep -qx "Fix round: 1/2" $W/status.md'
+check "an open quick fix: back to the implementer, a fix round on the same count as verify" '[ "$out" = "$QUICK" ] && grep -qx "Fix round: 2/2" $W/status.md'
 commit_change; verify PASS; next T1
 check "after the fix: verify passed, a delta review" '[ "$out" = "$REVIEW" ]'
 mark_reviewed; review_md "fix quick fixed" "_pending_ _(set_if_fix)_ open"
@@ -217,7 +222,7 @@ review_md "fix re-plan open" "fix requirements open"
 next T1; next T1 approve; next T1
 check "a requirements route goes furthest back: the requirements agent" '[ "$out" = "run requirements AUTO RUN. Update requirements for T1 from the code review (Route: requirements in code-review.md)." ]'
 review_md "fix quick open"; next T1
-check "another quick fix: fix round 1" 'grep -qx "Fix round: 1/2" $W/status.md'
+check "after approving a review stop, another quick fix: the count started over, fix round 1" 'grep -qx "Fix round: 1/2" $W/status.md'
 commit_change; verify PASS; mark_reviewed
 review_md "fix quick verified" "debt _ open" "skip _ open"
 next T1
@@ -298,6 +303,8 @@ done
 for id in $(ids unreadable); do
   check "header: the $id stop is listed as one no approval passes" 'stop_doc | grep -q "no approval passes" && stop_doc | sed "s/.*no approval passes//" | grep -qw -- "$id"'
 done
+# macOS ships bash 3.2: no associative arrays, mapfile or ${x,,}.
+check "runs on bash 3.2: no bash 4 features" '! grep -nE "(declare|local) -A|mapfile|readarray|\$\{[A-Za-z_]+(,,|\^\^)\}" "$NS"'
 check "header: end names both ends of a run" 'grep -E "^#  +end <reason>" -A1 "$NS" | grep -q "Duo round"'
 
 echo "passed=$pass failed=$fail"

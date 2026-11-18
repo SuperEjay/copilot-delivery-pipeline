@@ -66,9 +66,12 @@
 # shown (approve then checks the evidence approval itself).
 # Fix rounds (MAX_AUTO_FIX_ROUNDS) count each return to the implementer once per
 # commit, and start over when a review settles, a Duo round starts or the user
-# approves a stop. The same run with none of its inputs changed is the stalled
-# stop. The script writes all this to status.md (Key: value lines, read as
-# data, never sourced) and owns that file; the orchestrator only reads it.
+# approves the fix-limit or review stop; approving another stop keeps the count.
+# The same run with none of its inputs changed is the stalled stop. When that
+# run is the planner updating plan.md for changed requirements, approving it
+# keeps the plan as it is. The script writes all this to status.md (Key: value
+# lines, read as data, never sourced) and owns that file; the orchestrator only
+# reads it.
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
@@ -85,6 +88,7 @@ state_branch "$TASK" > /dev/null 2>&1 || {
 DIR="$(task_dir "$TASK")"
 STATUS="$DIR/status.md"
 REL="${DIR#"$REPO_ROOT"/}"
+PLAN_UPDATE="Requirements for $TASK changed; update plan.md."   # the planner's prompt when requirements change
 
 # ---------- status.md: Key: value lines, parsed, never sourced ----------
 # _st <Key>: the value of the last "Key: value" line, or empty.
@@ -135,7 +139,7 @@ check_plan() {
   local rfp="$1" pfp acc name v n reasons=() sfp
   pfp="$(_fp @unticked:plan.md)"; acc="$(_st "Plan accepted")"
   if [ -n "$acc" ] && [ "${acc% *}" = "$pfp" ] && [ "${acc#* }" != "$rfp" ]; then
-    _run planner "Requirements for $TASK changed; update plan.md."; return 1
+    _run planner "$PLAN_UPDATE"; return 1
   fi
   [ "$acc" = "$pfp $rfp" ] && return 0
 
@@ -353,9 +357,15 @@ check_stall() {
   INPUTS_FP="$(_fp "${INPUTS[@]}")"
   LAST_RUN="run $WHAT $TEXT"; LAST_RUN_FP="$INPUTS_FP"
   [ "$LAST_RUN" = "$(_st "Last run")" ] && [ "$INPUTS_FP" = "$(_st "Last run inputs")" ] || return 0
-  if _approved stalled "$INPUTS_FP"; then unset 'APPROVED[stalled]'; return 0; fi
-  _stop stalled "$INPUTS_FP" "$WHAT ran but changed nothing in $REL or the code. Approve to run it once more, or tell me how to go on. It would get: $TEXT"
+  if _approved stalled "$INPUTS_FP"; then _drop_approval stalled; return 0; fi
+  local offer="Approve to run it once more"
+  _plan_update_stalled && offer="Approve to keep plan.md as it is for the new requirements"
+  _stop stalled "$INPUTS_FP" "$WHAT ran but changed nothing in $REL or the code. $offer, or tell me how to go on. It would get: $TEXT"
 }
+# _plan_update_stalled: the stalled run is the planner updating plan.md for
+# changed requirements. Approving that stop accepts the plan as it is.
+_plan_update_stalled() { [ "$LAST_RUN" = "run planner AUTO RUN. $PLAN_UPDATE" ]; }
+
 
 # ---------- auto-decisions.md ----------
 _auto_decision() {
@@ -388,18 +398,17 @@ write_status() {
     echo "Fix round: $NEW_ROUND/$MAX_AUTO_FIX_ROUNDS"
     echo "Fix key: $NEW_KEY"
     echo "Plan accepted: ${PLAN_ACCEPTED:-$(_st "Plan accepted")}"
-    for id in "${!APPROVED[@]}"; do echo "Approved $id: ${APPROVED[$id]}"; done
+    if [ -n "$APPROVALS" ]; then sed 's/^/Approved /' <<<"$APPROVALS"; fi
   } > "$STATUS.tmp"
   mv "$STATUS.tmp" "$STATUS"
 }
 
 # Approvals: one fingerprint per stop id.
-declare -A APPROVED=()
-if [ -f "$STATUS" ]; then
-  while IFS= read -r l; do
-    id="${l#Approved }"; id="${id%%: *}"; APPROVED[$id]="${l#*: }"
-  done < <(grep '^Approved [a-z-]*: ' "$STATUS")
-fi
+# A plain list of "<stop-id>: <fingerprint>" lines: bash 3.2 (macOS) has no
+# associative arrays.
+APPROVALS="$(grep '^Approved [a-z-]*: ' "$STATUS" 2>/dev/null | sed 's/^Approved //')"
+_drop_approval() { APPROVALS="$(grep -v "^$1: " <<<"$APPROVALS")"; }
+_set_approval() { _drop_approval "$1"; APPROVALS="${APPROVALS:+$APPROVALS$'\n'}$1: $2"; }
 
 PLAN_ACCEPTED=""; AUTO_PLAN=""; FIX_KEY=""; LAST_RUN=""; LAST_RUN_FP=""; RESET_ROUNDS=""; APPROVE_BLOCK=""
 decide
@@ -419,9 +428,12 @@ if [ "$CMD" = approve ]; then
     echo "The stop changed since it was shown. Run next-stage.sh $TASK again and show the user the new stop." >&2
     exit 1
   fi
-  APPROVED[$WHAT]="$STOP_FP"
-  NEW_ROUND=0   # the user looked at the run: fix rounds start over
+  _set_approval "$WHAT" "$STOP_FP"
+  case "$WHAT" in fix-limit|review) NEW_ROUND=0 ;; esac   # more rounds allowed, or the findings were decided: the count starts over
   PLAN_ACCEPTED=""
+  if [ "$WHAT" = stalled ] && _plan_update_stalled; then
+    PLAN_ACCEPTED="$(_fp @unticked:plan.md) $(_fp requirements.md)"   # keep the plan for the new requirements
+  fi
   LINE="$(_st "Last decision")"
   write_status
   echo "Approved the $WHAT stop."
