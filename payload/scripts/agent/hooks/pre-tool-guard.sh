@@ -166,6 +166,7 @@ if $is_edit || $is_read; then
   [ -z "$paths" ] && paths="$(jq -r '[.. | strings | select(test("^[./~A-Za-z0-9_-]+/|\\.[A-Za-z0-9]{1,6}$"))] | .[]' <<<"$args" 2>/dev/null)"
   while IFS= read -r p; do
     [ -z "$p" ] && continue
+    p="${p//\\//}"   # Windows paths (C:\repo\scripts\agent\x) match like any other
     [[ $p =~ $PATH_START$PATHS_secret ]] && decide deny "$REASON_secret"
     if $is_edit; then
       [[ $p =~ $PATH_START$PATHS_record ]] && decide deny "$REASON_record"

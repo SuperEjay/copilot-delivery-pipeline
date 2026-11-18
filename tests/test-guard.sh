@@ -125,7 +125,9 @@ while IFS=$'\t' read -r kind entry; do
   sh "$w_mention" "cat $file"
   ed "$w_edit"    editFiles "$file"
   ed "$w_edit"    editFiles "/home/u/proj/$file"
+  ed "$w_edit"    editFiles "C:\\proj\\${file//\//\\}"   # Windows path
   ed "$w_read"    read_file "$file"
+  ed "$w_read"    read_file "C:\\proj\\${file//\//\\}"
   if [ "${entry%/}" != "$entry" ]; then   # the folder itself
     sh deny "rm -rf ${entry%/}"
     ed deny editFiles "${entry%/}"
