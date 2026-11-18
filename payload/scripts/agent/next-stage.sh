@@ -105,6 +105,11 @@ decide() {
   STAGE=plan
   if [ ! -f "$DIR/plan.md" ]; then _run planner "Plan $TASK."; return; fi
   check_plan "$fp" || return
+
+  STAGE=build
+  if grep -qE '^- \[ \] [SR][0-9]+:' "$DIR/plan.md"; then
+    _run implementer "Build $TASK: implement the next unchecked slice in plan.md."; return
+  fi
   _end "not built yet"
 }
 

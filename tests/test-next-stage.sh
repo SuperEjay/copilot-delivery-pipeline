@@ -81,7 +81,8 @@ next T1 approve; next T1
 check "an approved plan goes on" '[[ "$out" != stop* ]] && [ ! -f $W/auto-decisions.md ]'
 plan_md 3
 next T1
-check "a plan with no flags goes on without a stop" '[[ "$out" != stop* ]]'
+BUILD="run implementer AUTO RUN. Build T1: implement the next unchecked slice in plan.md."
+check "a plan with no flags goes on to the implementer" '[ "$out" = "$BUILD" ]'
 check "and records the auto-decision under the Plan rule" '[ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 1 ] && grep -q "Rule:.*Plan" $W/auto-decisions.md'
 next T1
 check "the auto-decision is recorded once per plan" '[ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 1 ]'
@@ -90,7 +91,19 @@ next T1; next T1 approve; next T1
 check "requirements changed after the plan: run the planner to update it" '[ "$out" = "run planner AUTO RUN. Requirements for T1 changed; update plan.md." ]'
 plan_md 4
 next T1
-check "updated plan: accepted again" '[[ "$out" != stop* ]] && [ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 2 ]'
+check "updated plan: accepted again" '[ "$out" = "$BUILD" ] && [ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 2 ]'
+
+# ---------- slices ----------
+sed -i 's/^- \[ \] S1:/- [x] S1:/; s/^- \[ \] S2:/- [x] S2:/; s/^- \[ \] S3:/- [x] S3:/' $W/plan.md
+next T1
+check "one slice left: still the implementer" '[ "$out" = "$BUILD" ]'
+sed -i 's/^- \[ \] S4:/- [x] S4:/' $W/plan.md
+next T1
+check "every slice ticked: not the implementer" '[ "$out" != "$BUILD" ]'
+printf '## Review slices\n- [ ] R1: fix CR-2\n' >> $W/plan.md
+next T1
+check "an unchecked review slice: the implementer" '[ "$out" = "$BUILD" ]'
+sed -i 's/^- \[ \] R1:/- [x] R1:/' $W/plan.md
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
