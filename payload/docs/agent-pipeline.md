@@ -191,7 +191,7 @@ afterwards, the stop comes back.
 | `plan` | A Stop flag in plan.md (requirement gaps, migration, feature flag, other team) or more than 6 slices | Review plan.md, then approve or say what to change |
 | `review` | A finding without a clear decision (including a blocker recommended debt or skip), or a fix routed to requirements or re-plan | Decide those findings in code-review.md |
 | `fix-limit` | `MAX_AUTO_FIX_ROUNDS` fix rounds used and the work still needs fixing | Approve for more rounds, or say how to go on |
-| `stalled` | A stage ran and changed nothing | Read its **Result:** line in the block. Approve to run it once more, or say how to go on |
+| `stalled` | A stage ran and changed nothing | Read its **Result:** line in the block. Approve to run it once more, or say how to go on. When it's the planner updating plan.md for changed requirements, approving keeps the plan as it is |
 | `pre-ship` | Before the push | Review evidence.md, mr.md and auto-decisions.md, tick the evidence, run `scripts/agent/approve-evidence.sh <id>` in your own terminal, then approve. This approval is your push confirmation. |
 | `duo` | After a Duo round: ASK threads, or fixes not yet pushed | Review review-triage.md, then approve the push or answer the ASK threads |
 | `plan`, `review`, `duo`, `verify`, `evidence` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:` | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
@@ -236,8 +236,8 @@ starts with `AUTO RUN`. Run by hand, the agents work as before. In an auto run:
 A fix round is one return to the implementer: a verifier FAIL, or quick review
 fixes (then verify and a delta review). After `MAX_AUTO_FIX_ROUNDS` rounds in a
 row (default 2), the run stops at `fix-limit`. Approving it allows that many
-more. Rounds start over when a review settles, a Duo round starts or you
-approve a stop. Set it in `.agent.env`:
+more. Rounds start over when a review settles, a Duo round starts, or you
+approve `fix-limit` or `review`. Approving `stalled` keeps the count. Set it in `.agent.env`:
 
 ```
 MAX_AUTO_FIX_ROUNDS=2
