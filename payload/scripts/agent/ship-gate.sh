@@ -17,12 +17,12 @@ source "$(dirname "${BASH_SOURCE[0]}")/evidence-lib.sh"
 _gate_marker() { echo "$(task_dir "$1")/verified-head"; }
 
 gate_require() {
-  local task="$1" action="${2:-}" v head current
+  local task="$1" action="${2:-}" v head current branch
   case "$action" in push|new-mr) ;; *) echo "Unknown ship gate action: $action (expected push or new-mr)." >&2; exit 2 ;; esac
-  load_state "$task"
+  branch="$(state_branch "$task")" || exit 1
 
   current="$(git branch --show-current)"
-  [ "$current" = "$BRANCH" ] || { echo "On branch ${current:-(detached)}, expected $BRANCH. Not pushing." >&2; exit 1; }
+  [ "$current" = "$branch" ] || { echo "On branch ${current:-(detached)}, expected $branch. Not pushing." >&2; exit 1; }
 
   v="$(cat "$(_gate_marker "$task")" 2>/dev/null || true)"; head="$(git rev-parse HEAD)"
   if [ -z "$v" ]; then

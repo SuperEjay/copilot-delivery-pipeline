@@ -23,8 +23,6 @@ else
   git switch --quiet -c "$BRANCH" "origin/$BASE_BRANCH"
 fi
 
-if [ ! -f "$DIR/state.env" ]; then
-  printf 'TASK=%s\nBRANCH=%s\nREVIEW_ROUND=0\n' "$TASK" "$BRANCH" > "$DIR/state.env"
-fi
+state_init "$TASK" "$BRANCH"
 
 echo "Task $TASK on branch $BRANCH. Work folder: ${DIR#"$REPO_ROOT"/}"

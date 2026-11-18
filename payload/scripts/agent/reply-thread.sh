@@ -10,8 +10,7 @@ TASK="${1:?usage: reply-thread.sh <task-id> <discussion-id> <message-file> [--re
 DID="${2:?discussion id}"
 MSG="${3:?message file}"
 RESOLVE="${4:-}"
-load_state "$TASK"
-: "${MR_IID:?No MR_IID in state.env.}"
+MR_IID="$(state_mr_iid "$TASK")" || exit 1
 [ -s "$MSG" ] || { echo "Message file is empty or missing: $MSG" >&2; exit 1; }
 
 glab api -X POST "projects/:id/merge_requests/$MR_IID/discussions/$DID/notes" \

@@ -8,6 +8,7 @@ source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/ship-gate.sh"
 
 TASK="${1:?usage: push-branch.sh <task-id>}"
+BRANCH="$(state_branch "$TASK")" || exit 1
 gate_require "$TASK" push
 git push --quiet origin "$BRANCH"
 echo "Pushed $BRANCH ($(git rev-parse --short HEAD))."

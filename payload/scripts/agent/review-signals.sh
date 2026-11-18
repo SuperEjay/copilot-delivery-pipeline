@@ -14,10 +14,10 @@ source "$(dirname "$0")/config.sh"
 
 TASK="${1:?usage: review-signals.sh <task-id> [--full|--mark-reviewed]}"
 MODE="${2:-}"
-load_state "$TASK"
+REVIEWED_SHA="$(state_reviewed_sha "$TASK")" || exit 1
 
 if [ "$MODE" = "--mark-reviewed" ]; then
-  set_state "$TASK" REVIEWED_SHA "$(git rev-parse HEAD)"
+  state_set_reviewed_sha "$TASK" "$(git rev-parse HEAD)" || exit 1
   echo "Marked $(git rev-parse --short HEAD) as reviewed."
   exit 0
 fi
@@ -28,7 +28,7 @@ fi
 : "${REVIEW_MAX_PER_FLAG:=15}"
 
 FULL_BASE="$(git merge-base "origin/$BASE_BRANCH" HEAD)"
-if [ "$MODE" != "--full" ] && [ -n "${REVIEWED_SHA:-}" ] && git cat-file -e "$REVIEWED_SHA" 2>/dev/null; then
+if [ "$MODE" != "--full" ] && [ -n "$REVIEWED_SHA" ] && git cat-file -e "$REVIEWED_SHA" 2>/dev/null; then
   BASE="$REVIEWED_SHA"; SCOPE="delta since last review ($(git rev-parse --short "$BASE"))"
 else
   BASE="$FULL_BASE"; SCOPE="full branch vs origin/$BASE_BRANCH"
