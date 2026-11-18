@@ -12,7 +12,9 @@ approving at each checkpoint:
 
 - **Auto run:** pick the `pipeline` agent and it runs the stages for you as
   subagents, stopping only where a decision is yours (requirements, a risky plan,
-  unclear review findings, before the push).
+  unclear review findings, before the push). Never with **Auto** in the model
+  picker: it cancels the pinned models. See "Hands-off: auto run" in
+  `payload/docs/agent-pipeline.md`.
 - **No MCP needed:** ClickUp goes through its REST API, GitLab through `glab`.
 - **Enforced rules:** a hook guards every agent tool call. Publishing needs your
   confirmation; secrets, destructive git, raw pushes and edits to the pipeline

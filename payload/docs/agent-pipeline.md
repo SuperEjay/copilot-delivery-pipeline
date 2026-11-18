@@ -40,8 +40,8 @@ you move on.
 | Path | What it is |
 |---|---|
 | `.github/agents/*.agent.md` | The eight stage agents (requirements, planner, implementer, verifier, reviewer, evidence, shipper, review-responder) and `pipeline`, the orchestrator of an auto run |
-| `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>`: branch, work folder, ClickUp fetch, then on to requirements |
-| `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id>`: pull Duo's open threads, then on to review-responder |
+| `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>`: branch, work folder, ClickUp fetch, then on to requirements, or starts the auto run when **pipeline** is picked |
+| `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then on to review-responder, or resumes the auto run when **pipeline** is picked |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
 | `.github/copilot-instructions.md` | Six short rules every agent follows (kept short on purpose: it's sent with every request) |
 | `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, thread reply/resolve |
@@ -120,9 +120,10 @@ premium-speed variant of a model. Fast variants cost several times more than
 the standard model for the same work. The pinned names above are all standard
 variants. Leave them that way.
 
-## Daily use
+## Daily use: stage by stage
 
-Follow the **Next:** line at the end of each reply. The usual path:
+To have the stages run for you instead, see **Hands-off: auto run** below.
+By hand, follow the **Next:** line at the end of each reply. The usual path:
 
 | Step | Pick agent / run | Say |
 |---|---|---|
@@ -146,45 +147,138 @@ earlier stages are done, and tells you what's missing.
 carry the context, so each agent starts small instead of dragging the whole
 history along.
 
-## Auto run (the pipeline agent)
+## Hands-off: auto run
 
-Instead of picking each agent yourself, pick **pipeline** once and run
-`/start-task 86c1abcde invoice-export`. The orchestrator runs each stage agent
-as a subagent, on that agent's pinned model, and comes back to you only at a
-**stop**. `scripts/agent/next-stage.sh` decides what runs next and where to
-stop, from the files in `.work/<id>/` (ADR 0001). Each stage prints one
-`▶ <agent>: <result>` line.
+Instead of picking each agent yourself, let the **pipeline** agent (the
+**orchestrator**) run the stages for you. It comes back to you only at a
+**stop**, where a decision is yours. The design is in ADR 0001.
+
+**Don't use Auto in the model picker.** Under Auto, every stage runs on Auto's
+choice and ignores its pinned model. The orchestrator warns about this once per
+run, then goes on.
+
+### Start
+
+1. Pick **pipeline** in the agent picker, and a model other than Auto in the
+   model picker if your plan offers one.
+2. Run `/start-task 86c1abcde invoice-export`. The skill sets up the task, then
+   hands over to the orchestrator. If a script fails (uncommitted changes, a
+   ClickUp error), you get its message and the run doesn't start.
+3. The orchestrator runs each stage agent as a subagent and prints one
+   `▶ <agent>: <result>` line per stage. `scripts/agent/next-stage.sh` decides
+   what runs next and where to stop, from the files in `.work/<id>/`.
+
+Answer every stop in that same chat.
+
+### Stops and what to reply
 
 At a stop you see a `⏸ DECISION NEEDED` block with the reason, the files to
-read and what replying does. Answer in the same chat:
+read, the last stage's **Result:** line and what replying does. Reply with:
 
-- **`approve`** (or `yes`, `go`, `lgtm`…, with nothing else) moves the run on.
-  If the stop can't be approved yet (say, the evidence isn't approved at
-  HEAD), you're told why and the stop stays.
+- **`approve`** (or `approved`, `yes`, `go`, `go ahead`, `ship it`, `lgtm`, with
+  nothing else) moves the run on. If the stop can't be approved yet (say, the
+  evidence isn't approved at HEAD), you're told why and the stop stays.
 - **Anything else** goes to the stage the stop is about as feedback, and the
-  stop comes back with its answer.
+  stop comes back with its answer. "Yes, but …" is feedback too.
 - **`retry`** or **`continue`** checks again after you changed a file by hand.
 
-| Stop | When |
-|---|---|
-| `requirements` | Always, once requirements.md is written |
-| `plan` | A Stop flag in plan.md (requirement gaps, migration, feature flag, other team) or more than 6 slices |
-| `review` | A finding without a clear decision, or a fix routed to requirements or re-plan |
-| `fix-limit` | `MAX_AUTO_FIX_ROUNDS` fix rounds used and the work still fails |
-| `stalled` | A stage ran and changed nothing; the block shows its **Result:** line |
-| `pre-ship` | Before the push: review evidence.md, mr.md and auto-decisions.md, run `approve-evidence.sh`, then approve. This is your push confirmation. |
-| `duo` | After a Duo round: ASK threads, and the push of the verified fixes |
+An approval holds only for what you saw. If the file a stop is about changes
+afterwards, the stop comes back.
 
-The run ends when the MR is open. After Duo has reviewed, run
-`/fetch-review 86c1abcde` with **pipeline** picked to continue. `Run <id>` or
-`Continue <id>` picks a run up again in a new chat. `.work/<id>/status.md`
-shows where the run stands (the script writes it), and `auto-decisions.md`
-lists what the pipeline decided for you.
+| Stop | When | What to do |
+|---|---|---|
+| `requirements` | Always, once requirements.md is written | Answer its open questions, or approve it |
+| `plan` | A Stop flag in plan.md (requirement gaps, migration, feature flag, other team) or more than 6 slices | Review plan.md, then approve or say what to change |
+| `review` | A finding without a clear decision (including a blocker recommended debt or skip), or a fix routed to requirements or re-plan | Decide those findings in code-review.md |
+| `fix-limit` | `MAX_AUTO_FIX_ROUNDS` fix rounds used and the work still needs fixing | Approve for more rounds, or say how to go on |
+| `stalled` | A stage ran and changed nothing | Read its **Result:** line in the block. Approve to run it once more, or say how to go on. When it's the planner updating plan.md for changed requirements, approving keeps the plan as it is |
+| `pre-ship` | Before the push | Review evidence.md, mr.md and auto-decisions.md, tick the evidence, run `scripts/agent/approve-evidence.sh <id>` in your own terminal, then approve. This approval is your push confirmation. |
+| `duo` | After a Duo round: ASK threads, or fixes not yet pushed | Review review-triage.md, then approve the push or answer the ASK threads |
+| `plan`, `review`, `duo`, `verify`, `evidence` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:` | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
 
-**Don't run it with Auto selected in the model picker.** Under Auto, every
-subagent runs on Auto's choice and ignores its pinned model. The orchestrator
-warns about this once per run. On Copilot Free, Auto is the only option: the
-run works, but not on the pinned models.
+The run ends when the MR is open, and again each time a Duo round is answered: run `/fetch-review <id>` after Duo's next review.
+
+### What the stages do in an auto run
+
+Each stage agent knows it's in an auto run because the orchestrator's prompt
+starts with `AUTO RUN`. Run by hand, the agents work as before. In an auto run:
+
+- **No stage asks you anything.** Questions and decisions go into the stage's
+  files in `.work/<id>/`, and the stop shows them to you.
+- **A stage that can't finish** returns `**Result:** blocked: <why>`, and the
+  run stops (`stalled`).
+- **Requirements** leaves open questions in requirements.md for the
+  `requirements` stop.
+- **The planner** writes blocking questions as Requirement gaps under
+  `## Stop flags`, instead of stopping.
+- **The reviewer** sets each finding's decision to its recommendation and logs
+  each one in `auto-decisions.md`. It leaves unclear findings for you.
+- **The implementer** marks a quick fix that turned out bigger than its
+  estimate as `re-plan`, so the `review` stop shows it to you.
+- **The shipper** runs twice: once to write mr.md, and once to ship after you
+  approve `pre-ship`.
+- **The review-responder** triages Duo's threads and commits the fixes without
+  waiting for an OK. ASK threads wait for the `duo` stop.
+
+### Files to check
+
+- **`.work/<id>/status.md`:** where the run stands: `Stage:`, `Pending stop:`,
+  `Fix round: <n>/<max>`, and an `Approved <stop>:` line per approval. Only
+  `next-stage.sh` writes it. Agents may read it, and the guard denies them any
+  change to it, so an agent can't approve a stop.
+- **`.work/<id>/auto-decisions.md`:** each **auto-decision**: what the pipeline
+  decided for you, when, why and under which rule. A plan that went on without
+  a stop has an entry, and so does each review finding the reviewer decided.
+  Read it before you approve `pre-ship`.
+
+### Fix rounds
+
+A fix round is one return to the implementer: a verifier FAIL, or quick review
+fixes (then verify and a delta review). After `MAX_AUTO_FIX_ROUNDS` rounds in a
+row (default 2), the run stops at `fix-limit`. Approving it allows that many
+more. Rounds start over when a review settles, a Duo round starts, or you
+approve `fix-limit` or `review`. Approving `stalled` keeps the count. Set it in `.agent.env`:
+
+```
+MAX_AUTO_FIX_ROUNDS=2
+```
+
+### Resuming
+
+- **After Duo has reviewed:** pick **pipeline** and run
+  `/fetch-review 86c1abcde`. It fetches the threads, then continues the run.
+- **After `MAX_REVIEW_ROUNDS` Duo rounds,** the fetch stops with a message. That
+  isn't a stop: there's no decision block. Run `/fetch-review 86c1abcde --force`
+  to go on.
+- **In a new chat, or after a break:** pick **pipeline** and say
+  `Continue 86c1abcde` (or `Run 86c1abcde`).
+
+### Pinned models in an auto run
+
+Each stage should run on its pinned model (see "Models (pinned per agent)"):
+the orchestrator names the stage's model on every subagent call.
+
+**This is unverified.** The spike behind ADR 0001 ran on Copilot Free, where
+Auto is the only option in Agent Host. It found that a `model:` line the plan
+can't use is ignored without any error, and that a model named on the subagent
+call is applied. Whether the pinned models hold on a paid plan still needs
+checking. On Copilot Free, the run works, but not on the pinned models.
+
+### Recommended settings (alerts)
+
+A stop waits for you, so you may want an alert. The installer doesn't touch
+`.vscode/settings.json`. Add these yourself if you want them:
+
+```json
+{
+  "chat.notifyWindowOnConfirmation": "always",
+  "accessibility.signals.chatUserActionRequired": { "sound": "on" }
+}
+```
+
+**Unverified:** the spike didn't confirm whether these fire in Agent Host. A
+stop ends the orchestrator's turn; it isn't a confirm prompt, so these may
+alert you only for the guard's confirm prompts, not at a stop.
 
 ## Hooks (enforced rules)
 
