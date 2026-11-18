@@ -19,6 +19,7 @@ fi
 : "${FAIL_TAIL_LINES:=40}"
 : "${DUO_USERNAMES:=}"
 : "${MAX_REVIEW_ROUNDS:=3}"
+: "${MAX_AUTO_FIX_ROUNDS:=2}"
 : "${MR_DRAFT:=true}"
 : "${EVIDENCE_BASE_URL:=http://localhost:3000}"
 : "${EVIDENCE_START_CMD=}"

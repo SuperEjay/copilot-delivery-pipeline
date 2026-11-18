@@ -53,6 +53,9 @@ _approved() { [ -n "$2" ] && [ "$(_st "Approved $1")" = "$2" ]; }
 _run()  { VERB=run;  WHAT="$1"; TEXT="AUTO RUN. $2"; }
 _stop() { VERB=stop; WHAT="$1"; STOP_FP="$2"; TEXT="$3"; }
 _end()  { VERB=end;  WHAT=""; TEXT="$1"; }
+# _fix_run <key> <prompt>: back to the implementer for a fix. The key (the
+# commit it fixes) makes a round count once, however often this is asked.
+_fix_run() { FIX_KEY="$1"; _run implementer "$2"; }
 # _unreadable <stop-id> <reason>: a stop no approval can pass; the file needs fixing.
 _unreadable() { VERB=stop; WHAT="$1"; STOP_FP=""; TEXT="$2"; }
 
@@ -110,7 +113,50 @@ decide() {
   if grep -qE '^- \[ \] [SR][0-9]+:' "$DIR/plan.md"; then
     _run implementer "Build $TASK: implement the next unchecked slice in plan.md."; return
   fi
+
+  STAGE=verify
+  check_verified || return
   _end "not built yet"
+}
+
+# _field <file> <Key>: the value after the last "Key:" line, first word only.
+_field() {
+  [ -f "$DIR/$1" ] || return 0
+  awk -v k="$2:" 'index($0, k) == 1 { split(substr($0, length(k) + 1), w, " "); v = w[1] } END { print v }' "$DIR/$1"
+}
+
+# check_verified: HEAD is verified (verification.md PASS at HEAD, and HEAD is
+# the verified commit), or set a run/stop and return 1.
+check_verified() {
+  local head vc vr
+  head="$(git rev-parse HEAD)"
+  if [ -f "$DIR/verification.md" ]; then
+    vc="$(_field verification.md Commit)"; vr="$(_field verification.md Result)"
+    if [ -z "$vc" ]; then
+      _unreadable verify "$REL/verification.md has no 'Commit:' line. The verifier must write the HEAD it checked."; return 1
+    fi
+    if [ "$vc" = "$head" ]; then
+      case "$vr" in
+        FAIL) _fix_run "verify:$head" "Fix the verification failures for $TASK (see verification.md)."; return 1 ;;
+        PASS) [ "$(cat "$DIR/verified-head" 2>/dev/null)" = "$head" ] && return 0 ;;
+        *) _unreadable verify "$REL/verification.md has no 'Result: PASS|FAIL' line."; return 1 ;;
+      esac
+    fi
+  fi
+  _run verifier "Verify $TASK."; return 1
+}
+
+# apply_fix_round: count a new fix round, or turn it into the fix-limit stop.
+apply_fix_round() {
+  local round key
+  round="$(_st "Fix round")"; round="${round%%/*}"; round="${round:-0}"; key="$(_st "Fix key")"
+  NEW_ROUND="$round"; NEW_KEY="$key"
+  [ "$VERB" = run ] && [ -n "$FIX_KEY" ] && [ "$FIX_KEY" != "$key" ] || return 0
+  if [ "$round" -ge "$MAX_AUTO_FIX_ROUNDS" ]; then
+    _stop fix-limit "$FIX_KEY" "$MAX_AUTO_FIX_ROUNDS fix rounds used (MAX_AUTO_FIX_ROUNDS) and the work still needs fixing: $TEXT Approve to allow more rounds, or tell me how to go on."
+    return 0
+  fi
+  NEW_ROUND=$(( round + 1 )); NEW_KEY="$FIX_KEY"
 }
 
 # ---------- auto-decisions.md ----------
@@ -139,6 +185,8 @@ write_status() {
     echo "Stage: $STAGE"
     echo "Last decision: $LINE"
     echo "Pending stop: $pending"
+    echo "Fix round: $NEW_ROUND/$MAX_AUTO_FIX_ROUNDS"
+    echo "Fix key: $NEW_KEY"
     echo "Plan accepted: ${PLAN_ACCEPTED:-$(_st "Plan accepted")}"
     for id in "${!APPROVED[@]}"; do echo "Approved $id: ${APPROVED[$id]}"; done
   } > "$STATUS.tmp"
@@ -153,8 +201,9 @@ if [ -f "$STATUS" ]; then
   done < <(grep '^Approved [a-z-]*: ' "$STATUS")
 fi
 
-PLAN_ACCEPTED=""; AUTO_PLAN=""
+PLAN_ACCEPTED=""; AUTO_PLAN=""; FIX_KEY=""
 decide
+apply_fix_round
 
 if [ "$CMD" = approve ]; then
   pending="$(_st "Pending stop")"
@@ -167,6 +216,7 @@ if [ "$CMD" = approve ]; then
     exit 1
   fi
   APPROVED[$WHAT]="$STOP_FP"
+  NEW_ROUND=0   # the user looked at the run: fix rounds start over
   LINE="$(_st "Last decision")"
   write_status
   echo "Approved the $WHAT stop."

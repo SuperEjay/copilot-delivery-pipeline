@@ -18,8 +18,16 @@ git remote add origin "$T/remote.git"
 mkdir -p scripts; cp -r "$ROOT/payload/scripts/agent" scripts/
 printf '.work/\n.agent.env\n' > .gitignore
 echo one > a.txt; git add -A; git commit -qm init; git push -q origin main
-printf 'MAX_AUTO_FIX_ROUNDS=2\n' > .agent.env
+: > .agent.env   # MAX_AUTO_FIX_ROUNDS stays at its default, 2
 W=.work/T1
+
+# commit_change: move HEAD.  verify PASS|FAIL: verification.md at HEAD (PASS also
+# records the verified commit, as run-checks.sh all does).
+commit_change() { echo x >> a.txt; git commit -qam change; }
+verify() {
+  printf '# Verification: T1\nResult: %s\nCommit: %s\n' "$1" "$(git rev-parse HEAD)" > $W/verification.md
+  if [ "$1" = PASS ]; then git rev-parse HEAD > $W/verified-head; else rm -f $W/verified-head; fi
+}
 
 # next <args>: run next-stage.sh, output in $T/out.txt and $out, exit code in $rc.
 next() { $S/next-stage.sh "$@" > "$T/out.txt" 2>&1; rc=$?; out="$(cat "$T/out.txt")"; }
@@ -104,6 +112,31 @@ printf '## Review slices\n- [ ] R1: fix CR-2\n' >> $W/plan.md
 next T1
 check "an unchecked review slice: the implementer" '[ "$out" = "$BUILD" ]'
 sed -i 's/^- \[ \] R1:/- [x] R1:/' $W/plan.md
+
+# ---------- verify, and the fix-round limit ----------
+VERIFY="run verifier AUTO RUN. Verify T1."
+FIX="run implementer AUTO RUN. Fix the verification failures for T1 (see verification.md)."
+next T1
+check "all slices built: run the verifier" '[ "$out" = "$VERIFY" ]'
+verify FAIL; next T1
+check "FAIL at HEAD: back to the implementer, fix round 1" '[ "$out" = "$FIX" ] && grep -qx "Fix round: 1/2" $W/status.md'
+next T1
+check "asking again doesn't count the round twice" '[ "$out" = "$FIX" ] && grep -qx "Fix round: 1/2" $W/status.md'
+commit_change; next T1
+check "HEAD moved since the FAIL: verify again" '[ "$out" = "$VERIFY" ]'
+verify FAIL; next T1
+check "second FAIL: fix round 2" '[ "$out" = "$FIX" ] && grep -qx "Fix round: 2/2" $W/status.md'
+commit_change; verify FAIL; next T1
+check "third FAIL: stop at MAX_AUTO_FIX_ROUNDS (default 2)" '[[ "$out" == "stop fix-limit "*"2 fix rounds"* ]]'
+next T1 approve; next T1
+check "approving the fix-limit stop allows another round" '[ "$out" = "$FIX" ] && grep -qx "Fix round: 1/2" $W/status.md'
+printf '# Verification: T1\nResult: FAIL\n' > $W/verification.md
+next T1
+check "verification.md without a Commit line: a stop no approval passes" '[[ "$out" == "stop verify "*"Commit:"* ]] && { next T1 approve; [ $rc -eq 1 ]; }'
+commit_change; verify PASS; rm $W/verified-head; next T1
+check "PASS without the verified commit recorded: verify again" '[ "$out" = "$VERIFY" ]'
+verify PASS; next T1
+check "PASS at the verified commit: past the verifier" '[ "$out" != "$VERIFY" ] && [ "$out" != "$FIX" ]'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
