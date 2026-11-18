@@ -18,6 +18,7 @@ git add -A; git commit -qm init
 # 1. fresh install
 run; check "install exits 0" '[ $? -eq 0 ]'
 check "agents copied" '[ -f .github/agents/reviewer.agent.md ]'
+check "orchestrator copied" '[ -f .github/agents/pipeline.agent.md ]'
 check "hooks copied" '[ -f .github/hooks/pipeline-guard.json ]'
 check "scripts executable" '[ -x scripts/agent/run-checks.sh ] && [ -x scripts/agent/hooks/pre-tool-guard.sh ]'
 check "manifest written" '[ -f .github/agent-pipeline.manifest ]'
@@ -56,6 +57,7 @@ check "backup kept" 'grep -q "my tweak" .github/agents/planner.agent.md.bak'
 # 6. uninstall
 "$T/v2/install.sh" --yes --uninstall "$T/proj" > "$T/out.txt" 2>&1
 check "agents removed" '[ ! -d .github/agents ] || [ -z "$(ls -A .github/agents | grep -v .bak)" ]'
+check "orchestrator removed" '[ ! -f .github/agents/pipeline.agent.md ]'
 check "scripts removed" '[ ! -f scripts/agent/run-checks.sh ]'
 check "manifest removed" '[ ! -f .github/agent-pipeline.manifest ]'
 check "team rules survive uninstall" 'grep -q "TypeScript strict" .github/copilot-instructions.md && ! grep -q "agent-pipeline" .github/copilot-instructions.md'
