@@ -8,9 +8,12 @@
 #                                     this prompt (it starts with "AUTO RUN.")
 #       stop <stop-id> <reason>       wait for the user's decision; stop ids:
 #                                     requirements plan review fix-limit stalled
-#                                     pre-ship duo, plus verify and evidence for
-#                                     a file it can't read
-#       end <reason>                  the run is over (MR open, waiting on Duo)
+#                                     pre-ship duo. A file missing a line it
+#                                     reads is a stop no approval passes, under
+#                                     the stage's id: plan review duo verify
+#                                     evidence
+#       end <reason>                  the run is over until Duo reviews: the MR
+#                                     is open, or a Duo round is answered
 #   next-stage.sh <task-id> approve   the user explicitly approved the stop last
 #                                     printed: record it, so the run moves on
 #

@@ -287,5 +287,18 @@ check "verifier template: Commit is the HEAD it checked, PASS or FAIL" 'grep -q 
 check "evidence template: Commit line" 'grep -q "^Commit: <the HEAD" $A/evidence.agent.md'
 check "review-responder: Round and Replied lines in review-triage.md" 'grep -q "Round: <n>" $A/review-responder.agent.md && grep -q "Replied: yes" $A/review-responder.agent.md'
 
+# ---------- the header's contract names every stop the script raises ----------
+NS="$ROOT/payload/scripts/agent/next-stage.sh"
+# stop_doc: the header's "stop <stop-id> <reason>" entry as one line.
+stop_doc() { awk '/^#  +stop <stop-id> <reason>/ { on = 1 } /^#  +end <reason>/ { on = 0 } on' "$NS" | sed 's/^#//' | tr -s ' \n' '  '; }
+ids() { grep -oE "_$1 [a-z-]+ " "$NS" | awk '{ print $2 }' | sort -u; }
+for id in $(ids stop); do
+  check "header: the $id stop is listed" 'stop_doc | sed "s/no approval passes.*//" | grep -qw -- "$id"'
+done
+for id in $(ids unreadable); do
+  check "header: the $id stop is listed as one no approval passes" 'stop_doc | grep -q "no approval passes" && stop_doc | sed "s/.*no approval passes//" | grep -qw -- "$id"'
+done
+check "header: end names both ends of a run" 'grep -E "^#  +end <reason>" -A1 "$NS" | grep -q "Duo round"'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
