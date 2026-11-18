@@ -130,9 +130,26 @@ if $is_shell; then
 
   # Only the top level (the orchestrator) runs the auto run's router. A call
   # from a subagent carries agentId; a stage agent running next-stage.sh could
-  # approve a stop itself or upset the stall detection.
-  [ -n "$subagent" ] && has 'next-stage\.sh[[:space:]]+[^[:space:];&|<>]' &&
-    decide deny "Only the orchestrator runs next-stage.sh. Finish your stage, end with your **Result:** line and return."
+  # approve a stop itself or upset the stall detection. Any spelling counts: the
+  # name is matched with quotes and backslashes taken out, a glob (next-st*.sh)
+  # or a variable holding it (x=next-stage) too. A subagent's command that names
+  # it is denied unless every part of it only reads (cat, grep, git diff ...)
+  # and nothing is substituted into it.
+  if [ -n "$subagent" ]; then
+    bare="${cmd//[\"\'\\]/}"
+    router_name='(^|[/[:space:]=<>(`])next-(stage|s[a-z]*[*?[])'
+    if [[ $bare =~ $router_name ]]; then
+      reader='^[[:space:]]*(cat|head|tail|less|more|grep|egrep|fgrep|wc|ls|stat|file|nl|diff|git[[:space:]]+(diff|log|show|blame|grep|status))([[:space:]]|$)'
+      substituted='\$\(|`|[<>]\('
+      only_reads=true
+      [[ $cmd =~ $substituted ]] && only_reads=false
+      while IFS= read -r seg; do
+        [[ -z "${seg//[[:space:]]/}" || $seg =~ $reader ]] || only_reads=false
+      done < <(sed -E 's/[0-9]*>&[0-9-]+//g; s/(&&|\|\||[;|&])/\n/g' <<<"$cmd")
+      $only_reads ||
+        decide deny "Only the orchestrator runs next-stage.sh. Finish your stage, end with your **Result:** line and return. (Reading it with cat, grep or git diff is fine.)"
+    fi
+  fi
 
   # `source` or `.` in command position (start, after ;&|({ or a backtick, or
   # just inside a quote as in bash -c '. x'), then a path into scripts/agent/.
