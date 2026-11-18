@@ -40,6 +40,11 @@ check "planner: open questions don't stop it" 'auto planner "Skip step 1" && aut
 check "planner: blocking questions become Requirement gaps: yes" 'auto planner "## Requirement gaps" && auto planner "\- Requirement gaps: yes"'
 check "planner: Stop flags kept current on an update or a re-plan" 'auto planner "Keep the Stop flags current" && auto planner "update plan.md" && auto planner "Re-plan the review findings"'
 check "implementer: a quick fix bigger than its estimate is routed to re-plan, left open" 'auto implementer "bigger than its estimate" && auto implementer "Route.* to \`re-plan\`" && auto implementer "Status.*\`open\`"'
+check "reviewer: Decision from Recommend, a Route for each fix, no questions" 'auto reviewer "set \*\*Decision\*\* to the finding.s \*\*Recommend\*\*" && auto reviewer "\*\*Route\*\*" && auto reviewer "steps 7 and 8"'
+check "reviewer: unclear findings stay _pending_" 'auto reviewer "Leave \`Decision: _pending_\`"'
+check "reviewer: a blocker is never parked or skipped without the user" 'auto reviewer "\*\*blocker\*\* is recommended debt or skip"'
+check "reviewer: debt still goes to tech-debt.md" 'auto reviewer "tech-debt.md"'
+check "reviewer: each decision logged to auto-decisions.md in the router's format" 'auto reviewer "auto-decisions.md" && [ "$(for k in When What Why Rule; do auto reviewer "^  - \*\*$k:\*\*" && echo $k; done | wc -l)" -eq 4 ]'
 check "evidence: no approval steps in an auto run; the pre-ship stop gives them" 'auto evidence "pre-ship stop"'
 
 echo "passed=$pass failed=$fail"

@@ -113,6 +113,16 @@ Follow this section only when the prompt starts with `AUTO RUN`. The orchestrato
 - **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
 - **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
 - **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+- **Decide each finding yourself**, instead of the questions in steps 7 and 8: set **Decision** to the finding's **Recommend**, and give each fix a **Route** by the routing rules above. Append each debt finding to tech-debt.md as in step 8. On a second pass, decide only the new findings.
+- **Leave `Decision: _pending_`** when Recommend isn't exactly one of fix, debt or skip, when a fix's route isn't clear, or when a **blocker** is recommended debt or skip. The user decides those at the review stop, as they do fixes routed to `requirements` or `re-plan`.
+- **Log each finding you decided** in `.work/<task-id>/auto-decisions.md`, one entry each, appended. If the file is missing, start it with `# Auto-decisions: <task-id>` and the line `Decisions the pipeline made for you in an auto run. Review them before shipping.`
+  ~~~markdown
+  ## CR-n: fix → quick | debt | skip
+  - **When:** <UTC time, e.g. 2026-11-18T09:30:00Z>
+  - **What:** <severity, area and file from the heading, and the Problem in one sentence>
+  - **Why:** Recommend: <fix | debt | skip>, Effort: <S | M | L>
+  - **Rule:** Code review: recommendations are accepted automatically (ADR 0001).
+  ~~~
 
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
