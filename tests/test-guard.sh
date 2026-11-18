@@ -105,6 +105,48 @@ ed deny  create_file '.work/T-1/verified-head'
 ed deny  read_file '.auth/session.json'
 ed deny  read_file "$HOME/.ssh/id_rsa"
 
+# ---------- protected paths: every table entry behaves as its kind says ----------
+# Per kind: shell write, shell mention, edit tool, read tool.
+declare -A want=(
+  [secret]='deny deny deny deny'
+  [record]='deny deny deny allow'
+  [config]='deny allow deny allow'
+)
+list="$(bash "$GUARD" --list-protected)"
+for kind in secret record config; do
+  if grep -q "^$kind	" <<<"$list"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: --list-protected has no $kind entries"; fi
+done
+while IFS=$'\t' read -r kind entry; do
+  [ -n "$kind" ] || continue
+  read -r w_write w_mention w_edit w_read <<<"${want[$kind]:-unknown}"
+  [ "$w_write" = unknown ] && { fail=$((fail + 1)); echo "FAIL: unknown kind '$kind' for $entry"; continue; }
+  file="$entry"; [ "${entry%/}" != "$entry" ] && file="${entry}x"   # a file inside a folder entry
+  sh "$w_write"   "echo x > $file"
+  sh "$w_mention" "cat $file"
+  ed "$w_edit"    editFiles "$file"
+  ed "$w_edit"    editFiles "/home/u/proj/$file"
+  ed "$w_read"    read_file "$file"
+  if [ "${entry%/}" != "$entry" ]; then   # the folder itself
+    sh deny "rm -rf ${entry%/}"
+    ed deny editFiles "${entry%/}"
+  fi
+done <<<"$list"
+
+# ---------- protected paths: a match starts at a path segment, the same in both channels ----------
+sh allow 'echo x > my.agent.env'
+ed allow editFiles 'my.agent.env'
+sh allow 'rm vendor/myscripts/agent/x.sh'
+ed allow editFiles 'vendor/myscripts/agent/x.sh'
+sh allow 'cat .npmrc.example'
+ed allow read_file '.npmrc.example'
+sh allow 'cat docs/oauth.auth/x'
+ed allow read_file 'docs/oauth.auth/x'
+sh allow 'echo x > .agent.env.bak'
+ed allow editFiles '.agent.env.bak'
+sh deny 'grep -rn verified-head docs/'
+sh deny "echo x > './scripts/agent/config.sh'"
+sh deny 'cat --netrc-file=.netrc'
+
 # ---------- switch ----------
 got="$(jq -n '{toolName: "bash", toolArgs: {command: "git push"}}' | PIPELINE_GUARD=off bash "$GUARD")"
 if [ "$got" = "{}" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: PIPELINE_GUARD=off should allow"; fi

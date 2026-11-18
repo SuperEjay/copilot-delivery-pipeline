@@ -15,6 +15,67 @@
 #
 # Every decision other than allow is logged to .work/hooks.log.
 # To switch the guard off for a session, start VS Code with PIPELINE_GUARD=off.
+# `pre-tool-guard.sh --list-protected` prints the protected-path table.
+
+# ---------- protected paths ----------
+# Paths agents may not change. What each kind blocks is written once, below:
+#   kind    shell                        edit tool  read tool
+#   secret  denied if mentioned at all   denied     denied
+#   record  denied if mentioned at all   denied     allowed
+#   config  denied when a write targets  denied     allowed
+# Entries are literal paths; a folder ends in "/" and covers itself and
+# everything in it. A match starts at a path segment, anywhere in the path.
+PROTECTED='
+secret  .auth/
+secret  .ssh/
+secret  .netrc
+secret  .npmrc
+record  verified-head
+record  evidence/APPROVED
+record  evidence/UPLOADED
+config  .github/agents/
+config  .github/hooks/
+config  .github/prompts/
+config  .github/skills/start-task/
+config  .github/skills/fetch-review/
+config  .github/copilot-instructions.md
+config  scripts/agent/
+config  .agent.env
+'
+REASON_secret="That file holds credentials or a saved login session. Agents never need to read or change it."
+REASON_record="verified-head and evidence/APPROVED|UPLOADED are written only by the pipeline's scripts: run-checks.sh records the verified commit, and the user approves evidence with approve-evidence.sh. Run scripts/agent/run-checks.sh <task-id> all to re-verify."
+REASON_config="Pipeline config (agents and their models, hooks, prompts, instructions, scripts, .agent.env) is user-owned, from the shell too. Tell the user what you'd change and why."
+
+if [ "${1:-}" = "--list-protected" ]; then
+  while read -r kind entry; do [ -n "$kind" ] && printf '%s\t%s\n' "$kind" "$entry"; done <<<"$PROTECTED"
+  exit 0
+fi
+
+# PATHS_<kind>: one regex per kind matching any of its entries, from the start
+# of the entry to the end of a path segment. The caller adds the start boundary.
+re_escape() {   # re_escape <text>: escape ERE metacharacters into $REPLY (no subshell, it's per call)
+  local s="$1" c i; REPLY=""
+  for ((i = 0; i < ${#s}; i++)); do
+    c="${s:i:1}"
+    case "$c" in [].\\[*^\$+?\(\)\{\}\|/]) REPLY+="\\$c" ;; *) REPLY+="$c" ;; esac
+  done
+}
+PATHS_secret=''; PATHS_record=''; PATHS_config=''
+while read -r kind entry; do
+  [ -n "$kind" ] || continue
+  re_escape "${entry%/}"; alt="$REPLY"
+  case "$kind" in
+    secret) PATHS_secret+="${PATHS_secret:+|}$alt" ;;
+    record) PATHS_record+="${PATHS_record:+|}$alt" ;;
+    config) PATHS_config+="${PATHS_config:+|}$alt" ;;
+  esac
+done <<<"$PROTECTED"
+SEG_END='([^A-Za-z0-9._-]|$)'
+for kind in secret record config; do
+  v="PATHS_$kind"; printf -v "$v" '(%s)%s' "${!v}" "$SEG_END"
+done
+SHELL_START='(^|[/[:space:]"'"'"'=<>(`])'   # where a path can start inside a command
+PATH_START='(^|/)'                         # where a segment starts inside a path
 
 input="$(cat)"
 
@@ -52,23 +113,22 @@ if $is_shell; then
 
   has 'approve-evidence\.sh' &&
     decide deny "Evidence approval is the user's job. Ask them to review evidence.md and run approve-evidence.sh themselves."
-  has 'evidence/(APPROVED|UPLOADED)' &&
-    decide deny "evidence/APPROVED and evidence/UPLOADED are managed by the user's approval and the upload script only."
-  has 'verified-head' &&
-    decide deny "verified-head is written only by run-checks.sh when every check passes. Run scripts/agent/run-checks.sh <task-id> all instead."
+  [[ $cmd =~ $SHELL_START$PATHS_record ]] && decide deny "$REASON_record"
 
-  # Shell writes to pipeline config (the edit-tool rule below, applied to the
-  # shell). Checked per command segment, so `rm -rf x && scripts/agent/...` is fine.
-  protected='(\.github/(agents|hooks|prompts)/|\.github/skills/(start-task|fetch-review)(/|[[:space:]"'"'"']|$)|\.github/copilot-instructions\.md|scripts/agent(/|[[:space:]"'"'"']|$)|\.agent\.env([^.A-Za-z]|$))'
+  # Shell writes to pipeline config. Checked per command segment, so
+  # `rm -rf x && scripts/agent/...` is fine. A redirect may put a relative
+  # prefix (./, ../, dir/) before the path.
+  redirect_to_config=">[|]?[[:space:]]*[\"']?([^[:space:];&|]*/)?$PATHS_config"
   writer='(^|[[:space:]/(])(tee|cp|mv|rm|rmdir|ln|chmod|chown|truncate|install|dd|patch|unlink|shred|rsync|sed[[:space:]]+([^|;&]*[[:space:]])?(-[a-zA-Z]*i|--in-place)|perl[[:space:]]+-[a-zA-Z]*i|(python[0-9.]*|node|ruby|perl)[[:space:]]+-[a-zA-Z]*[ce]|git[[:space:]]+(checkout|restore|rm|mv|apply|stash))([[:space:]]|$)'
   while IFS= read -r seg; do
-    if grep -qE -- ">[|]?[[:space:]]*[\"']?[^[:space:];&|]*$protected" <<<"$seg" ||
-       { grep -qE -- "$writer" <<<"$seg" && grep -qE -- "$protected" <<<"$seg"; }; then
-      decide deny "Pipeline config (agents, hooks, prompts, instructions, scripts, .agent.env) is user-owned, from the shell too. Tell the user what you'd change and why."
+    if [[ $seg =~ $redirect_to_config ]] ||
+       { [[ $seg =~ $writer ]] && [[ $seg =~ $SHELL_START$PATHS_config ]]; }; then
+      decide deny "$REASON_config"
     fi
   done < <(sed -E 's/(&&|\|\||[;|&])/\n/g' <<<"$cmd")
 
-  has '(\$\{?[A-Za-z_]*(TOKEN|SECRET|PASSWORD|API_KEY)|(^|[;&|[:space:]])(printenv|env|set|export -p)([[:space:]]*($|[;&|>]))|\.auth/|\.ssh/|pk_[A-Za-z0-9]{6,}|glpat-|\.netrc|\.npmrc)' &&
+  [[ $cmd =~ $SHELL_START$PATHS_secret ]] && decide deny "$REASON_secret"
+  has '(\$\{?[A-Za-z_]*(TOKEN|SECRET|PASSWORD|API_KEY)|(^|[;&|[:space:]])(printenv|env|set|export -p)([[:space:]]*($|[;&|>]))|pk_[A-Za-z0-9]{6,}|glpat-)' &&
     decide deny "This command could read or print a secret (token, saved login session or credentials). Agents never need those values; the scripts use them directly."
 
   has 'git[[:space:]]+push.*(--force|[[:space:]]-f([[:space:]]|$)|--force-with-lease|--delete|[[:space:]]:[^[:space:]])' &&
@@ -106,19 +166,10 @@ if $is_edit || $is_read; then
   [ -z "$paths" ] && paths="$(jq -r '[.. | strings | select(test("^[./~A-Za-z0-9_-]+/|\\.[A-Za-z0-9]{1,6}$"))] | .[]' <<<"$args" 2>/dev/null)"
   while IFS= read -r p; do
     [ -z "$p" ] && continue
-    if grep -qE '(^|/)\.auth/|(^|/)\.ssh/|(^|/)\.netrc$|(^|/)\.npmrc$' <<<"$p"; then
-      decide deny "That file holds credentials or a saved login session. Agents never need to read or change it."
-    fi
+    [[ $p =~ $PATH_START$PATHS_secret ]] && decide deny "$REASON_secret"
     if $is_edit; then
-      if grep -qE '(^|/)verified-head$' <<<"$p"; then
-        decide deny "verified-head is written only by run-checks.sh when every check passes."
-      fi
-      if grep -qE 'evidence/(APPROVED|UPLOADED)$' <<<"$p"; then
-        decide deny "evidence/APPROVED and evidence/UPLOADED are managed by the user's approval and the upload script only."
-      fi
-      if grep -qE '(^|/)\.github/(agents|hooks|prompts)/|(^|/)\.github/skills/(start-task|fetch-review)/|(^|/)\.github/copilot-instructions\.md$|(^|/)scripts/agent/|(^|/)\.agent\.env$' <<<"$p"; then
-        decide deny "Pipeline config (agents, models, hooks, prompts, instructions, scripts, .agent.env) is user-owned. Tell the user what you'd change and why."
-      fi
+      [[ $p =~ $PATH_START$PATHS_record ]] && decide deny "$REASON_record"
+      [[ $p =~ $PATH_START$PATHS_config ]] && decide deny "$REASON_config"
     fi
   done <<<"$paths"
 fi
