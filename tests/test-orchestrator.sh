@@ -63,5 +63,18 @@ check "feedback: the prompt carries the reply word for word" 'sec Feedback "AUTO
 check "feedback: then next-stage.sh again" 'sec Feedback "run \`scripts/agent/next-stage.sh <task-id>\` again"'
 check "retry or continue: next-stage.sh again, nothing sent to a stage" 'sec Feedback "\`retry\` or \`continue\`"'
 
+# ---------- starting and resuming ----------
+check "start: /start-task hands over, then the loop" 'sec "Starting a run" "/start-task <task-id> <slug>"'
+check "resume: /fetch-review, or Run/Continue <task-id>" 'sec "Starting a run" "/fetch-review <task-id>" && sec "Starting a run" "\`Run <task-id>\` or \`Continue <task-id>\`"'
+check "warning: Auto in the model picker cancels pinned models, once per run" 'sec "Starting a run" "\*\*Auto\*\*" && sec "Starting a run" "Copilot Free" && sec "Starting a run" "once"'
+check "warning: it doesn't block the run" 'sec "Starting a run" "don.t stop"'
+
+# ---------- rules ----------
+check "rules: never writes product code or any file" 'sec "Rules" "never write product code" && sec "Rules" "any file"'
+check "rules: status.md is the script's, read only" 'sec "Rules" "status.md" && sec "Rules" "only read"'
+check "rules: no auto-decisions of its own" 'sec "Rules" "auto-decisions.md"'
+check "rules: publishing stays with the stages" 'sec "Rules" "create-mr.sh" && sec "Rules" "push-branch.sh"'
+check "rules: no stage work of its own" 'sec "Rules" "never do a stage.s work"'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
