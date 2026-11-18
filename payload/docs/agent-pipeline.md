@@ -194,9 +194,9 @@ afterwards, the stop comes back.
 | `stalled` | A stage ran and changed nothing | Read its **Result:** line in the block. Approve to run it once more, or say how to go on |
 | `pre-ship` | Before the push | Review evidence.md, mr.md and auto-decisions.md, tick the evidence, run `scripts/agent/approve-evidence.sh <id>` in your own terminal, then approve. This approval is your push confirmation. |
 | `duo` | After a Duo round: ASK threads, or fixes not yet pushed | Review review-triage.md, then approve the push or answer the ASK threads |
-| `verify`, `evidence` | verification.md or evidence.md is missing a line the router reads | No approval passes it. Have that stage write the file again |
+| `plan`, `review`, `duo`, `verify`, `evidence` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:` | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
 
-The run ends when the MR is open.
+The run ends when the MR is open, and again each time a Duo round is answered: run `/fetch-review <id>` after Duo's next review.
 
 ### What the stages do in an auto run
 

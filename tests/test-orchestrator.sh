@@ -60,6 +60,15 @@ check "feedback: every agent in the table exists" 'feedback_agents_exist'
 check "feedback: the stalled stop goes back to the agent its reason names" 'section Feedback | grep -E "^\| \`stalled\`" | grep -q "named at the start of the reason"'
 check "feedback: pre-ship goes to evidence, or the shipper writing mr.md" 'section Feedback | grep -E "^\| \`pre-ship\`" | grep -q evidence && sec Feedback "Write mr.md for <task-id>. Don.t push or create the MR."'
 check "feedback: the prompt carries the reply word for word" 'sec Feedback "AUTO RUN. The user replied at the <stop-id> stop for <task-id>: \"<reply, word for word>\""'
+
+# ---------- the docs' stop table matches the router ----------
+DOC="$ROOT/payload/docs/agent-pipeline.md"
+# unapprovable_row: the doc's row for stops no approval passes (an unreadable file).
+unapprovable_row() { grep -E '^\| .*\| .*No approval passes it' "$DOC"; }
+for id in $(grep -oE '_unreadable [a-z-]+ ' "$NS" | awk '{ print $2 }' | sort -u); do
+  check "docs: the $id stop is listed as one no approval passes" 'unapprovable_row | cut -d"|" -f2 | grep -q "\`$id\`"'
+done
+check "docs: the run also ends when a Duo round is answered" 'grep -q "^The run ends when the MR is open.*Duo round is answered" "$DOC"'
 check "feedback: then next-stage.sh again" 'sec Feedback "run \`scripts/agent/next-stage.sh <task-id>\` again"'
 check "retry or continue: next-stage.sh again, nothing sent to a stage" 'sec Feedback "\`retry\` or \`continue\`"'
 
