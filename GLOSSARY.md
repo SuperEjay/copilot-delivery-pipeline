@@ -36,6 +36,10 @@ _Avoid_: checkpoint, pause, gate (a gate is enforced by scripts; see Ship gate)
 A decision the pipeline made on the user's behalf during an auto run under a rule the user agreed to, recorded so the user can review it before shipping.
 _Avoid_: default, implicit approval
 
+**Task state**:
+The scripts' record of a task in `.work/<id>/state.env`: its branch, merge request and Duo review round. Scripts read and write it only through `task-state.sh`; it is data, never run as code.
+_Avoid_: state file, task env
+
 ### Guard
 
 **Protected path**:
