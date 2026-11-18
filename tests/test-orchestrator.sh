@@ -88,6 +88,7 @@ check "/start-task: either script failing stops before the hand-over" 'stops_bef
 check "/fetch-review: the fetch failing stops before the hand-over" 'stops_before fetch-review 1'
 check "/fetch-review: takes an optional --force" 'grep -qx "argument-hint: \"<clickup-task-id> \[--force\]\"" "$SK/fetch-review/SKILL.md"'
 check "/fetch-review: passes --force on only when the user typed it" 'grep -q "fetch-duo-review.sh <task-id> \[--force\]\`.*only when the user typed it" "$SK/fetch-review/SKILL.md" && grep -q "Never add \`--force\` yourself" "$SK/fetch-review/SKILL.md"'
+check "/fetch-review: the round limit is no stop: no decision block, no router" 'grep "round limit" "$SK/fetch-review/SKILL.md" | grep "not a stop" | grep "DECISION NEEDED" | grep -q "don.t run \`next-stage.sh\`"'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
