@@ -35,3 +35,9 @@ _Avoid_: checkpoint, pause, gate (a gate is enforced by scripts; see Ship gate)
 **Auto-decision**:
 A decision the pipeline made on the user's behalf during an auto run under a rule the user agreed to, recorded so the user can review it before shipping.
 _Avoid_: default, implicit approval
+
+### Guard
+
+**Protected path**:
+A file or folder that belongs to the user or to the pipeline's own scripts, which agents may not change (and, for secrets, may not read).
+_Avoid_: locked file, guarded path, pipeline file

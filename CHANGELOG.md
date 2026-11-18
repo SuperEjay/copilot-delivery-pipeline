@@ -11,6 +11,9 @@
 - The verifier now commits its new tests first and runs `run-checks.sh all` last.
 - New `tests/test-gates.sh` covers the push gates and round counting.
 - The ship gate's rules (right branch, verified commit, evidence approved at that commit) now live in one module, `scripts/agent/ship-gate.sh`, and the evidence approval record is written and checked only in `evidence-lib.sh`. No behaviour change: `create-mr.sh` and `push-branch.sh` call the gate, `run-checks.sh` records verification through it, and `tests/test-gates.sh` tests the rules against the gate directly.
+- **One protected-path table in the hook guard.** Every protected path (secrets, the verified-commit and evidence records, pipeline config) is listed once, and the shell and edit-tool checks both use it. `pre-tool-guard.sh --list-protected` prints it, and `tests/test-guard.sh` checks every entry from it. The shell check now starts a match at a path segment like the edit check does, so names that only contain a protected path (`my.agent.env`, `vendor/myscripts/agent/`, `.npmrc.example`) are no longer blocked from the shell.
+- **The guard catches Windows paths.** Edit and read tools that pass `C:\repo\scripts\agent\x.sh`-style paths were not matched against protected paths; backslashes are now treated as `/`.
+- **The guard ignores case for protected paths**, so `Scripts/Agent/x.sh` or `.AGENT.ENV` on macOS and Windows are blocked like their lower-case names.
 
 ## v1.1.0
 
