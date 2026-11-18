@@ -76,5 +76,11 @@ check "rules: no auto-decisions of its own" 'sec "Rules" "auto-decisions.md"'
 check "rules: publishing stays with the stages" 'sec "Rules" "create-mr.sh" && sec "Rules" "push-branch.sh"'
 check "rules: no stage work of its own" 'sec "Rules" "never do a stage.s work"'
 
+# ---------- the skills hand an auto run over to the orchestrator ----------
+SK="$ROOT/payload/.github/skills"
+check "/start-task: the pipeline agent starts the auto run" 'grep -q "If you are the \*\*pipeline\*\* agent, start the auto run" "$SK/start-task/SKILL.md"'
+check "/fetch-review: the pipeline agent continues the auto run" 'grep -q "If you are the \*\*pipeline\*\* agent, continue the auto run" "$SK/fetch-review/SKILL.md"'
+check "/fetch-review: the round limit still stops first" 'awk "/round limit/ { r = NR } /pipeline\*\* agent/ { p = NR } END { exit !(r && p && r < p) }" "$SK/fetch-review/SKILL.md"'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
