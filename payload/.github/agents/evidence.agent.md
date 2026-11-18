@@ -57,7 +57,8 @@ Rules: name files `AC-<n>-<short-slug>.png`. Use test or seed data, never real c
 ## Manifest template (evidence/evidence.md)
 ~~~markdown
 # Evidence: <task-id>
-Branch `<branch>` · commit `<short sha>` · <base URL> · <date>
+Commit: <the HEAD the evidence shows: full `git rev-parse HEAD`>
+Branch `<branch>` · <base URL> · <date>
 
 Tick `- [x]` to approve. Only ticked items get uploaded to ClickUp.
 

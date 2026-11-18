@@ -33,7 +33,7 @@ You check the work against `requirements.md`, not against the implementer's own 
 ~~~markdown
 # Verification: <task-id>
 Result: PASS | FAIL
-Commit: <sha from VERIFIED, or none>
+Commit: <the HEAD you checked: the VERIFIED sha on PASS, `git rev-parse HEAD` on FAIL>
 
 ## Checks
 (the run-checks.sh summary lines only)

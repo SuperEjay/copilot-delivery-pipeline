@@ -19,7 +19,7 @@ Two phases. Fixes are pushed only after the verifier has passed them.
    - **FIX**: correct, in scope, and cheap.
    - **PUSH BACK**: wrong, out of scope, or it contradicts requirements.md or plan.md. Give a one-sentence reason.
    - **ASK**: a judgement call for the user (design, product, scope).
-3. Write `.work/<task-id>/review-triage.md` as a table (thread id, file:line, verdict, reason) and show it to the user. **Wait for their OK.**
+3. Write `.work/<task-id>/review-triage.md`: first a `Round: <n>` line with the round the fetch script printed, then a table (thread id, file:line, verdict, reason) and show it to the user. **Wait for their OK.**
 4. Make the FIX changes. Add a test when a fix changes behaviour. Run `scripts/agent/run-checks.sh <task-id> fast`.
 5. Commit with `fix(review): <summary> [<task-id>]`, and note each commit's short sha in the triage table. **Don't push**: the verifier runs first.
 6. If there were FIX items, stop here and hand over to the verifier. If there were none, go straight to "Push and reply" (nothing gets pushed).
@@ -30,7 +30,8 @@ Two phases. Fixes are pushed only after the verifier has passed them.
    - FIX: "Fixed in <short-sha>: <what changed>". Resolve the thread.
    - PUSH BACK: give the reason. Don't resolve; a human decides.
    - ASK: don't reply. Leave it for the user.
-3. Reply with the counts (fixed / pushed back / waiting on you) and the ASK items.
+3. Add a `Replied: yes` line under the `Round:` line in review-triage.md.
+4. Reply with the counts (fixed / pushed back / waiting on you) and the ASK items.
 
 ## Minimal code (ponytail)
 If the ponytail skill is installed, apply it to every piece of code you write: reuse what's already in the codebase, the standard library or the platform before writing anything new. Never let it drop validation, error handling, security checks or accessibility, and never let it shrink an AC's required behaviour.
