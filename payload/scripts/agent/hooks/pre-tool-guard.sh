@@ -31,8 +31,10 @@
 # Entries are literal paths; a folder ends in "/" and covers itself and
 # everything in it. A "*" segment stands for any one path segment (a task id).
 # A match starts at a path segment, anywhere in the path.
-# An entry of more than one segment can't see a write made after a cd
-# (cd .work/T-1 && echo x >> status.md): the guard is a backstop, not a sandbox.
+# Paths are squashed first (squash_path), so "//", "/./" and "<dir>/.." don't
+# hide one. An entry of more than one segment still can't see a write made
+# after a cd (cd .work/T-1 && echo x >> status.md) or through a variable
+# (d=.work/T-1; echo x >> $d/status.md): the guard is a backstop, not a sandbox.
 PROTECTED='
 secret  .auth/
 secret  .ssh/
@@ -90,6 +92,16 @@ done
 SHELL_START='(^|[/[:space:]"'"'"'=<>(`])'   # where a path can start inside a command
 PATH_START='(^|/)'                         # where a segment starts inside a path
 
+# squash_path <text>: the paths in a path or command in one shape, into $REPLY,
+# so .work//T-1/./status.md or .work/T-1/../T-1/status.md match their entry:
+# "//" becomes "/", "/./" becomes "/", and "<dir>/../" is folded away.
+SEG_CHAR='[^/[:space:]"'"'"'=<>(`]'           # a character inside one path segment
+NON_DOT='[^./[:space:]"'"'"'=<>(`]'           # so ".." itself is never folded away
+squash_path() {
+  REPLY="$(sed -E -e ':a' -e 's#//+#/#g' -e 's#/\./#/#g' \
+    -e "s#$SHELL_START$SEG_CHAR*$NON_DOT$SEG_CHAR*/\.\./#\1#" -e 'ta' <<<"$1")"
+}
+
 input="$(cat)"
 
 decide() {   # decide <allow|deny|ask> [reason]
@@ -129,10 +141,11 @@ shopt -s nocasematch
 if $is_shell; then
   cmd="$(jq -r '.command // .cmd // .script // ([.. | strings] | join(" "))' <<<"$args")"
   has() { grep -qE -- "$1" <<<"$cmd"; }
+  squash_path "$cmd"; path_cmd="$REPLY"   # the command, for matching protected paths
 
   has 'approve-evidence\.sh' &&
     decide deny "Evidence approval is the user's job. Ask them to review evidence.md and run approve-evidence.sh themselves."
-  [[ $cmd =~ $SHELL_START$PATHS_record ]] && decide deny "$REASON_record"
+  [[ $path_cmd =~ $SHELL_START$PATHS_record ]] && decide deny "$REASON_record"
 
   # Only the top level (the orchestrator) runs the auto run's router. A call
   # from a subagent carries agentId; a stage agent running next-stage.sh could
@@ -161,9 +174,9 @@ if $is_shell; then
         decide deny "${!r}"
       fi
     done
-  done < <(sed -E 's/(&&|\|\||[;|&])/\n/g' <<<"$cmd")
+  done < <(sed -E 's/(&&|\|\||[;|&])/\n/g' <<<"$path_cmd")
 
-  [[ $cmd =~ $SHELL_START$PATHS_secret ]] && decide deny "$REASON_secret"
+  [[ $path_cmd =~ $SHELL_START$PATHS_secret ]] && decide deny "$REASON_secret"
   has '(\$\{?[A-Za-z_]*(TOKEN|SECRET|PASSWORD|API_KEY)|(^|[;&|[:space:]])(printenv|env|set|export -p)([[:space:]]*($|[;&|>]))|pk_[A-Za-z0-9]{6,}|glpat-)' &&
     decide deny "This command could read or print a secret (token, saved login session or credentials). Agents never need those values; the scripts use them directly."
 
@@ -203,6 +216,7 @@ if $is_edit || $is_read; then
   while IFS= read -r p; do
     [ -z "$p" ] && continue
     p="${p//\\//}"   # Windows paths (C:\repo\scripts\agent\x) match like any other
+    squash_path "$p"; p="$REPLY"
     [[ $p =~ $PATH_START$PATHS_secret ]] && decide deny "$REASON_secret"
     if $is_edit; then
       [[ $p =~ $PATH_START$PATHS_record ]] && decide deny "$REASON_record"

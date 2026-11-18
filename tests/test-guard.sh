@@ -164,6 +164,21 @@ sh allow 'echo x > docs/status.md'
 ed allow editFiles '.workx/T-1/status.md'
 ed allow editFiles '.work/status.md'
 ed allow editFiles '.work/T-1/sub/status.md'
+# Other shapes of the same path: doubled slashes, "." and ".." segments.
+ed deny  editFiles '.work//T-1/status.md'
+ed deny  editFiles '.work/T-1//status.md'
+ed deny  editFiles '.work/./T-1/status.md'
+ed deny  editFiles '.work/T-1/./status.md'
+ed deny  editFiles '.work/T-1/../T-1/status.md'
+ed deny  editFiles '../proj/.work/T-1/status.md'
+sh deny  'echo x >> .work//T-1/status.md'
+sh deny  'echo x >> .work/./T-1/status.md'
+sh deny  'echo x >> .work/T-1/../T-1/status.md'
+sh deny  'cp /tmp/s.md .work/T-1//status.md'
+ed deny  editFiles 'scripts//agent/config.sh'
+sh deny  'echo x > scripts/./agent/config.sh'
+ed allow editFiles '.work/T-1/../status.md'
+sh allow 'echo x > .work/T-1/../../docs/status.md'
 
 # ---------- the pipeline's scripts are run, never sourced ----------
 sh deny "bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate.sh; gate_record_run T-1 0'"
