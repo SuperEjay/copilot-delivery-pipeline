@@ -12,8 +12,9 @@ require glab jq
 TASK="${1:?usage: fetch-duo-review.sh <task-id> [--force]}"
 FORCE="${2:-}"
 DIR="$(task_dir "$TASK")"
-load_state "$TASK"
-: "${MR_IID:?No MR_IID in state.env. Run create-mr.sh first.}"
+MR_IID="$(state_mr_iid "$TASK")" || exit 1
+LAST_ROUND="$(state_review_round "$TASK")"
+LAST_IDS="$(state_review_ids "$TASK")"
 
 OUT="$DIR/review.json"
 TMP="$OUT.tmp"; trap 'rm -f "$TMP"' EXIT
@@ -35,17 +36,16 @@ glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=10
       ]' > "$TMP"
 
 IDS="$(jq -r '[.[].id] | sort | join(",")' "$TMP" | cksum | cut -d' ' -f1)"
-if [ -n "${REVIEW_IDS:-}" ] && [ "$IDS" = "$REVIEW_IDS" ]; then
-  ROUND="${REVIEW_ROUND:-0}"; note=" (same threads as the last fetch, not a new round)"
+if [ -n "$LAST_IDS" ] && [ "$IDS" = "$LAST_IDS" ]; then
+  ROUND="$LAST_ROUND"; note=" (same threads as the last fetch, not a new round)"
 else
-  ROUND=$(( ${REVIEW_ROUND:-0} + 1 )); note=""
+  ROUND=$(( LAST_ROUND + 1 )); note=""
   if [ "$ROUND" -gt "$MAX_REVIEW_ROUNDS" ] && [ "$FORCE" != "--force" ]; then
     echo "Review round $ROUND would exceed MAX_REVIEW_ROUNDS=$MAX_REVIEW_ROUNDS." >&2
     echo "Look at the remaining threads yourself, or re-run with --force." >&2
     exit 3
   fi
-  set_state "$TASK" REVIEW_ROUND "$ROUND"
-  set_state "$TASK" REVIEW_IDS "$IDS"
+  state_set_review "$TASK" "$ROUND" "$IDS"
 fi
 mv "$TMP" "$OUT"
 

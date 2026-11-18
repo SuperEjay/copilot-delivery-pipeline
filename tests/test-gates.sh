@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tests the push gates in a scratch repo with a local bare remote and a stub
 # glab: the ship gate's rules (called directly), that push-branch, create-mr and
-# upload-evidence go through it, and re-fetching the same Duo review isn't a new round.
+# upload-evidence go through it, re-fetching the same Duo review isn't a new round,
+# and the scripts treat state.env as data.
 # Usage: tests/test-gates.sh     (exit 0 = all passed)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -127,10 +128,20 @@ threads d2 d3
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
 check "new threads are round 2" 'grep -q "^Round 2: 2 " "$T/out.txt"'
 threads d4
+echo MAX_REVIEW_ROUNDS=99 >> $W/state.env   # state.env is data: it can't lift the limit
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
-check "round 3 refused at MAX_REVIEW_ROUNDS=2" '[ $? -eq 3 ] && jq -e "map(.id) == [\"d2\",\"d3\"]" $W/review.json >/dev/null'
+check "round 3 refused at MAX_REVIEW_ROUNDS=2, even with MAX_REVIEW_ROUNDS=99 in state.env" '[ $? -eq 3 ] && jq -e "map(.id) == [\"d2\",\"d3\"]" $W/review.json >/dev/null'
 $S/fetch-duo-review.sh T1 --force > "$T/out.txt" 2>&1
 check "--force goes past the limit" 'grep -q "^Round 3: 1 " "$T/out.txt"'
+$S/review-signals.sh T1 --mark-reviewed > "$T/out.txt" 2>&1
+check "review-signals --mark-reviewed records HEAD" '[ $? -eq 0 ] && grep -qx "REVIEWED_SHA=$(git rev-parse HEAD)" $W/state.env'
+
+# ---------- task state is data, never run ----------
+$S/start-task.sh T2 'x$(touch${IFS}pwned)' > "$T/out.txt" 2>&1
+$S/push-branch.sh T2 > "$T/out.txt" 2>&1
+check "a branch name with \$(...) isn't run by the scripts" '[ ! -e pwned ] && grep -q "No verified commit for T2" "$T/out.txt"'
+$S/fetch-duo-review.sh T2 > "$T/out.txt" 2>&1
+check "no MR yet: the shared message" '[ $? -eq 1 ] && grep -qx "No MR for T2 yet (no MR_IID in .work/T2/state.env). Run scripts/agent/create-mr.sh T2 first." "$T/out.txt"'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

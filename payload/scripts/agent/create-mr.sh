@@ -12,7 +12,7 @@ require git glab jq
 
 TASK="${1:?usage: create-mr.sh <task-id>}"
 DIR="$(task_dir "$TASK")"
-load_state "$TASK"
+BRANCH="$(state_branch "$TASK")" || exit 1
 
 MR_FILE="$DIR/mr.md"
 [ -f "$MR_FILE" ] || { echo "Write $MR_FILE first." >&2; exit 1; }
@@ -46,5 +46,5 @@ else
   action="Created"
 fi
 
-set_state "$TASK" MR_IID "$IID"
+state_set_mr_iid "$TASK" "$IID"
 echo "$action MR !$IID: ${existing#* }"
