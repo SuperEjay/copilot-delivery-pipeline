@@ -23,13 +23,15 @@ Read `.work/<task-id>/requirements.md` and write `.work/<task-id>/plan.md`. You 
 3. Cut the work into **tracer-bullet slices** (as the to-tickets skill does): each slice is thin, goes end to end, and can be shown working on its own. Prefer 2–6 slices. Put risky or unknown work first.
 4. Give every slice exact file paths and a test plan. That way the implementer reads only those files instead of searching the repo again.
 5. Check coverage: every AC must map to at least one slice.
-6. Reply with the slice list (one line each), the riskiest slice, and anything that needs a migration, feature flag or another team. Don't paste the whole plan.
+6. Fill in **Stop flags** with exactly `yes` or `no` on each line: requirement gaps (anything under "Requirement gaps"), a migration, a feature flag, work for another team. Keep the lines as they are; `scripts/agent/next-stage.sh` reads them, and in an auto run any `yes` (or more than 6 slices) stops for the user.
+7. Reply with the slice list (one line each), the riskiest slice, and anything that needs a migration, feature flag or another team. Don't paste the whole plan.
 
 ## Re-planning from code review
 When handed findings with `Route: re-plan` from `code-review.md`:
 - Keep plan.md as it is. Done slices stay ticked and are not redone.
 - Add a section `## Review slices` with new slices `R1`, `R2`, …, in the same format. Use `Covers: CR-n` (plus any AC it touches) and list exact files and tests.
 - Group findings that touch the same code into one slice. Order them blockers first.
+- Update **Stop flags** if the new slices need a migration, a feature flag or another team.
 - If a finding can't be planned without a behaviour decision, list it under "Requirement gaps" and use the requirements handoff.
 - Reply with the new slices only, one line each.
 
@@ -56,6 +58,12 @@ When handed findings with `Route: re-plan` from `code-review.md`:
 
 ## Requirement gaps
 (only if planning exposed something requirements.md doesn't settle)
+
+## Stop flags
+- Requirement gaps: no
+- Migration: no
+- Feature flag: no
+- Other team: no
 
 ## Coverage
 | AC | Slices |

@@ -264,5 +264,12 @@ check "a new Duo round starts the fix rounds over" '[ "$out" = "$TRIAGE" ] && gr
 printf '# Duo review triage: T1\n| d1 | a.txt:1 | FIX | r | |\n' > $W/review-triage.md; next T1
 check "review-triage.md without a Round line: a stop no approval passes" '[[ "$out" == "stop duo "*"Round:"* ]] && { next T1 approve; [ $rc -eq 1 ]; }'
 
+# ---------- the agents' templates write the lines next-stage.sh reads ----------
+A="$ROOT/payload/.github/agents"
+check "planner template: the four Stop flags" 'grep -qx "## Stop flags" $A/planner.agent.md && [ "$(grep -cxE -- "- (Requirement gaps|Migration|Feature flag|Other team): no" $A/planner.agent.md)" -eq 4 ]'
+check "verifier template: Commit is the HEAD it checked, PASS or FAIL" 'grep -q "^Commit: <the HEAD you checked" $A/verifier.agent.md && ! grep -q "or none>" $A/verifier.agent.md'
+check "evidence template: Commit line" 'grep -q "^Commit: <the HEAD" $A/evidence.agent.md'
+check "review-responder: Round and Replied lines in review-triage.md" 'grep -q "Round: <n>" $A/review-responder.agent.md && grep -q "Replied: yes" $A/review-responder.agent.md'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
