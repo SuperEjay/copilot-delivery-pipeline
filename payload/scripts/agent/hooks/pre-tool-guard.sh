@@ -102,6 +102,18 @@ squash_path() {
     -e "s#$SHELL_START$SEG_CHAR*$NON_DOT$SEG_CHAR*/\.\./#\1#" -e 'ta' <<<"$1")"
 }
 
+# split_parts <command>: the command's parts, one per line, into $REPLY. It
+# splits at ; | & (so && and || too), in bash rather than sed: BSD/macOS sed
+# may write a literal "n" for "\n" in a replacement, which would leave the
+# command whole. Redirects to a descriptor (2>&1, >&2, 2>&-) are taken out
+# first, so their "&" doesn't split.
+FD_REDIRECT='[0-9]*>&[0-9-]+'
+split_parts() {
+  local s="$1" nl=$'\n'
+  while [[ $s =~ $FD_REDIRECT ]]; do s="${s/"${BASH_REMATCH[0]}"/}"; done
+  REPLY="${s//[;|&]/$nl}"
+}
+
 input="$(cat)"
 
 decide() {   # decide <allow|deny|ask> [reason]
@@ -162,9 +174,10 @@ if $is_shell; then
       substituted='\$\(|`|[<>]\('
       only_reads=true
       [[ $cmd =~ $substituted ]] && only_reads=false
+      split_parts "$cmd"
       while IFS= read -r seg; do
         [[ -z "${seg//[[:space:]]/}" || $seg =~ $reader ]] || only_reads=false
-      done < <(sed -E 's/[0-9]*>&[0-9-]+//g; s/(&&|\|\||[;|&])/\n/g' <<<"$cmd")
+      done <<<"$REPLY"
       $only_reads ||
         decide deny "Only the orchestrator runs next-stage.sh. Finish your stage, end with your **Result:** line and return. (Reading it with cat, grep or git diff is fine.)"
     fi
@@ -181,6 +194,7 @@ if $is_shell; then
   # Shell writes to pipeline config and task state. Checked per command
   # segment, so `rm -rf x && scripts/agent/...` is fine. A redirect may put a
   # relative prefix (./, ../, dir/) before the path.
+  split_parts "$path_cmd"; path_parts="$REPLY"
   writer='(^|[[:space:]/(])(tee|cp|mv|rm|rmdir|ln|chmod|chown|truncate|install|dd|patch|unlink|shred|rsync|sed[[:space:]]+([^|;&]*[[:space:]])?(-[a-zA-Z]*i|--in-place)|perl[[:space:]]+-[a-zA-Z]*i|(python[0-9.]*|node|ruby|perl)[[:space:]]+-[a-zA-Z]*[ce]|git[[:space:]]+(checkout|restore|rm|mv|apply|stash))([[:space:]]|$)'
   while IFS= read -r seg; do
     for kind in config state; do
@@ -191,7 +205,7 @@ if $is_shell; then
         decide deny "${!r}"
       fi
     done
-  done < <(sed -E 's/(&&|\|\||[;|&])/\n/g' <<<"$path_cmd")
+  done <<<"$path_parts"
 
   [[ $path_cmd =~ $SHELL_START$PATHS_secret ]] && decide deny "$REASON_secret"
   has '(\$\{?[A-Za-z_]*(TOKEN|SECRET|PASSWORD|API_KEY)|(^|[;&|[:space:]])(printenv|env|set|export -p)([[:space:]]*($|[;&|>]))|pk_[A-Za-z0-9]{6,}|glpat-)' &&
