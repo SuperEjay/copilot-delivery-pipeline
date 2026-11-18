@@ -1,6 +1,6 @@
 ---
 name: start-task
-description: "Start a ClickUp task in the delivery pipeline: create the branch and work folder, fetch the task, then hand over to the requirements agent. Use only when the user runs /start-task."
+description: "Start a ClickUp task in the delivery pipeline: create the branch and work folder, fetch the task, then hand over to the requirements agent or, in the pipeline agent, start the auto run. Use only when the user runs /start-task."
 argument-hint: "<clickup-task-id> <short-slug>"
 disable-model-invocation: true
 ---

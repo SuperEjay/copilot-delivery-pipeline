@@ -1,6 +1,6 @@
 ---
 name: fetch-review
-description: "Fetch GitLab Duo's latest unresolved MR review for a pipeline task and hand over to the review-responder agent. Use only when the user runs /fetch-review."
+description: "Fetch GitLab Duo's latest unresolved MR review for a pipeline task and hand over to the review-responder agent or, in the pipeline agent, resume the auto run. Use only when the user runs /fetch-review."
 argument-hint: "<clickup-task-id> [--force]"
 disable-model-invocation: true
 ---
