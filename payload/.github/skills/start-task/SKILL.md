@@ -8,8 +8,8 @@ disable-model-invocation: true
 
 The user gave a ClickUp task id and a short kebab-case slug (e.g. `86c1abcde invoice-export`). If either is missing, ask for it and stop.
 
-1. Run `scripts/agent/start-task.sh <task-id> <slug>`. If it fails (for example, uncommitted changes), pass on its message and stop.
-2. Run `scripts/agent/clickup.sh fetch <task-id>`. If it fails (token, access, wrong id), pass on its message and stop.
+1. Run `scripts/agent/start-task.sh <task-id> <slug>`. If it fails (for example, uncommitted changes), pass on its message and end your turn here.
+2. Run `scripts/agent/clickup.sh fetch <task-id>`. If it fails (token, access, wrong id), pass on its message and end your turn here.
 3. If you are the **pipeline** agent, start the auto run for `<task-id>`: follow your loop now.
    If you are the **requirements** agent, continue with your normal steps now.
    Otherwise reply with exactly this, filled in, and stop:
