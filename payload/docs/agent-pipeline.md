@@ -39,7 +39,7 @@ you move on.
 
 | Path | What it is |
 |---|---|
-| `.github/agents/*.agent.md` | The eight agents: requirements, planner, implementer, verifier, reviewer, evidence, shipper, review-responder |
+| `.github/agents/*.agent.md` | The eight stage agents (requirements, planner, implementer, verifier, reviewer, evidence, shipper, review-responder) and `pipeline`, the orchestrator of an auto run |
 | `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>`: branch, work folder, ClickUp fetch, then on to requirements |
 | `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id>`: pull Duo's open threads, then on to review-responder |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
@@ -108,6 +108,7 @@ Each agent file has a `model:` line, using only the models your admins allow:
 | evidence | Claude Sonnet 5.5 | Playwright specs and screenshot checks: reliable, not deep |
 | shipper | GPT-6 Luna | Mostly mechanical; the cheapest model |
 | review-responder | Grok 4.7 | Triage and small fixes, cheap output. Trial it here before considering it for the implementer |
+| pipeline | GPT-6 Luna | The orchestrator only follows `next-stage.sh` and calls the stages; the cheapest model |
 
 **Check the names once.** `model:` must match the name in your Copilot model
 picker exactly. If a name differs (say `Claude Opus 5.5` vs `Opus 5.5`), fix
@@ -144,6 +145,46 @@ earlier stages are done, and tells you what's missing.
 **Start a new chat for each stage** when you pick the next agent. The files
 carry the context, so each agent starts small instead of dragging the whole
 history along.
+
+## Auto run (the pipeline agent)
+
+Instead of picking each agent yourself, pick **pipeline** once and run
+`/start-task 86c1abcde invoice-export`. The orchestrator runs each stage agent
+as a subagent, on that agent's pinned model, and comes back to you only at a
+**stop**. `scripts/agent/next-stage.sh` decides what runs next and where to
+stop, from the files in `.work/<id>/` (ADR 0001). Each stage prints one
+`▶ <agent>: <result>` line.
+
+At a stop you see a `⏸ DECISION NEEDED` block with the reason, the files to
+read and what replying does. Answer in the same chat:
+
+- **`approve`** (or `yes`, `go`, `lgtm`…, with nothing else) moves the run on.
+  If the stop can't be approved yet (say, the evidence isn't approved at
+  HEAD), you're told why and the stop stays.
+- **Anything else** goes to the stage the stop is about as feedback, and the
+  stop comes back with its answer.
+- **`retry`** or **`continue`** checks again after you changed a file by hand.
+
+| Stop | When |
+|---|---|
+| `requirements` | Always, once requirements.md is written |
+| `plan` | A Stop flag in plan.md (requirement gaps, migration, feature flag, other team) or more than 6 slices |
+| `review` | A finding without a clear decision, or a fix routed to requirements or re-plan |
+| `fix-limit` | `MAX_AUTO_FIX_ROUNDS` fix rounds used and the work still fails |
+| `stalled` | A stage ran and changed nothing; the block shows its **Result:** line |
+| `pre-ship` | Before the push: review evidence.md, mr.md and auto-decisions.md, run `approve-evidence.sh`, then approve. This is your push confirmation. |
+| `duo` | After a Duo round: ASK threads, and the push of the verified fixes |
+
+The run ends when the MR is open. After Duo has reviewed, run
+`/fetch-review 86c1abcde` with **pipeline** picked to continue. `Run <id>` or
+`Continue <id>` picks a run up again in a new chat. `.work/<id>/status.md`
+shows where the run stands (the script writes it), and `auto-decisions.md`
+lists what the pipeline decided for you.
+
+**Don't run it with Auto selected in the model picker.** Under Auto, every
+subagent runs on Auto's choice and ignores its pinned model. The orchestrator
+warns about this once per run. On Copilot Free, Auto is the only option: the
+run works, but not on the pinned models.
 
 ## Hooks (enforced rules)
 
