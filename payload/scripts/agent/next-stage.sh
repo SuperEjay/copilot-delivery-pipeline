@@ -1,15 +1,68 @@
 #!/usr/bin/env bash
 # The auto run's router: decides the next stage, or a stop, from the files in
-# .work/<task-id>/. The orchestrator follows it without its own judgement.
+# .work/<task-id>/, the task state, HEAD and the verified commit. The
+# orchestrator follows it without its own judgement. See ADR 0001.
 #
 #   next-stage.sh <task-id>           print one line:
 #       run <agent> <prompt>          run that stage agent as a subagent with
 #                                     this prompt (it starts with "AUTO RUN.")
-#       stop <stop-id> <reason>       wait for the user's decision
+#       stop <stop-id> <reason>       wait for the user's decision; stop ids:
+#                                     requirements plan review fix-limit stalled
+#                                     pre-ship duo, plus verify and evidence for
+#                                     a file it can't read
 #       end <reason>                  the run is over (MR open, waiting on Duo)
+#   next-stage.sh <task-id> approve   the user explicitly approved the stop last
+#                                     printed: record it, so the run moves on
 #
-# Exit 0 for any decision; 1 with the reason on stderr when it can't decide
-# (no task state yet: run /start-task first).
+# Exit 0 for any decision. Exit 1 with the reason on stderr when it can't
+# decide (no task state yet: run /start-task first), or when approve refuses:
+# no stop is pending, the stop changed since it was shown, a file needs fixing,
+# a review finding has no decision, or the evidence isn't approved at HEAD.
+#
+# It walks the pipeline in order and the first unfinished step decides:
+#   requirements.md   missing: run requirements. Not approved as it is now: stop.
+#   plan.md           missing: run planner. Requirements changed since the plan
+#                     was accepted: run planner. A Stop flag "yes" or more than
+#                     6 S slices: stop (once approved, it goes on); otherwise it
+#                     goes on and adds an auto-decision to auto-decisions.md.
+#   slices            any "- [ ] S<n>:" or "- [ ] R<n>:" line: run implementer.
+#   (MR open)         the Duo round below instead of the next four steps.
+#   verified          verification.md "Result: PASS" with "Commit:" = HEAD, and
+#                     HEAD is the verified commit. FAIL at HEAD: run implementer
+#                     (a fix round). Anything else: run verifier.
+#   reviewed          REVIEWED_SHA = HEAD, or run reviewer. In code-review.md, a
+#                     finding with no decision, or "Decision: fix" + "Status: open"
+#                     routed to requirements or re-plan: stop; once approved,
+#                     run requirements (or planner). Open quick fixes: run
+#                     implementer (a fix round). Otherwise settled.
+#   evidence          evidence/evidence.md "Commit:" = HEAD, or run evidence.
+#   pre-ship          mr.md missing: run shipper (write it, don't push). Then the
+#                     pre-ship stop; approve needs the evidence approval at HEAD.
+#                     Approved: run shipper (ship). MR_IID recorded: end.
+#   Duo round         REVIEW_ROUND 0: end. Newer than review-triage.md's "Round:":
+#                     run review-responder (triage). "Replied: yes": end. Then
+#                     re-verify as above; ASK threads or commits not yet on
+#                     origin/<branch>: the duo stop. Then run review-responder
+#                     (push and reply).
+#
+# Lines it reads, which the agents' templates write (anything missing or
+# unreadable is a stop no approval can pass):
+#   plan.md                "## Stop flags" with "- Requirement gaps: yes|no",
+#                          "- Migration: …", "- Feature flag: …", "- Other team: …"
+#   verification.md        "Result: PASS|FAIL", "Commit: <HEAD it checked>"
+#   code-review.md         "### CR-n …", "- **Decision:** … · **Route:** …",
+#                          "- **Status:** …"
+#   evidence/evidence.md   "Commit: <HEAD it shows>"
+#   review-triage.md       "Round: <n>", "Replied: yes", an "ASK" table cell
+#
+# Approvals are tied to a checksum of what the stop is about (requirements.md;
+# plan.md and requirements.md; code-review.md; HEAD, mr.md and the evidence;
+# HEAD and review-triage.md), so a change after approval brings the stop back.
+# Fix rounds (MAX_AUTO_FIX_ROUNDS) count each return to the implementer once per
+# commit, and start over when a review settles, a Duo round starts or the user
+# approves a stop. The same run with none of its inputs changed is the stalled
+# stop. The script writes all this to status.md (Key: value lines, read as
+# data, never sourced) and owns that file; the orchestrator only reads it.
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
@@ -42,7 +95,7 @@ _fp() {
     if [ "$f" = @HEAD ]; then git rev-parse HEAD
     elif [ -f "$DIR/$f" ]; then cat "$DIR/$f"
     else echo "(none)"; fi
-  done | sha256sum | cut -c1-16
+  done | sha256 /dev/stdin | cut -c1-16
 }
 
 # _approved <stop-id> <fp>: the user approved this stop at this fingerprint.
@@ -144,7 +197,6 @@ decide() {
   _run shipper "Ship $TASK. The user confirmed the push at the pre-ship stop."
 }
 
-# check_duo: the MR is open.
 # check_duo: the MR is open. /fetch-review moves the Duo round on; each round
 # is triaged, re-verified, and pushed and replied to, with one stop before the
 # push when there are ASK threads or commits to push.
@@ -359,6 +411,7 @@ if [ "$CMD" = approve ]; then
   fi
   APPROVED[$WHAT]="$STOP_FP"
   NEW_ROUND=0   # the user looked at the run: fix rounds start over
+  PLAN_ACCEPTED=""
   LINE="$(_st "Last decision")"
   write_status
   echo "Approved the $WHAT stop."
