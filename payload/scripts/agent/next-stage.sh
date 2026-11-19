@@ -63,7 +63,8 @@
 # Approvals are tied to a checksum of what the stop is about (requirements.md;
 # plan.md and requirements.md; code-review.md; HEAD, mr.md, the evidence and
 # auto-decisions.md; HEAD and review-triage.md), so a change after approval
-# brings the stop back.
+# brings the stop back. fix-limit is tied to the fix it's about (verify or
+# review, and the commit), and stalled to a checksum of the run's inputs.
 # Ticks don't count as a change: building a slice ticks plan.md, and the user
 # ticks evidence.md and runs approve-evidence.sh after the pre-ship stop is
 # shown (approve then checks the evidence approval itself).
