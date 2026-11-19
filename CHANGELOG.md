@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Docs: install and update steps for each platform.** The README lists what the pipeline needs and how to install it on macOS, Linux, Windows with WSL (recommended) and Windows with Git Bash (unverified: the hook guard may not run there). It has a step-by-step first-time install and a walkthrough for updating an existing install to a new version. On Windows, add `*.sh text eol=lf` to `.gitattributes` so bash doesn't fail on CRLF line endings.
+- Docs: the pipeline diagram at the top of `docs/agent-pipeline.md` shows the auto run: the pipeline agent, `next-stage.sh`, each stop, and the Duo round loop.
+
 ## v1.2.1
 
 A fix to the pre-ship stop, and docs and code cleanups. To upgrade from v1.2.0, run `install.sh --update`; there are no other steps.
