@@ -44,6 +44,14 @@ _Avoid_: default, implicit approval
 The scripts' record of a task in `.work/<id>/state.env`: its branch, merge request and Duo review round. Scripts read and write it only through `task-state.sh`; it is data, never run as code.
 _Avoid_: state file, task env
 
+**Run log**:
+The router's record of an auto run in `.work/<id>/run.log`: one line for each decision and each approval. Only the router writes it.
+_Avoid_: history, audit log, trace
+
+**Manual mode**:
+Running a task by picking each stage agent yourself and following its **Next:** line, instead of an auto run. It is the fallback when an auto run can't be used.
+_Avoid_: stage-by-stage mode, step mode
+
 ### Guard
 
 **Protected path**:
