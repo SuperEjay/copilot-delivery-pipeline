@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **The pre-ship approval covers `auto-decisions.md`.** The pre-ship stop asks you to review it, but a change to it after you approved didn't bring the stop back, so the shipper could ship on decisions you never saw. It's now part of the stop's checksum, and of the inputs that tell a stalled stage from one that has new work. A task already approved at pre-ship gets the stop once more after the update.
+- Docs: `--update` replaces everything between the `BEGIN/END agent-pipeline` markers in `.gitignore` and `.github/copilot-instructions.md`, so a line you add inside them is lost. The README and `docs/agent-pipeline.md` now say to keep your own lines outside the markers.
 
 ## v1.2.0
 
