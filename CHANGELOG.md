@@ -1,25 +1,21 @@
 # Changelog
 
-## v2.0.0-rc.2
+## v2.0.0
 
-The second v2 release candidate, with one installer fix. To upgrade, follow "Upgrading to v2" under v2.0.0-rc.1, with `v2.0.0-rc.2` in place of `v2.0.0-rc.1`. From v2.0.0-rc.1, run `install.sh --update --version v2.0.0-rc.2`; there are no other steps.
+The auto run is the main path, with manual mode as the fallback (ADR 0002), ahead of VS Code removing the Local harness in February 2027. Tried first as the pre-releases v2.0.0-rc.1 and v2.0.0-rc.2.
 
-- **`curl … | bash` runs the whole installer again.** Piped from curl, the installer reads its own script from stdin, and `npx skills add` (for the optional skills, which `--yes` turns on) read the rest of it, so everything after the skills step silently never ran: in v2.0.0-rc.1 that's the `doctor.sh` check and the "Done. Next steps" lines. `npx` and `doctor.sh` now get no stdin. `tests/test-install.sh` pipes the installer into bash with an `npx` and a `glab` that read stdin, and checks it reaches the end.
-
-## v2.0.0-rc.1
-
-A release candidate for v2 (ADR 0002): the auto run is the main path, with manual mode as the fallback, ahead of VS Code removing the Local harness in February 2027. It's a GitHub pre-release: the README still installs v1.2.2. v2.0.0 follows once pinned models are checked on a paid Copilot plan (#67).
+**Pinned models are still unverified.** ADR 0002 planned a check on a paid Copilot plan before this release; v2.0.0 went out without it (issue #67 keeps it as a follow-up). On a plan where they don't hold, each stage runs on the session's model: the run still works, at a different cost. See "Pinned models in an auto run" in `docs/agent-pipeline.md`.
 
 ### Upgrading to v2
 
 1. Be on v1.2.0 or later. From an older install, update to v1.2.2 first: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.2/install.sh | bash -s -- --update`. `--update` refuses anything older, even with `--force`.
-2. Run `install.sh --update` from this release, for example `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.0.0-rc.1/install.sh | bash -s -- --update --version v2.0.0-rc.1`.
+2. Run `install.sh --update` from v2.0.0: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.0.0/install.sh | bash -s -- --update`.
 3. Merge each `<file>.new` it reports into the file you changed. In an agent file, drop the `handoffs:` block: the agents have none now.
 4. If you changed a pipeline script, check it doesn't call `load_state` or `set_state`. They now stop the script; use the `state_*` functions in `scripts/agent/task-state.sh` (listed below).
 5. On Windows, move to WSL: Git Bash is unsupported.
 6. Run `scripts/agent/doctor.sh` and fix every FAIL.
 
-Tasks you started on v1.2.x carry on: their `.work/<id>/` files are read as before.
+Tasks you started on v1.2.x carry on: their `.work/<id>/` files are read as before. From v2.0.0-rc.1 or rc.2, step 2 is all there is.
 
 ### Changes
 
@@ -33,6 +29,7 @@ Tasks you started on v1.2.x carry on: their `.work/<id>/` files are read as befo
 - **`install.sh` run by a relative path installs from its clone.** Run as `./install.sh /path/to/project`, it looked for its clone only after moving into the project, where `./install.sh` no longer pointed anywhere. So it downloaded the release named in the script from GitHub instead of using the clone's `payload/`, or failed with no network. It now finds its clone first. An absolute path, such as the README's `/tmp/cdp/install.sh .`, and `curl … | bash` work as before.
 - **`scripts/agent/doctor.sh` checks a setup and changes nothing.** One line per check, PASS, WARN, FAIL or INFO: the required tools (`git`, `curl`, `jq`, `glab`, `node`, `npx`) and the optional ones, `glab` logged in, `CLICKUP_API_TOKEN` exported and its value in no tracked file and not in `.agent.env`, settings `.agent.env` doesn't set, CRLF line endings in `scripts/agent/`, the hook guard blocking a test `git push` (and `PIPELINE_GUARD=off`), VS Code 1.106 or later, and Windows with Git Bash. It exits 1 on any FAIL and never prints the token. Pinned models can't be checked by a script, so it says how to check them by hand. The installer runs it at the end, in place of its own tool list and guard test; a FAIL there doesn't fail the install. New `tests/test-doctor.sh`.
 - Docs: the README and `docs/agent-pipeline.md` lead with the auto run. The guide's sections are now "Daily use: auto run" and "Manual mode (fallback)" (were "Hands-off: auto run" and "Daily use: stage by stage"). Windows with Git Bash is marked unsupported, WSL is the supported way, and the alert settings are optional.
+- **`curl … | bash` runs the whole installer again.** Piped from curl, the installer reads its own script from stdin, and `npx skills add` (for the optional skills, which `--yes` turns on) read the rest of it, so everything after the skills step silently never ran: in v2.0.0-rc.1 that was the `doctor.sh` check and the "Done. Next steps" lines. `npx` and `doctor.sh` now get no stdin. `tests/test-install.sh` pipes the installer into bash with an `npx` and a `glab` that read stdin, and checks it reaches the end.
 
 ## v1.2.2
 

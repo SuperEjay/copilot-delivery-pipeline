@@ -186,11 +186,11 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
 
    ```bash
    # Option A: clone, read, run (recommended)
-   git clone -c core.autocrlf=false --branch v1.2.2 https://github.com/SuperEjay/copilot-delivery-pipeline.git /tmp/cdp
+   git clone -c core.autocrlf=false --branch v2.0.0 https://github.com/SuperEjay/copilot-delivery-pipeline.git /tmp/cdp
    /tmp/cdp/install.sh .
 
    # Option B: one line, pinned to a release
-   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.2/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.0.0/install.sh | bash
    ```
 
 3. Read the installer's output. It ends by running `scripts/agent/doctor.sh`,
@@ -238,6 +238,13 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
 
    It prints `# agent-pipeline <version> installed <date>`. Compare it with the
    [latest release](https://github.com/SuperEjay/copilot-delivery-pipeline/releases/latest).
+   **v2 updates only from v1.2.0 or later.** On anything older, update to v1.2.2
+   first, then come back to step 3:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.2/install.sh | bash -s -- --update
+   ```
+
 2. Start from a clean tree, on a new branch, and finish or park any task that's
    mid-stage if the CHANGELOG asks you to (step 5).
 
@@ -250,11 +257,11 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
 
    ```bash
    # Option A: from a clone (clone it again as in First-time install if /tmp/cdp is gone)
-   git -C /tmp/cdp fetch --tags && git -C /tmp/cdp checkout v1.2.2
+   git -C /tmp/cdp fetch --tags && git -C /tmp/cdp checkout v2.0.0
    /tmp/cdp/install.sh --update .
 
    # Option B: one line
-   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.2/install.sh | bash -s -- --update
+   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.0.0/install.sh | bash -s -- --update
    ```
 
 4. Merge each `.new` file. When you'd changed a pipeline file, the installer
@@ -269,8 +276,10 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    version with `install.sh --update --force` (yours are saved as `.bak`). An
    auto run won't start while an agent file lacks the new version's sections.
 5. Follow the upgrade steps in the [CHANGELOG](CHANGELOG.md) for every version
-   after the one you had, oldest first. For example, from v1.1.0, see
-   [Upgrading from v1.1.0](CHANGELOG.md#upgrading-from-v110).
+   after the one you had, oldest first. From v1.2.x, see
+   [Upgrading to v2](CHANGELOG.md#upgrading-to-v2): in short, drop the
+   `handoffs:` block from any agent file you merge, stop calling `load_state` or
+   `set_state` in scripts you changed, and use WSL on Windows.
 6. If the output lists settings your `.agent.env` doesn't set, copy the ones you
    want from `.agent.env.example`. The installer never writes `.agent.env`.
 7. Check the `doctor.sh` lines at the end of the output: fix any FAIL, then run
@@ -318,4 +327,4 @@ tests/test-doctor.sh      # checks doctor.sh: each PASS, WARN and FAIL, with fak
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release
-(`git tag v1.x.y`), and push the tag so the curl install can find it.
+(`git tag v2.x.y`), and push the tag so the curl install can find it.

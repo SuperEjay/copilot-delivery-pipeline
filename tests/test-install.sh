@@ -175,7 +175,11 @@ slug() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9 _-]/
 version="$(sed -n 's/^PIPELINE_VERSION="\(.*\)"$/\1/p' "$ROOT/install.sh")"
 check "README: the pinned curl install is this version" 'grep -q "copilot-delivery-pipeline/$version/install.sh | bash$" "$README"'
 check "README: the pinned curl update is this version" 'grep -q "copilot-delivery-pipeline/$version/install.sh | bash -s -- --update$" "$README"'
-check "README: every pinned release (clone --branch, checkout, curl URL) is this version" '[ -z "$(grep -oE "(--branch|checkout|copilot-delivery-pipeline/) ?v[0-9]+\.[0-9]+\.[0-9]+" "$README" | grep -v "$version\$")" ]'
+via="$(sed -n 's/^UPDATE_VIA="\(.*\)".*/\1/p' "$ROOT/install.sh")"
+check "README: every pinned release (clone --branch, checkout, curl URL) is this version" '[ -z "$(grep -oE "(--branch|checkout|copilot-delivery-pipeline/) ?v[0-9]+\.[0-9]+\.[0-9]+" "$README" | grep -v "$version\$" | grep -v "copilot-delivery-pipeline/$via\$")" ]'
+check "README: the one other pin is the update-first step, to UPDATE_VIA ($via), with --update" '[ "$(grep -c "copilot-delivery-pipeline/$via/install.sh | bash -s -- --update\$" "$README")" -eq 1 ] && readme_section "## Updating an existing install" | grep -q "v1.2.0 or later"'
+check "README: the update links the CHANGELOG's Upgrading to v2" 'grep -q "(CHANGELOG.md#upgrading-to-v2)" "$README" && grep -qx "### Upgrading to v2" "$ROOT/CHANGELOG.md"'
+check "VERSION, install.sh and the CHANGELOG's newest release agree" '[ "$(cat "$ROOT/VERSION")" = "$version" ] && [ "$(grep -m1 "^## v" "$ROOT/CHANGELOG.md")" = "## $version" ]'
 for flag in $(sed -n 's/^    \(--[a-z-]*\)[)|].*/\1/p' "$ROOT/install.sh"); do
   check "README: the $flag option is documented" 'grep -q -- "\`install.sh [^\`]*$flag" "$README"'
 done

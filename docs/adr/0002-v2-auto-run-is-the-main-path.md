@@ -1,5 +1,5 @@
 ---
-status: accepted (2026-11-19, after the v2 scope grilling; the release waits on the pinned-model check, see Consequences)
+status: accepted (2026-11-19, after the v2 scope grilling). Amended 2026-11-19: v2.0.0 was released without the pinned-model check, see Release
 ---
 
 # v2: auto run is the main path
@@ -27,8 +27,10 @@ The pipeline talks to three outside systems: a **tracker** (ClickUp: fetch the t
 
 - Changes merge straight into `main`. The README keeps pinning v1.2.2 until v2.0.0 is out, so nobody gets unreleased work by following it. If v1.2.x needs a fix, `release/v1.2.x` is cut from the tag then.
 - `v2.0.0-rc.1` is tagged as a GitHub pre-release once the changes are in.
-- **The pinned-model check blocks the release.** A teammate on a paid Copilot plan installs the release candidate, runs a real task, and confirms that each stage runs on its pinned model. The result goes into ADR 0001's Consequences. The author is on Copilot Free, which only offers Auto, so this can't be checked there.
+- **The pinned-model check blocks the release** (as first decided; see the amendment below). A teammate on a paid Copilot plan installs the release candidate, runs a real task, and confirms that each stage runs on its pinned model. The result goes into ADR 0001's Consequences. The author is on Copilot Free, which only offers Auto, so this can't be checked there.
 - The CHANGELOG gets an "Upgrading to v2" section: update to v1.2.2 first, merge any `<file>.new` agent files (their handoffs are gone), check that no script you changed still calls `load_state` or `set_state`, and on Windows move to WSL.
+
+**Amendment (2026-11-19): released without the check.** The release candidates v2.0.0-rc.1 and v2.0.0-rc.2 shipped as planned, then the author chose to release v2.0.0 the same day, before anyone on a paid plan had run the check. Pinned models in subagents stay unverified, as in v1.2.x; issue #67 keeps the check as a follow-up, and its result goes into ADR 0001 as planned. If pinned models turn out not to hold, the per-stage model design in ADR 0001 is revisited in a later release instead of before this one. The run itself doesn't depend on them: without them, every stage runs on the session's model.
 
 ## Considered options
 
@@ -41,6 +43,6 @@ The pipeline talks to three outside systems: a **tracker** (ClickUp: fetch the t
 ## Consequences
 
 - **A breaking release.** Anyone on v1.1.0 or older updates twice, and a script a user changed that still calls `load_state` or `set_state` stops working.
-- **v2.0.0 isn't released until the pinned-model check passes on a paid plan.** If pinned models turn out not to work in subagents, the per-stage model design in ADR 0001 has to be revisited before the release.
+- **v2.0.0 shipped with pinned models unverified** (see the amendment under Release). If they turn out not to work in subagents, the per-stage model design in ADR 0001 is revisited in a later release.
 - **Windows users on Git Bash lose support** and should move to WSL.
 - **Stage agents ship without handoffs before the Local harness is gone.** A user still on the Local harness between v2.0.0 and February 2027 picks the next stage from its `**Next:**` line, as Agent Host users already do.
