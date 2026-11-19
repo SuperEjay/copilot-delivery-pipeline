@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v1.2.0
+
+Auto run: pick the **pipeline** agent and `/start-task`, and the stages run one after another, stopping only where a human decision is needed. The guard is hardened, and installs from v1.1.0 have an upgrade path. Stage-by-stage use is unchanged.
 
 ### Upgrading from v1.1.0
 
