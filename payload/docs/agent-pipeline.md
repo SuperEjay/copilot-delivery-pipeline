@@ -1,21 +1,52 @@
 # ClickUp → GitLab agent pipeline (GitHub Copilot custom agents)
 
 ```
-/start-task ─► requirements ─(you approve)─► planner ─(you approve)─► implementer ×N slices
-                  ▲                             ▲                            │
-                  │ route: requirements         │ route: re-plan             ▼
-                  └──────────────┬──────────────┘                         verifier
-                                 │        route: quick ─► implementer        │ PASS
-                                 │                                           ▼
-                                 └──── (you decide per finding) ◄──── reviewer ──► tech-debt.md
-                                                                             │       (local only)
-                                                                             │ READY
-                                                                             ▼
-                                                       evidence ─► (YOU approve-evidence.sh)
-                                                                             ▼
-             review-responder ◄─(Duo reviews)◄─ shipper ─► MR + approved evidence to ClickUp
-                 │  (you approve triage)
-                 └─ fixes committed ─► verifier ─► review-responder pushes + replies
+By hand: pick each agent from its "Next:" line. Auto run: the pipeline agent runs each
+stage as a subagent, in the order scripts/agent/next-stage.sh decides, and stops at ⏸.
+
+              /start-task <id> <slug>
+                    │
+                    ▼
+              requirements ······················ ⏸ requirements: answer it, or approve
+                    │
+                    ▼
+              planner ··························· ⏸ plan: a Stop flag, or over 6 slices
+                    │
+                    ▼
+  ┌──────┬───► implementer (one slice per run)
+  │      │          │
+  │ fail │          ▼
+  │      └──── verifier ── records verified-head
+  │                 │ PASS
+  │ quick fix       ▼
+  └─────────── reviewer ························· ⏸ review: an unclear finding, or a fix
+                    │ └─► tech-debt.md (local)       sent back to requirements or planner
+                    ▼ settled
+              evidence
+                    │
+                    ▼
+              shipper: writes mr.md ············· ⏸ pre-ship: YOU tick evidence.md and run
+                    │                               approve-evidence.sh
+                    ▼
+              shipper: ship gate, push, MR, approved evidence to ClickUp
+                    │
+                    ▼
+              ■ end: MR open. After Duo reviews it: /fetch-review <id>
+                    │
+                    ▼
+  ┌──────────► review-responder: triage, commit fixes
+  │                 │
+  │                 ▼
+  │           verifier: re-verify
+  │                 │
+  │                 ▼
+  │           review-responder: push, reply ····· ⏸ duo: ASK threads, or fixes to push
+  │                 │
+  │                 ▼
+  └─────────── ■ end: round answered. After the next Duo review: /fetch-review <id>
+
+⏸ An auto run waits for your reply here; by hand, you decide as you go. Any stage can
+  also stop: stalled (it changed nothing), fix-limit (MAX_AUTO_FIX_ROUNDS used).
 ```
 
 **Only verified code is pushed.** When `run-checks.sh <id> all` passes on a
