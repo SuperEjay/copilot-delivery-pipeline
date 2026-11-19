@@ -158,7 +158,19 @@ for platform in "### macOS" "### Linux" "### Windows with WSL" "### Windows with
     check "README: $platform says how to get $t" 'readme_section "$platform" | grep -qw "$t"'
   done
 done
-check "README: Git Bash is marked unverified" 'readme_section "### Windows with Git Bash" | grep -qi "unverified"'
+check "README: Git Bash is marked unsupported (ADR 0002)" 'readme_section "### Windows with Git Bash" | grep -q "\*\*Unsupported"'
+check "README: Git Bash says the guard may not run" 'readme_section "### Windows with Git Bash" | grep -qi "guard"'
+check "README: WSL is the supported way on Windows" 'readme_section "### Windows with WSL" | grep -qi "the supported way"'
+# ---------- auto run first, manual mode as the fallback (ADR 0002) ----------
+# line_of <file> <fixed text>: the first line number containing it, or 99999.
+line_of() { grep -nF -- "$2" "$1" | head -n1 | cut -d: -f1 | grep . || echo 99999; }
+check "README: What it does leads with the pipeline agent, manual mode after" '[ "$(readme_section "## What it does" | grep -nF "**pipeline**" | head -n1 | cut -d: -f1)" -lt "$(readme_section "## What it does" | grep -nF "manual mode" | head -n1 | cut -d: -f1 || echo 0)" ]'
+check "guide: Daily use: auto run comes before Manual mode (fallback)" '[ "$(line_of "$GUIDE" "## Daily use: auto run")" -lt "$(line_of "$GUIDE" "## Manual mode (fallback)")" ] && [ "$(line_of "$GUIDE" "## Manual mode (fallback)")" -lt 99999 ]'
+check "guide: no section still named for the old modes" '! grep -qE "^## (Hands-off: auto run|Daily use: stage by stage)" "$GUIDE"'
+check "guide: manual mode moves on through the Next: line" 'awk "/^## Manual mode \\(fallback\\)/{on=1;next} /^## /{on=0} on" "$GUIDE" | grep -q "\*\*Next:\*\*"'
+check "guide: the diagram caption names the auto run first" 'sed -n "/^\`\`\`/,/^\`\`\`/p" "$GUIDE" | sed -n 2p | grep -q "^Auto run"'
+check "README and guide: no handoff buttons" '! grep -qi "handoff button" "$README" "$GUIDE"'
+check "guide: alerts are optional and unverified" 'awk "/^### /{on=(\$0 ~ /alerts/)} on" "$GUIDE" | grep -qi "optional" && awk "/^### /{on=(\$0 ~ /alerts/)} on" "$GUIDE" | grep -qi "unverified"'
 check "README: Windows warns about CRLF in .sh files" 'readme_section "## Requirements" | grep -q "eol=lf"'
 check "README: the update finds the installed version in the manifest" 'readme_section "## Updating an existing install" | grep -q "agent-pipeline.manifest"'
 check "README: the update says to merge each .new" 'readme_section "## Updating an existing install" | grep -q "\.new"'
