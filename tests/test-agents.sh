@@ -24,13 +24,22 @@ section() { awk -v h="## $2" '/^## / { on = ($0 == h); next } on' "$A/$1.agent.m
 auto() { section "$1" "In an auto run" | grep -qE -- "$2"; }
 
 # ---------- the shared "In an auto run" rules ----------
+# The one copy of the rules every stage agent's "## In an auto run" section
+# starts with, word for word. The agent file is the place a subagent surely
+# reads, so each agent keeps a copy; this check keeps the copies the same.
+# To change the shared rules, change them here and in all eight agents.
+SHARED_AUTO_RUN="$(cat <<'EOF'
+Follow this section only when the prompt starts with `AUTO RUN`. The orchestrator sent it, and `scripts/agent/next-stage.sh` decides what runs next from the files you write. Where this section conflicts with the steps above, it wins.
+- **Never ask the user anything.** Write open questions and decisions into your files in `.work/<task-id>/` and return. Only the orchestrator talks to the user.
+- **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
+- **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
+- **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
+EOF
+)"
+SHARED_LINES="$(printf '%s\n' "$SHARED_AUTO_RUN" | wc -l | tr -d ' ')"
 for a in "${AGENTS[@]}"; do
   check "$a: In an auto run comes before Next step" '[ "$(grep -E "^## (In an auto run|Next step)$" $A/$a.agent.md | tr "\n" "|")" = "## In an auto run|## Next step|" ]'
-  check "$a: auto run only when the prompt starts with AUTO RUN" 'auto $a "only when the prompt starts with \`AUTO RUN\`"'
-  check "$a: never asks the user in an auto run" 'auto $a "Never ask the user"'
-  check "$a: a reply from a stop is handled as in manual use" 'auto $a "reply from a stop"'
-  check "$a: can't finish: Result blocked" 'auto $a "\*\*Result:\*\* blocked: <why>"'
-  check "$a: ends with a Result line, not Next" 'auto $a "one \`\*\*Result:\*\*\` line"'
+  check "$a: In an auto run starts with the shared rules, word for word" '[ "$(section $a "In an auto run" | head -n "$SHARED_LINES")" = "$SHARED_AUTO_RUN" ]'
   check "$a: Next step points to the Result line in an auto run" 'section $a "Next step" | grep -q "In an auto run, end with the \*\*Result:\*\* line instead"'
 done
 # ---------- each agent's own auto-run rules ----------
