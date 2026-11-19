@@ -1,14 +1,34 @@
 # Copilot delivery pipeline
 
-A ClickUp → GitLab delivery pipeline built from GitHub Copilot custom agents in
-VS Code. Eight agents take a task from requirements to a merged MR, with you
-deciding wherever a decision is yours:
+Turn a ClickUp task into a reviewed GitLab merge request with GitHub Copilot in
+VS Code. You install it into your own project. It adds a set of Copilot agents,
+each doing one step of delivery, and scripts and hooks that keep them inside
+safe limits. You stay in charge of every decision that matters.
 
-```
-/start-task → requirements → (you) → planner → (you) → implementer → verifier
-→ reviewer → (you: fix / debt / skip) → evidence → (you: approve screenshots)
-→ shipper → GitLab Duo → review-responder → (you) → …
-```
+## What it does
+
+Give it a ClickUp task id with `/start-task <id> <slug>`, and the agents:
+
+1. **Read the task** (description, comments, attachments, linked docs) and write
+   the requirements, with open questions for you to answer.
+2. **Plan** the work in small slices, listing the files each one touches.
+3. **Build** one slice at a time, then **verify** it with your project's own
+   lint, type check and tests.
+4. **Review** the code in depth. For each finding you decide: fix it, park it as
+   tech debt (kept on your machine) or skip it.
+5. **Capture evidence:** a screenshot (or a short note) for each acceptance
+   criterion, which you check and approve.
+6. **Ship:** push the verified commit, open the MR, and attach the approved
+   evidence to the ClickUp task.
+7. **Answer GitLab Duo's review:** triage its comments, fix, re-verify, push and
+   reply.
+
+You can pick each agent yourself, or pick the **pipeline** agent to run the
+steps for you, stopping only where a decision is yours. It never merges the MR:
+that stays with you and your team. Everything runs in your VS Code, using your
+Copilot plan and your own ClickUp and GitLab accounts. There's no server to host.
+
+## Why use it
 
 - **Auto run:** pick the `pipeline` agent and it runs the stages for you as
   subagents, stopping only where a decision is yours (requirements, a risky plan,
