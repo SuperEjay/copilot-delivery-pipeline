@@ -117,12 +117,18 @@ if [ -f "$DIR/plan.md" ] && ! grep -qx '## Stop flags' "$DIR/plan.md"; then
   exit 1
 fi
 
-# ---------- status.md: Key: value lines, parsed, never sourced ----------
-# _st <Key>: the value of the last "Key: value" line, or empty.
-_st() {
-  [ -f "$STATUS" ] || return 0
-  awk -v k="$1: " 'index($0, k) == 1 { v = substr($0, length(k) + 1) } END { print v }' "$STATUS"
+# ---------- Key: value lines, parsed, never sourced ----------
+# _last_value <file> <prefix> [section]: the rest of the last line that starts
+# with <prefix> (only under "## <section>", if given), or empty. A missing file
+# is empty too. The readers below trim the value each in their own way.
+_last_value() {
+  [ -f "$1" ] || return 0
+  awk -v k="$2" -v s="${3:-}" 's != "" && /^## / { on = ($0 == "## " s) }
+    (s == "" || on) && index($0, k) == 1 { v = substr($0, length(k) + 1) } END { print v }' "$1"
 }
+
+# _st <Key>: the value of the last "Key: value" line in status.md, or empty.
+_st() { _last_value "$STATUS" "$1: "; }
 
 # _fp <file|@HEAD|@unticked:file>...: one checksum over these inputs (a missing
 # file counts too). @unticked:<file> reads every "- [x]" as "- [ ]", so ticking
@@ -156,8 +162,7 @@ _unreadable() { VERB=stop; WHAT="$1"; STOP_FP=""; TEXT="$2"; }
 
 # _plan_flag <name>: yes or no from "- <name>: yes|no" under "## Stop flags".
 _plan_flag() {
-  awk -v k="- $1:" '/^## / { on = ($0 == "## Stop flags") } on && index($0, k) == 1 { v = tolower(substr($0, length(k) + 1)) }
-                    END { gsub(/[ \t]/, "", v); print v }' "$DIR/plan.md"
+  _last_value "$DIR/plan.md" "- $1:" "Stop flags" | tr -d ' \t' | tr '[:upper:]' '[:lower:]'
 }
 
 # check_plan <requirements fp>: decide whether the plan may go on (sets PLAN_ACCEPTED
@@ -276,8 +281,9 @@ check_duo() {
 
 # _field <file> <Key>: the value after the last "Key:" line, first word only.
 _field() {
-  [ -f "$DIR/$1" ] || return 0
-  awk -v k="$2:" 'index($0, k) == 1 { split(substr($0, length(k) + 1), w, " "); v = w[1] } END { print v }' "$DIR/$1"
+  local w _
+  read -r w _ <<< "$(_last_value "$DIR/$1" "$2:")"
+  printf '%s\n' "$w"
 }
 
 # check_verified [verb]: HEAD is verified (verification.md PASS at HEAD, and HEAD is
