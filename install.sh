@@ -54,6 +54,14 @@ confirm() {   # confirm "question" -> 0 yes / 1 no; --yes or no terminal = yes
 }
 sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 
+# ---------- find this script's clone, if any ----------
+# Before the cd below: a relative BASH_SOURCE (./install.sh) only resolves from the starting directory.
+# Empty or not a file when piped from curl, so SELF_DIR stays empty and the payload is downloaded.
+SELF_DIR=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
 # ---------- locate the target project ----------
 TARGET="${TARGET:-$PWD}"
 [ -d "$TARGET" ] || die "Target directory not found: $TARGET"
@@ -108,10 +116,6 @@ if [ "$MODE" = update ] && [ -f "$MANIFEST" ]; then
 fi
 
 # ---------- get the payload ----------
-SELF_DIR=""
-if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
-  SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-fi
 if [ -n "$SELF_DIR" ] && [ -d "$SELF_DIR/payload" ]; then
   PAYLOAD="$SELF_DIR/payload"
   [ -f "$SELF_DIR/VERSION" ] && PIPELINE_VERSION="$(cat "$SELF_DIR/VERSION")"

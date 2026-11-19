@@ -69,6 +69,14 @@ check ".agent.env kept" '[ -f .agent.env ]'
 mkdir "$T/plain"; "$ROOT/install.sh" --yes "$T/plain" > "$T/out.txt" 2>&1
 check "non-git target refused" 'grep -q "not inside a git repository" "$T/out.txt"'
 
+# 7b. run by a relative path from the clone: it installs from the clone's payload, not a download
+git init -q -b main "$T/rel"
+mkdir "$T/nocurl"; printf '#!/bin/sh\necho "fake curl: no network" >&2\nexit 1\n' > "$T/nocurl/curl"; chmod +x "$T/nocurl/curl"
+(cd "$ROOT" && PATH="$T/nocurl:$PATH" PIPELINE_REPO=nobody/unreachable ./install.sh --yes "$T/rel") > "$T/out.txt" 2>&1
+check "relative-path run exits 0" '[ $? -eq 0 ]'
+check "relative-path run doesn't download" '! grep -q "Downloading" "$T/out.txt"'
+check "relative-path run installs the clone's payload" 'cmp -s "$T/rel/.github/agents/pipeline.agent.md" "$ROOT/payload/.github/agents/pipeline.agent.md"'
+
 # ---------- 8. updates accept v1.2.x and later only (ADR 0002) ----------
 version="$(cat "$ROOT/VERSION")"
 # old_install <tag> <dir>: a real install of that release, by its own installer.
