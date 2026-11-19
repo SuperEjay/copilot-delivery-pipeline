@@ -61,8 +61,8 @@ admin policy that blocks MCP servers doesn't affect any of this.
 2. **Commit the pipeline files** so your teammates get the same agents and hooks.
 3. **Don't edit pipeline files casually.** `--update` keeps files you changed
    and writes the new version next to each as `<file>.new`; until you merge it,
-   you miss its improvements, and an auto run won't start with an old agent file. Put project-specific settings in
-   `.agent.env` instead.
+   you miss its improvements, and an auto run won't start with an old agent
+   file. Put project-specific settings in `.agent.env` instead.
 4. **Configure:** open `.agent.env` (the installer created it) and set your real lint,
    typecheck, unit, integration and e2e commands. Leave a command empty to skip it.
 5. **Install and log in to the CLIs:** `glab auth login` (point it at your GitLab

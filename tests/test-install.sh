@@ -79,6 +79,7 @@ if git -C "$ROOT" cat-file -e "$V110^{commit}" 2>/dev/null; then
   check "v1.1.0 installs" '[ -f .github/agents/planner.agent.md ] && [ ! -f .github/agents/pipeline.agent.md ]'
   cp .agent.env "$T/env.v110"
   sed -i 's/^model: .*/model: my-pinned-model/' .github/agents/planner.agent.md   # a pinned model, say
+  echo "# my tweak" >> scripts/agent/clickup.sh
   up() { "$ROOT/install.sh" --yes --update "$@" "$T/old" > "$T/out.txt" 2>&1; }
   up
   check "update from v1.1.0: orchestrator added" '[ -f .github/agents/pipeline.agent.md ]'
@@ -88,6 +89,7 @@ if git -C "$ROOT" cat-file -e "$V110^{commit}" 2>/dev/null; then
   check "update from v1.1.0: changed agent kept" 'grep -q "my-pinned-model" .github/agents/planner.agent.md'
   check "update from v1.1.0: the new version next to it as .new" 'cmp -s .github/agents/planner.agent.md.new "$ROOT/payload/.github/agents/planner.agent.md"'
   check "update from v1.1.0: the warning names the .new and auto run" 'grep "planner.agent.md" "$T/out.txt" | grep -q "planner.agent.md.new" && grep "planner.agent.md.new" "$T/out.txt" | grep -qi "auto run"'
+  check "a kept script gets a .new too, but no auto-run warning (only agent files need it)" '[ -x scripts/agent/clickup.sh.new ] && grep -q "clickup.sh.new" "$T/out.txt" && ! grep "clickup.sh" "$T/out.txt" | grep -qi "auto run"'
   check "update from v1.1.0: no .new for a file you didn't change" '[ ! -f .github/agents/shipper.agent.md.new ]'
   check "update from v1.1.0: *.new in the .gitignore block" 'awk "/^# BEGIN agent-pipeline/,/^# END agent-pipeline/" .gitignore | grep -qx "\*.new"'
   check "update from v1.1.0: .gitignore block still once" '[ "$(grep -c "BEGIN agent-pipeline" .gitignore)" -eq 1 ] && grep -q node_modules .gitignore'

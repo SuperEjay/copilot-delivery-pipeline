@@ -79,13 +79,16 @@ $S/start-task.sh T1 router > "$T/out.txt" 2>&1
 AG=.github/agents
 cp $AG/planner.agent.md "$T/planner.keep"
 sed -i '/^## In an auto run$/d' $AG/planner.agent.md
+cp "$T/planner.keep" $AG/planner.agent.md.new   # what install.sh --update writes next to a kept file
 next T1
 check "a stage agent without the auto-run section: exit 1, naming it and its .new" '[ $rc -eq 1 ] && grep -qF "$AG/planner.agent.md" "$T/out.txt" && grep -qF "planner.agent.md.new" "$T/out.txt"'
 check "no decision is recorded for it" '[ ! -f $W/status.md ]'
 next T1 approve
 check "approve checks the agents too" '[ $rc -eq 1 ] && grep -qF "$AG/planner.agent.md" "$T/out.txt"'
+rm $AG/planner.agent.md.new; next T1
+check "no .new next to it: exit 1, naming it, pointing at --update rather than a .new" '[ $rc -eq 1 ] && grep -qF "$AG/planner.agent.md" "$T/out.txt" && ! grep -qF ".new" "$T/out.txt" && grep -q -- "--update" "$T/out.txt"'
 rm $AG/planner.agent.md; next T1
-check "a missing stage agent: exit 1, naming it" '[ $rc -eq 1 ] && grep -qF "$AG/planner.agent.md" "$T/out.txt"'
+check "a missing stage agent: exit 1, naming it" '[ $rc -eq 1 ] && grep -qF "$AG/planner.agent.md" "$T/out.txt" && ! grep -qF ".new" "$T/out.txt"'
 cp "$T/planner.keep" $AG/planner.agent.md
 sed -i '/^## In an auto run$/d' $AG/pipeline.agent.md 2>/dev/null
 next T1

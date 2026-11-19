@@ -100,10 +100,15 @@ PLAN_UPDATE="Requirements for $TASK changed; update plan.md."   # the planner's 
 # stop: the run can't start until it's fixed.
 for _agent in requirements planner implementer verifier reviewer evidence shipper review-responder; do
   _af=".github/agents/$_agent.agent.md"
-  grep -qx '## In an auto run' "$REPO_ROOT/$_af" 2>/dev/null || {
-    echo "$_af has no '## In an auto run' section, so an auto run can't use it. Merge $_af.new into it (install.sh --update writes it next to a file you changed), or run install.sh --update --force. Until then, run the stages yourself." >&2
-    exit 1
-  }
+  grep -qx '## In an auto run' "$REPO_ROOT/$_af" 2>/dev/null && continue
+  if [ -f "$REPO_ROOT/$_af.new" ]; then
+    _fix="Merge $_af.new into it, or run install.sh --update --force to take the new version."
+  else
+    _fix="Run install.sh --update to get the new version (next to it, to merge, if you changed it), or --update --force to replace it."
+  fi
+  [ -f "$REPO_ROOT/$_af" ] && _what="has no '## In an auto run' section" || _what="is missing"
+  echo "$_af $_what, so an auto run can't use it. $_fix Until then, run the stages yourself." >&2
+  exit 1
 done
 if [ -f "$DIR/plan.md" ] && ! grep -qx '## Stop flags' "$DIR/plan.md"; then
   echo "$TASK was started before auto run ($REL/plan.md has no '## Stop flags' heading). Finish it stage by stage; auto run works for tasks you start from now on." >&2

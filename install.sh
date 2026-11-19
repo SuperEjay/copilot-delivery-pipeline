@@ -138,7 +138,8 @@ while IFS= read -r rel; do
       # refreshed on each update. An agent file without the new version's
       # sections stops an auto run (next-stage.sh names it).
       cp "$src" "$dst.new"; case "$dst" in *.sh) chmod +x "$dst.new" ;; esac
-      warn "kept your changed $dst; the new version is in $dst.new. Merge it in (an auto run needs the new agent files), or re-run with --force to replace yours (a .bak is kept)"
+      why=""; case "$dst" in .github/agents/*) why=" (an auto run needs the new agent files)" ;; esac
+      warn "kept your changed $dst; the new version is in $dst.new. Merge it in$why, or re-run with --force to replace yours (a .bak is kept)"
       skipped=$((skipped + 1)); printf '%s\t%s\n' "$recorded" "$dst" >> "$NEW_MANIFEST"; continue
     fi
     if [ -z "$recorded" ] && [ "$MODE" = install ]; then
@@ -191,12 +192,12 @@ GI_LINES='.work/
 gi_block="$(printf '%s\n%s\n%s' "$GI_BEGIN" "$GI_LINES" "$GI_END")"
 if [ -f .gitignore ] && grep -qF "$GI_BEGIN" .gitignore; then
   # Replace the block's lines, so an older install gets the ones added since.
-  printf '%s\n' "$GI_LINES" > .gitignore.lines
-  awk -v b="$GI_BEGIN" -v e="$GI_END" -v f=.gitignore.lines '
+  gi_lines_file="$(mktemp)"; printf '%s\n' "$GI_LINES" > "$gi_lines_file"
+  awk -v b="$GI_BEGIN" -v e="$GI_END" -v f="$gi_lines_file" '
     $0==b { print; while ((getline line < f) > 0) print line; skip=1; next }
     $0==e { skip=0; print; next }
     !skip' .gitignore > .gitignore.tmp && mv .gitignore.tmp .gitignore
-  rm -f .gitignore.lines
+  rm -f "$gi_lines_file"
   ok "updated the pipeline block in .gitignore"
 else
   printf '\n%s\n' "$gi_block" >> .gitignore; ok "added $(printf '%s' "$GI_LINES" | tr '\n' ' ' | sed 's/ /, /g') to .gitignore"
