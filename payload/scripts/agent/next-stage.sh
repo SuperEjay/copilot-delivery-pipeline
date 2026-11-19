@@ -134,13 +134,15 @@ _last_value() {
     (s == "" || on) && index($0, k) == 1 { v = substr($0, length(k) + 1) } END { print v }' "$1"
 }
 
-# _st <Key>: the value of the last "Key: value" line in status.md, or empty.
-_st() { _last_value "$STATUS" "$1: "; }
+# _status_value <Key>: the value of the last "Key: value" line in status.md, or
+# empty.
+_status_value() { _last_value "$STATUS" "$1: "; }
 
-# _fp <file|@HEAD|@unticked:file>...: one checksum over these inputs (a missing
-# file counts too). @unticked:<file> reads every "- [x]" as "- [ ]", so ticking
-# a slice in plan.md or an item in evidence.md isn't a change to what was approved.
-_fp() {
+# _checksum <file|@HEAD|@unticked:file>...: one checksum over these inputs (a
+# missing file counts too). @unticked:<file> reads every "- [x]" as "- [ ]", so
+# ticking a slice in plan.md or an item in evidence.md isn't a change to what
+# was approved.
+_checksum() {
   local f
   for f in "$@"; do
     echo "== $f"
@@ -153,7 +155,7 @@ _fp() {
 }
 
 # _approved <stop-id> <fp>: the user approved this stop at this fingerprint.
-_approved() { [ -n "$2" ] && [ "$(_st "Approved $1")" = "$2" ]; }
+_approved() { [ -n "$2" ] && [ "$(_status_value "Approved $1")" = "$2" ]; }
 
 # ---------- the decision ----------
 # decide sets VERB (run|stop|end), WHAT (agent or stop id), TEXT (prompt or
@@ -175,16 +177,16 @@ _plan_flag() {
 # check_plan <requirements fp>: decide whether the plan may go on (sets PLAN_ACCEPTED
 # and AUTO_PLAN), or set a run/stop. Returns 1 when it set a decision.
 check_plan() {
-  local rfp="$1" pfp acc name v n reasons=() sfp
-  pfp="$(_fp @unticked:plan.md)"; acc="$(_st "Plan accepted")"
+  local rfp="$1" pfp acc name flag n reasons=() sfp
+  pfp="$(_checksum @unticked:plan.md)"; acc="$(_status_value "Plan accepted")"
   if [ -n "$acc" ] && [ "${acc% *}" = "$pfp" ] && [ "${acc#* }" != "$rfp" ]; then
     _run planner "$PLAN_UPDATE"; return 1
   fi
   [ "$acc" = "$pfp $rfp" ] && return 0
 
   for name in "Requirement gaps" "Migration" "Feature flag" "Other team"; do
-    v="$(_plan_flag "$name")"
-    case "$v" in
+    flag="$(_plan_flag "$name")"
+    case "$flag" in
       yes) reasons+=("$name") ;;
       no) ;;
       *) _unreadable plan "$REL/plan.md has no readable '- $name: yes|no' line under '## Stop flags'. The planner must write it."; return 1 ;;
@@ -194,7 +196,7 @@ check_plan() {
   [ "$n" -gt "$MAX_PLAN_SLICES" ] && reasons+=("$n slices (more than $MAX_PLAN_SLICES)")
 
   if [ "${#reasons[@]}" -gt 0 ]; then
-    sfp="$(_fp @unticked:plan.md requirements.md)"
+    sfp="$(_checksum @unticked:plan.md requirements.md)"
     if ! _approved plan "$sfp"; then
       local IFS=,; _stop plan "$sfp" "Review $REL/plan.md: it flags ${reasons[*]}."; return 1
     fi
@@ -207,7 +209,7 @@ check_plan() {
 decide() {
   STAGE=requirements
   if [ ! -f "$DIR/requirements.md" ]; then _run requirements "Analyse $TASK."; return; fi
-  local fp; fp="$(_fp requirements.md)"
+  local fp; fp="$(_checksum requirements.md)"
   if ! _approved requirements "$fp"; then
     _stop requirements "$fp" "Review $REL/requirements.md: answer its open questions here, or approve it."; return
   fi
@@ -240,7 +242,7 @@ decide() {
 
   STAGE=ship
   if [ ! -f "$DIR/mr.md" ]; then _run shipper "Write mr.md for $TASK. Don't push or create the MR."; return; fi
-  fp="$(_fp @HEAD mr.md @unticked:evidence/evidence.md auto-decisions.md)"
+  fp="$(_checksum @HEAD mr.md @unticked:evidence/evidence.md auto-decisions.md)"
   if ! _approved pre-ship "$fp"; then
     local why
     why="$(approval_verify "$TASK" 2>&1 > /dev/null)" || APPROVE_BLOCK="$why"
@@ -254,16 +256,16 @@ decide() {
 # is triaged, re-verified, and pushed and replied to, with one stop before the
 # push when there are ASK threads or commits to push.
 check_duo() {
-  local round tr head pushed asks fp why=""
+  local round triage_round head pushed asks fp why=""
   round="$(state_review_round "$TASK")"
   if [ "$round" = 0 ]; then _end "MR open. Run /fetch-review $TASK after Duo has reviewed it."; return; fi
   if [ -f "$DIR/review-triage.md" ]; then
-    tr="$(_field review-triage.md Round)"
-    case "$tr" in
+    triage_round="$(_field review-triage.md Round)"
+    case "$triage_round" in
       ''|*[!0-9]*) _unreadable duo "$REL/review-triage.md has no 'Round: <n>' line. The review-responder must write the round it triaged."; return ;;
     esac
   fi
-  if [ "${tr:-0}" -lt "$round" ]; then
+  if [ "${triage_round:-0}" -lt "$round" ]; then
     RESET_ROUNDS=1; _run review-responder "Triage $TASK."; return
   fi
   if [ "$(_field review-triage.md Replied)" = yes ]; then
@@ -276,7 +278,7 @@ check_duo() {
   pushed="$(git rev-parse --verify -q "refs/remotes/origin/$(state_branch "$TASK")" || true)"
   asks="$(awk -F'|' '{ for (i = 2; i < NF; i++) { c = $i; gsub(/^[ \t]+|[ \t]+$/, "", c); if (c == "ASK") { n++; break } } } END { print n + 0 }' "$DIR/review-triage.md")"
   if [ "$asks" -gt 0 ] || [ "$pushed" != "$head" ]; then
-    fp="$(_fp @HEAD review-triage.md)"
+    fp="$(_checksum @HEAD review-triage.md)"
     if ! _approved duo "$fp"; then
       [ "$asks" -gt 0 ] && why=" $asks ASK thread(s) wait for you; they get no reply."
       [ "$pushed" != "$head" ] && why="$why Approving confirms the push of the verified fixes."
@@ -350,7 +352,7 @@ check_review() {
   done < <(_findings)
 
   if [ $(( ${#pending[@]} + ${#req[@]} + ${#replan[@]} )) -gt 0 ]; then
-    fp="$(_fp code-review.md)"
+    fp="$(_checksum code-review.md)"
     if [ "${#pending[@]}" -eq 0 ] && _approved review "$fp"; then
       if [ "${#req[@]}" -gt 0 ]; then
         _run requirements "Update requirements for $TASK from the code review (Route: requirements in code-review.md)."
@@ -376,7 +378,7 @@ check_review() {
 # apply_fix_round: count a new fix round, or turn it into the fix-limit stop.
 apply_fix_round() {
   local round key
-  round="$(_st "Fix round")"; round="${round%%/*}"; round="${round:-0}"; key="$(_st "Fix key")"
+  round="$(_status_value "Fix round")"; round="${round%%/*}"; round="${round:-0}"; key="$(_status_value "Fix key")"
   NEW_ROUND="$round"; NEW_KEY="$key"
   [ -n "$RESET_ROUNDS" ] && NEW_ROUND=0
   [ "$VERB" = run ] && [ -n "$FIX_KEY" ] && [ "$FIX_KEY" != "$key" ] || return 0
@@ -394,9 +396,9 @@ INPUTS=(@HEAD requirements.md plan.md verification.md code-review.md evidence/ev
         evidence/APPROVED mr.md auto-decisions.md review-triage.md state.env verified-head)
 check_stall() {
   [ "$VERB" = run ] || return 0
-  INPUTS_FP="$(_fp "${INPUTS[@]}")"
+  INPUTS_FP="$(_checksum "${INPUTS[@]}")"
   LAST_RUN="run $WHAT $TEXT"; LAST_RUN_FP="$INPUTS_FP"
-  [ "$LAST_RUN" = "$(_st "Last run")" ] && [ "$INPUTS_FP" = "$(_st "Last run inputs")" ] || return 0
+  [ "$LAST_RUN" = "$(_status_value "Last run")" ] && [ "$INPUTS_FP" = "$(_status_value "Last run inputs")" ] || return 0
   if _approved stalled "$INPUTS_FP"; then _drop_approval stalled; return 0; fi
   local offer="Approve to run it once more"
   _plan_update_stalled && offer="Approve to keep plan.md as it is for the new requirements"
@@ -432,12 +434,12 @@ write_status() {
     echo
     echo "Stage: $STAGE"
     echo "Last decision: $LINE"
-    echo "Last run: ${LAST_RUN:-$(_st "Last run")}"
-    echo "Last run inputs: ${LAST_RUN_FP:-$(_st "Last run inputs")}"
+    echo "Last run: ${LAST_RUN:-$(_status_value "Last run")}"
+    echo "Last run inputs: ${LAST_RUN_FP:-$(_status_value "Last run inputs")}"
     echo "Pending stop: $pending"
     echo "Fix round: $NEW_ROUND/$MAX_AUTO_FIX_ROUNDS"
     echo "Fix key: $NEW_KEY"
-    echo "Plan accepted: ${PLAN_ACCEPTED:-$(_st "Plan accepted")}"
+    echo "Plan accepted: ${PLAN_ACCEPTED:-$(_status_value "Plan accepted")}"
     if [ -n "$APPROVALS" ]; then sed 's/^/Approved /' <<<"$APPROVALS"; fi
   } > "$STATUS.tmp"
   mv "$STATUS.tmp" "$STATUS"
@@ -456,7 +458,7 @@ apply_fix_round
 check_stall
 
 if [ "$CMD" = approve ]; then
-  pending="$(_st "Pending stop")"
+  pending="$(_status_value "Pending stop")"
   if [ -z "$pending" ]; then echo "No stop is waiting for an approval." >&2; exit 1; fi
   if [ "$VERB" = stop ] && [ -z "$STOP_FP" ]; then
     echo "This stop can't be approved: $TEXT" >&2; exit 1
@@ -472,9 +474,9 @@ if [ "$CMD" = approve ]; then
   case "$WHAT" in fix-limit|review) NEW_ROUND=0 ;; esac   # more rounds allowed, or the findings were decided: the count starts over
   PLAN_ACCEPTED=""
   if [ "$WHAT" = stalled ] && _plan_update_stalled; then
-    PLAN_ACCEPTED="$(_fp @unticked:plan.md) $(_fp requirements.md)"   # keep the plan for the new requirements
+    PLAN_ACCEPTED="$(_checksum @unticked:plan.md) $(_checksum requirements.md)"   # keep the plan for the new requirements
   fi
-  LINE="$(_st "Last decision")"
+  LINE="$(_status_value "Last decision")"
   write_status
   echo "Approved the $WHAT stop."
   exit 0

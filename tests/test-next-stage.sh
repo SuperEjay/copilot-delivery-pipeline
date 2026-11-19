@@ -344,7 +344,13 @@ done
 # macOS ships bash 3.2: no associative arrays, mapfile or ${x,,}.
 check "runs on bash 3.2: no bash 4 features" '! grep -nE "(declare|local) -A|mapfile|readarray|\$\{[A-Za-z_]+(,,|\^\^)\}" "$NS"'
 check "header: end names both ends of a run" 'grep -E "^#  +end <reason>" -A1 "$NS" | grep -q "Duo round"'
-check "one parser for the last Key line: _st, _plan_flag and _field use _last_value" '[ "$(grep -cF "index(\$0, k) == 1" "$NS")" -eq 1 ] && ( for f in _st _plan_flag _field; do sed -n "/^$f() {/,/^}/p" "$NS" | grep -q _last_value || exit 1; done )'
+check "one parser for the last Key line: _status_value, _plan_flag and _field use _last_value" '[ "$(grep -cF "index(\$0, k) == 1" "$NS")" -eq 1 ] && ( for f in _status_value _plan_flag _field; do sed -n "/^$f() {/,/^}/p" "$NS" | grep -q _last_value || exit 1; done )'
+# no_unclear_names: none of _fp, _st (functions) or v, tr (variables: declared, set or read) in the router.
+no_unclear_names() {
+  ! grep -nE '(^|[^A-Za-z0-9_])(_fp|_st)([^A-Za-z0-9_]|$)' "$NS" &&
+  ! grep -nE 'local [^#]*[[:space:]](v|tr)([[:space:]]|$)|(^|[[:space:]])(v|tr)=|\$\{?(v|tr)([^A-Za-z0-9_]|$)' "$NS"
+}
+check "no unclear names: _fp, _st, v and tr are renamed" 'no_unclear_names > "$T/out.txt"'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
