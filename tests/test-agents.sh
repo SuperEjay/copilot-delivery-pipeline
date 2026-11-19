@@ -5,9 +5,16 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 A="$ROOT/payload/.github/agents"
-AGENTS=(requirements planner implementer verifier reviewer evidence shipper review-responder)
+NS="$ROOT/payload/scripts/agent/next-stage.sh"
 pass=0; fail=0
 check() { if eval "$2"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $1"; fi; }
+
+# ---------- the stage agents: one list, in next-stage.sh ----------
+# The router's STAGE_AGENTS is the one list of stage agents; these tests read it.
+read -r -a AGENTS <<< "$(sed -n 's/^STAGE_AGENTS="\(.*\)"$/\1/p' "$NS")"
+check "next-stage.sh sets STAGE_AGENTS once" '[ "$(grep -c "^STAGE_AGENTS=" "$NS")" -eq 1 ] && [ "${#AGENTS[@]}" -gt 0 ]'
+check "the router checks the agents in STAGE_AGENTS" 'grep -q "^for _agent in \$STAGE_AGENTS; do" "$NS"'
+check "STAGE_AGENTS names every agent file but the orchestrator, no more" '[ "$(printf "%s\n" "${AGENTS[@]}" | sort | tr "\n" " ")" = "$(cd "$A" && ls *.agent.md | sed "s/\.agent\.md$//" | grep -vx pipeline | sort | tr "\n" " ")" ]'
 
 # frontmatter <agent>: the lines between the file's first two "---" lines.
 frontmatter() { awk 'NR == 1 && $0 == "---" { on = 1; next } on && $0 == "---" { exit } on' "$A/$1.agent.md"; }
