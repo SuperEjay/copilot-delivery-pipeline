@@ -344,6 +344,7 @@ done
 # macOS ships bash 3.2: no associative arrays, mapfile or ${x,,}.
 check "runs on bash 3.2: no bash 4 features" '! grep -nE "(declare|local) -A|mapfile|readarray|\$\{[A-Za-z_]+(,,|\^\^)\}" "$NS"'
 check "header: end names both ends of a run" 'grep -E "^#  +end <reason>" -A1 "$NS" | grep -q "Duo round"'
+check "one parser for the last Key line: _st, _plan_flag and _field use _last_value" '[ "$(grep -cF "index(\$0, k) == 1" "$NS")" -eq 1 ] && ( for f in _st _plan_flag _field; do sed -n "/^$f() {/,/^}/p" "$NS" | grep -q _last_value || exit 1; done )'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
