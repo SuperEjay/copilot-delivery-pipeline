@@ -4,15 +4,6 @@ description: "Stage 3: build one slice from plan.md test-first, run fast checks 
 model: 'Claude Sonnet 5.5'
 tools: ['read', 'edit', 'search', 'execute', 'todo']
 include-custom-instructions: true
-handoffs:
-  - label: "Next slice"
-    agent: implementer
-    prompt: "Implement the next unchecked slice in .work/<task-id>/plan.md."
-    send: false
-  - label: "All slices done → verify"
-    agent: verifier
-    prompt: "All slices are built. Verify the task in .work/<task-id>/ against requirements.md."
-    send: false
 ---
 # Implementer
 

@@ -4,11 +4,6 @@ description: "Stage 1: read a ClickUp task and its docs, then write a requiremen
 model: 'Claude Opus 5.5'
 tools: ['read', 'search', 'edit', 'execute']
 include-custom-instructions: true
-handoffs:
-  - label: "Approved → plan the slices"
-    agent: planner
-    prompt: "Requirements are approved. Plan the slices for the task in .work/ (read state.env for the id)."
-    send: false
 ---
 # Requirements analyst
 

@@ -4,15 +4,6 @@ description: "Stage 2: slice approved requirements into thin end-to-end slices w
 model: 'Claude Opus 5.5'
 tools: ['read', 'search', 'edit', 'todo']
 include-custom-instructions: true
-handoffs:
-  - label: "Plan approved → build slice 1"
-    agent: implementer
-    prompt: "The plan is approved. Implement the first unchecked slice in .work/<task-id>/plan.md."
-    send: false
-  - label: "Requirements need changes"
-    agent: requirements
-    prompt: "Planning found gaps in the requirements; see the 'Requirement gaps' section of plan.md."
-    send: false
 ---
 # Planner
 
@@ -33,7 +24,7 @@ When handed findings with `Route: re-plan` from `code-review.md`:
 - Add a section `## Review slices` with new slices `R1`, `R2`, …, in the same format. Use `Covers: CR-n` (plus any AC it touches) and list exact files and tests.
 - Group findings that touch the same code into one slice. Order them blockers first.
 - Update **Stop flags** if the new slices need a migration, a feature flag or another team.
-- If a finding can't be planned without a behaviour decision, list it under "Requirement gaps" and use the requirements handoff.
+- If a finding can't be planned without a behaviour decision, list it under "Requirement gaps" and end with the "Requirement gaps found" **Next:** line.
 - Reply with the new slices only, one line each.
 
 ## Template
@@ -77,7 +68,7 @@ Follow this section only when the prompt starts with `AUTO RUN`. The orchestrato
 - **A reply from a stop:** if the prompt carries the user's reply from a stop, handle it as you would that reply in manual use.
 - **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
 - **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
-- **Open questions don't stop you.** Skip step 1. List each open question that blocks planning under `## Requirement gaps`, set `- Requirement gaps: yes`, and still write the plan. Do the same for a review finding you can't plan without a behaviour decision, instead of using the requirements handoff.
+- **Open questions don't stop you.** Skip step 1. List each open question that blocks planning under `## Requirement gaps`, set `- Requirement gaps: yes`, and still write the plan. Do the same for a review finding you can't plan without a behaviour decision, instead of sending the user to the requirements agent.
 - **Keep the Stop flags current** on every run: a first plan, "Requirements … changed; update plan.md" (keep done slices ticked and change only what the new requirements touch), and "Re-plan the review findings" (Re-planning from code review, above). Any `yes` stops the run for the user; otherwise the plan goes on as an auto-decision.
 
 ## Next step

@@ -61,10 +61,8 @@ Each stage writes one file into `.work/<task-id>/`, and the next stage reads it.
 **Moving between stages:** every agent ends its reply with a **Next:** line
 naming the agent to pick and what to say, e.g. *"Next: pick the **planner**
 agent and say 'Plan 86c1abcde'"*. Pick that agent in the Copilot Chat agent
-picker, preferably in a new chat. In older Local-harness sessions you also get
-handoff buttons that do the same thing. In Copilot (Agent Host) sessions, the
-default in current VS Code, the buttons don't appear, and the Next line is how
-you move on.
+picker, preferably in a new chat. The Next line is the only way to move on: the
+agents have no handoff buttons.
 
 ## What's in here
 

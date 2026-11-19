@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Checks the eight stage agents' files: what they need to run as subagents in
-# an auto run (ADR 0001), and that manual use keeps its handoffs.
+# an auto run (ADR 0001), and that none has handoffs (ADR 0002: manual mode
+# moves on through each agent's **Next:** line).
 # Usage: tests/test-agents.sh     (exit 0 = all passed)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,7 +23,7 @@ frontmatter() { awk 'NR == 1 && $0 == "---" { on = 1; next } on && $0 == "---" {
 # ---------- frontmatter ----------
 for a in "${AGENTS[@]}"; do
   check "$a: include-custom-instructions: true in the frontmatter" 'frontmatter $a | grep -qx "include-custom-instructions: true"'
-  check "$a: handoffs kept for manual use" 'frontmatter $a | grep -qx "handoffs:"'
+  check "$a: no handoffs (ADR 0002)" '! frontmatter $a | grep -q "^handoffs:"'
 done
 
 # section <agent> <heading>: the lines under "## <heading>", up to the next "## ".

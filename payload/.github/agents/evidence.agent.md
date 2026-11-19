@@ -4,15 +4,6 @@ description: "Stage 4b: capture screenshot evidence for each acceptance criterio
 model: 'Claude Sonnet 5.5'
 tools: ['read', 'search', 'edit', 'execute']
 include-custom-instructions: true
-handoffs:
-  - label: "Evidence approved → prepare the MR"
-    agent: shipper
-    prompt: "The user has approved the evidence. Prepare the merge request for the task in .work/<task-id>/."
-    send: false
-  - label: "Evidence shows a bug → back to implementer"
-    agent: implementer
-    prompt: "Evidence capture found a problem; see the notes in .work/<task-id>/evidence/evidence.md. Fix it in the relevant slice."
-    send: false
 ---
 # Evidence
 
@@ -25,7 +16,7 @@ Produce development evidence for each AC in `.work/<task-id>/requirements.md`, l
    - **Text**: not visible in a UI (an API, a job, data). Write `evidence/AC-n.md` with the exact command and a trimmed output (≤30 lines). Never include tokens, passwords or personal data.
    - **None**: nothing meaningful to show. Say why in the manifest.
 3. Write `.work/<task-id>/evidence/<task-id>.evidence.spec.ts`, with one test per screenshot AC (template below).
-4. Run `scripts/agent/capture-evidence.sh <task-id>`. To retake specific items, add `--grep "AC-2"`. If a failure is in your spec, fix it, at most 3 tries. If the app itself is wrong, stop and use the "back to implementer" handoff.
+4. Run `scripts/agent/capture-evidence.sh <task-id>`. To retake specific items, add `--grep "AC-2"`. If a failure is in your spec, fix it, at most 3 tries. If the app itself is wrong, stop and end with the "App bug found" **Next:** line.
 5. Look at each screenshot (open the PNG) and check it shows what its caption claims. If you can't view images, say so; the user will check.
 6. Write `evidence/evidence.md` (manifest template below), with **every checkbox unticked**.
 7. Reply with the number of items, anything you couldn't capture, and these steps for the user, word for word:
