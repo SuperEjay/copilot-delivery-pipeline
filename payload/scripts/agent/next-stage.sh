@@ -28,8 +28,9 @@
 #   requirements.md   missing: run requirements. Not approved as it is now: stop.
 #   plan.md           missing: run planner. Requirements changed since the plan
 #                     was accepted: run planner. A Stop flag "yes" or more than
-#                     6 S slices: stop (once approved, it goes on); otherwise it
-#                     goes on and adds an auto-decision to auto-decisions.md.
+#                     MAX_PLAN_SLICES S slices: stop (once approved, it goes
+#                     on); otherwise it goes on and adds an auto-decision to
+#                     auto-decisions.md.
 #   slices            any "- [ ] S<n>:" or "- [ ] R<n>:" line: run implementer.
 #   (MR open)         the Duo round below instead of the next four steps.
 #   verified          verification.md "Result: PASS" with "Commit:" = HEAD, and
@@ -79,6 +80,9 @@
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
+
+# A plan with more S slices than this stops for the user (ADR 0001).
+MAX_PLAN_SLICES=6
 
 TASK="${1:?usage: next-stage.sh <task-id> [approve]}"
 CMD="${2:-}"
@@ -179,7 +183,7 @@ check_plan() {
     esac
   done
   n="$(grep -cE '^- \[[ xX]\] S[0-9]+:' "$DIR/plan.md")"
-  [ "$n" -gt 6 ] && reasons+=("$n slices (more than 6)")
+  [ "$n" -gt "$MAX_PLAN_SLICES" ] && reasons+=("$n slices (more than $MAX_PLAN_SLICES)")
 
   if [ "${#reasons[@]}" -gt 0 ]; then
     sfp="$(_fp @unticked:plan.md requirements.md)"
@@ -404,8 +408,8 @@ _auto_decision() {
 record_auto_plan() {
   _auto_decision "Plan accepted without a stop" \
     "plan.md ($1 slices) went on to the implementer." \
-    "none of its Stop flags is \"yes\", and it has 6 or fewer slices." \
-    "Plan: stop only on requirement gaps, a migration, a feature flag, another team's work, or more than 6 slices (ADR 0001)."
+    "none of its Stop flags is \"yes\", and it has $MAX_PLAN_SLICES or fewer slices." \
+    "Plan: stop only on requirement gaps, a migration, a feature flag, another team's work, or more than $MAX_PLAN_SLICES slices (ADR 0001)."
 }
 
 # ---------- status.md writer ----------

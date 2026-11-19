@@ -146,9 +146,15 @@ plan_md 3 no yes
 next T1
 check "a migration flag stops the plan" '[[ "$out" == "stop plan "*"Migration"* ]]'
 check "no auto-decision for a plan that stops" '[ ! -f $W/auto-decisions.md ]'
+R=scripts/agent/next-stage.sh
+check "the slice limit is set once, as MAX_PLAN_SLICES" '[ "$(grep -c "^MAX_PLAN_SLICES=6$" $R)" -eq 1 ] && ! grep -qE "gt 6|than 6|6 or fewer|^#.* 6 S slices" $R'
+plan_md 6
+next T1
+check "6 slices go on, as an auto-decision" '[[ "$out" == "run implementer "* ]] && grep -q "6 or fewer slices" $W/auto-decisions.md'
+rm $W/auto-decisions.md
 plan_md 7
 next T1
-check "7 slices stop the plan" '[[ "$out" == "stop plan "*"7 slices"* ]]'
+check "7 slices stop the plan" '[[ "$out" == "stop plan "*"7 slices (more than 6)"* ]]'
 next T1 approve; next T1
 check "an approved plan goes on" '[[ "$out" != stop* ]] && [ ! -f $W/auto-decisions.md ]'
 sed -i 's/^- \[ \] S1:/- [x] S1:/' $W/plan.md; next T1
