@@ -130,13 +130,11 @@ plan_md() {
     echo "- Feature flag: ${4:-no}"; echo "- Other team: ${5:-no}"
   } > $W/plan.md
 }
-# A plan from before auto run (v1.1.0's planner wrote no Stop flags): finish it stage by stage.
+# A plan with no Stop flags heading at all (v2 dropped the separate check for
+# v1.1.0 tasks, ADR 0002): the same plan stop as a missing line.
 printf '# Plan: T1\n## Slices\n- [ ] S1: one\n' > $W/plan.md
 next T1
-check "plan.md with no Stop flags heading: exit 1, finish it stage by stage" '[ $rc -eq 1 ] && grep -q "stage by stage" "$T/out.txt"'
-mv $W/status.md "$T/status.keep"; next T1
-check "the same without status.md (a task from before auto run)" '[ $rc -eq 1 ] && grep -q "stage by stage" "$T/out.txt" && [ ! -f $W/status.md ]'
-mv "$T/status.keep" $W/status.md
+check "plan.md with no Stop flags heading: stop plan, naming the missing line" '[ $rc -eq 0 ] && [[ "$out" == "stop plan "*"Requirement gaps"* ]]'
 printf '# Plan: T1\n## Slices\n- [ ] S1: one\n## Stop flags\n- Migration: no\n' > $W/plan.md
 next T1
 check "Stop flags heading missing a line: stop plan, naming the missing line" '[[ "$out" == "stop plan "*"Requirement gaps"* ]]'
@@ -351,6 +349,30 @@ no_unclear_names() {
   ! grep -nE 'local [^#]*[[:space:]](v|tr)([[:space:]]|$)|(^|[[:space:]])(v|tr)=|\$\{?(v|tr)([^A-Za-z0-9_]|$)' "$NS"
 }
 check "no unclear names: _fp, _st, v and tr are renamed" 'no_unclear_names > "$T/out.txt"'
+
+# ---------- a task started on v1.2.2 carries on (ADR 0002) ----------
+# v1.2.2's own scripts start the task, stop it at requirements and record the
+# approval; the current scripts then take over, as after install.sh --update.
+if git -C "$ROOT" cat-file -e "v1.2.2^{commit}" 2>/dev/null; then
+  mkdir "$T/v122"; git -C "$ROOT" archive v1.2.2 payload/scripts/agent payload/.github/agents | tar -x -C "$T/v122"
+  git init -q --bare -b main "$T/carry.git"
+  git init -q -b main "$T/carry"; cd "$T/carry"
+  git config user.email t@t; git config user.name t; git remote add origin "$T/carry.git"
+  mkdir -p scripts .github; cp -r "$T/v122/payload/scripts/agent" scripts/; cp -r "$T/v122/payload/.github/agents" .github/
+  printf '.work/\n.agent.env\n' > .gitignore; : > .agent.env
+  echo one > a.txt; git add -A; git commit -qm init; git push -q origin main
+  $S/start-task.sh T2 carry > "$T/out.txt" 2>&1
+  printf '# T2: Export\n## Acceptance criteria\n- AC-1: x\n' > .work/T2/requirements.md
+  $S/next-stage.sh T2 > "$T/out.txt" 2>&1; $S/next-stage.sh T2 approve > "$T/out.txt" 2>&1
+  check "v1.2.2 approved its requirements stop" 'grep -q "^Approved requirements: " .work/T2/status.md'
+  rm -rf scripts/agent .github/agents
+  cp -r "$ROOT/payload/scripts/agent" scripts/; cp -r "$ROOT/payload/.github/agents" .github/
+  next T2
+  check "after the update, the run carries on to the planner" '[ $rc -eq 0 ] && [ "$out" = "run planner AUTO RUN. Plan T2." ]'
+  cd "$T/proj"
+else
+  echo "skip: v1.2.2 carry-on test (v1.2.2 isn't in this clone, e.g. a shallow one)"
+fi
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
