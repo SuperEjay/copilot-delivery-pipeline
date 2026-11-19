@@ -57,7 +57,9 @@ admin policy that blocks MCP servers doesn't affect any of this.
    repo. It copies the files, makes the scripts executable, merges the rules into
    `.github/copilot-instructions.md`, adds `.work/`, `.agent.env`, `.auth/`,
    `*.bak` and `*.new` to `.gitignore`, and creates `.agent.env`. Update later with
-   `install.sh --update`; remove with `install.sh --uninstall`.
+   `install.sh --update`; remove with `install.sh --uninstall`. The rules and
+   ignores sit between `BEGIN/END agent-pipeline` markers, and `--update`
+   replaces everything between them: put your own lines outside the markers.
 2. **Commit the pipeline files** so your teammates get the same agents and hooks.
 3. **Don't edit pipeline files casually.** `--update` keeps files you changed
    and writes the new version next to each as `<file>.new`; until you merge it,

@@ -67,7 +67,9 @@ Then follow the "Next steps" the installer prints: fill in `.agent.env`, export
   - `docs/agent-pipeline.md`, `.agent.env.example`
 - **Your existing files:** it never overwrites them. Rules go into
   `.github/copilot-instructions.md` and ignores into `.gitignore`, each inside
-  `BEGIN/END agent-pipeline` markers. `.agent.env` is created only if missing.
+  `BEGIN/END agent-pipeline` markers. `--update` replaces everything between
+  the markers, so put your own rules and ignores outside them. `.agent.env` is
+  created only if missing.
 
 ## Requirements
 
