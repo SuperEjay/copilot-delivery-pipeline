@@ -4,11 +4,6 @@ description: "Stage 5: write the change summary, open or update the GitLab MR, a
 model: 'GPT-6 Luna'
 tools: ['read', 'search', 'edit', 'execute']
 include-custom-instructions: true
-handoffs:
-  - label: "Duo has reviewed → respond"
-    agent: review-responder
-    prompt: "GitLab Duo has reviewed the MR. Fetch and triage the review for the task in .work/<task-id>/."
-    send: false
 ---
 # Shipper
 

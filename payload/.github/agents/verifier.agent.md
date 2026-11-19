@@ -4,19 +4,6 @@ description: "Stage 4: run unit, integration and e2e checks, fill test gaps, and
 model: 'GPT-6 Sol'
 tools: ['read', 'search', 'edit', 'execute']
 include-custom-instructions: true
-handoffs:
-  - label: "FAIL → back to implementer"
-    agent: implementer
-    prompt: "Fix the failures listed in .work/<task-id>/verification.md, then re-run fast checks."
-    send: false
-  - label: "PASS → code review"
-    agent: reviewer
-    prompt: "Verification passed. Review the code for the task in .work/<task-id>/ (first pass, or a delta pass if code-review.md exists)."
-    send: false
-  - label: "PASS (Duo fixes) → push and reply"
-    agent: review-responder
-    prompt: "The Duo review fixes are verified. Push and reply on the threads for the task in .work/<task-id>/."
-    send: false
 ---
 # Verifier
 

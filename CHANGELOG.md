@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Breaking: the stage agents have no handoffs** (ADR 0002). The `handoffs:` buttons only ever showed in the Local harness, which VS Code removes in February 2027, and never in Copilot (Agent Host) sessions. In manual mode, move on with each agent's **Next:** line, as before; the agents' steps that said "use the handoff" now point to the matching **Next:** line. If you changed an agent file, `--update` keeps yours and writes the new one next to it as `<file>.new`: drop its `handoffs:` block when you merge. `tests/test-agents.sh` now fails on any stage agent with a `handoffs:` block.
+
 ## v1.2.2
 
 Docs: a clearer README and an up-to-date pipeline diagram. To upgrade from v1.2.1, run `install.sh --update`; there are no other steps.

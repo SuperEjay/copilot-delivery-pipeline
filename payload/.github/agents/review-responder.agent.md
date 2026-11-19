@@ -4,11 +4,6 @@ description: "Stage 6: fetch GitLab Duo's unresolved MR comments, triage them, f
 model: 'Grok 4.7'
 tools: ['read', 'search', 'edit', 'execute']
 include-custom-instructions: true
-handoffs:
-  - label: "Fixes committed → re-verify"
-    agent: verifier
-    prompt: "Duo review fixes are committed. Re-verify the task in .work/<task-id>/ (run all checks, update verification.md)."
-    send: false
 ---
 # Review responder
 
