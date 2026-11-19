@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **The pre-ship approval covers `auto-decisions.md`.** The pre-ship stop asks you to review it, but a change to it after you approved didn't bring the stop back, so the shipper could ship on decisions you never saw. It's now part of the stop's checksum, and of the inputs that tell a stalled stage from one that has new work. A task already approved at pre-ship gets the stop once more after the update.
+
 ## v1.2.0
 
 Auto run: pick the **pipeline** agent and `/start-task`, and the stages run one after another, stopping only where a human decision is needed. The guard is hardened, and installs from v1.1.0 have an upgrade path. Stage-by-stage use is unchanged.
