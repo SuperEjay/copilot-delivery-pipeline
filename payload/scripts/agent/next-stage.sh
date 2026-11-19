@@ -83,6 +83,9 @@ source "$(dirname "$0")/evidence-lib.sh"
 
 # A plan with more S slices than this stops for the user (ADR 0001).
 MAX_PLAN_SLICES=6
+# The stage agents, the one list of them. An auto run needs each one's
+# "## In an auto run" section; a new stage goes here too.
+STAGE_AGENTS="requirements planner implementer verifier reviewer evidence shipper review-responder"
 
 TASK="${1:?usage: next-stage.sh <task-id> [approve]}"
 CMD="${2:-}"
@@ -104,7 +107,7 @@ PLAN_UPDATE="Requirements for $TASK changed; update plan.md."   # the planner's 
 # every plan would hit a stop no approval passes. So does a plan.md from
 # before auto run, which has no "## Stop flags" heading at all. Neither is a
 # stop: the run can't start until it's fixed.
-for _agent in requirements planner implementer verifier reviewer evidence shipper review-responder; do
+for _agent in $STAGE_AGENTS; do
   _af=".github/agents/$_agent.agent.md"
   grep -qx '## In an auto run' "$REPO_ROOT/$_af" 2>/dev/null && continue
   if [ -f "$REPO_ROOT/$_af.new" ]; then
