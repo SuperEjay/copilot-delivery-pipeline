@@ -7,7 +7,7 @@
 #   deny  approving evidence, touching evidence/APPROVED|UPLOADED or verified-head
 #   deny  running next-stage.sh from a subagent (only the orchestrator runs the router)
 #   deny  agent changes to the task state (.work/<id>/state.env) or the auto run's record
-#         (.work/<id>/status.md, which holds stop approvals); reading them is fine
+#         (.work/<id>/status.md, which holds stop approvals, and run.log); reading them is fine
 #   deny  sourcing the pipeline's scripts (their functions would skip the scripts' checks)
 #   deny  reading or printing secrets (tokens, .auth/ sessions, ~/.ssh)
 #   deny  destructive git (force push, reset --hard, clean -f, branch -D, --no-verify)
@@ -53,10 +53,11 @@ config  scripts/agent/
 config  .agent.env
 state   state.env
 state   .work/*/status.md
+state   .work/*/run.log
 '
 REASON_secret="That file holds credentials or a saved login session. Agents never need to read or change it."
 REASON_record="verified-head and evidence/APPROVED|UPLOADED are written only by the pipeline's scripts: run-checks.sh records the verified commit, and the user approves evidence with approve-evidence.sh. Run scripts/agent/run-checks.sh <task-id> all to re-verify."
-REASON_state="state.env (the task's state) and .work/<id>/status.md (the auto run's record, including stop approvals) are written only by the pipeline's scripts: start-task.sh, create-mr.sh, fetch-duo-review.sh and review-signals.sh --mark-reviewed write state.env, next-stage.sh writes status.md. Read them if you need to; don't change them. Only the user approves a stop."
+REASON_state="state.env (the task's state), .work/<id>/status.md (the auto run's record, including stop approvals) and .work/<id>/run.log (the run log) are written only by the pipeline's scripts: start-task.sh, create-mr.sh, fetch-duo-review.sh and review-signals.sh --mark-reviewed write state.env, next-stage.sh writes status.md and run.log. Read them if you need to; don't change them. Only the user approves a stop."
 REASON_config="Pipeline config (agents and their models, hooks, prompts, instructions, scripts, .agent.env) is user-owned, from the shell too. Tell the user what you'd change and why."
 
 if [ "${1:-}" = "--list-protected" ]; then

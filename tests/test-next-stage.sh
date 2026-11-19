@@ -119,6 +119,32 @@ check "requirements changed after approval: the stop repeats" '[[ "$out" == "sto
 next T1; next T1 approve; next T1
 check "approved again: on to the planner" '[ "$out" = "run planner AUTO RUN. Plan T1." ]'
 
+# ---------- run.log: one line per decision and approval (ADR 0002) ----------
+# "<UTC time> <run|stop|end|approve> <agent or stop id, - for end> round=<n>/<max> head=<short HEAD>"
+$S/start-task.sh T3 runlog > "$T/out.txt" 2>&1
+L=.work/T3/run.log
+HEAD7="$(git rev-parse --short HEAD)"
+# log_line <n>: line n of T3's run.log, with the time checked and cut off.
+log_line() { sed -n "${1}p" $L | sed -nE 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z //p'; }
+log_count() { [ -f $L ] && wc -l < $L | tr -d ' ' || echo 0; }
+check "no run.log before the first decision" '[ ! -f $L ]'
+next T3
+check "run: logged with the agent, the fix round and HEAD" '[ "$(log_line 1)" = "run requirements round=0/2 head=$HEAD7" ]'
+printf '# T3: Export\n## Acceptance criteria\n- AC-1: x\n' > .work/T3/requirements.md
+next T3
+check "stop: logged with the stop id" '[ "$(log_line 2)" = "stop requirements round=0/2 head=$HEAD7" ]'
+echo "- AC-2: y" >> .work/T3/requirements.md
+next T3 approve
+check "a refused approval logs nothing" '[ $rc -eq 1 ] && [ "$(log_count)" -eq 2 ]'
+next T3; next T3 approve
+check "approve: logged with the stop id, after the stop it approves" '[ "$(log_line 3)" = "stop requirements round=0/2 head=$HEAD7" ] && [ "$(log_line 4)" = "approve requirements round=0/2 head=$HEAD7" ]'
+next T3 approve
+check "approve with no stop pending logs nothing" '[ $rc -eq 1 ] && [ "$(log_count)" -eq 4 ]'
+next T3
+check "lines are only ever appended" '[ "$(log_count)" -eq 5 ] && [ "$(log_line 5)" = "run planner round=0/2 head=$HEAD7" ]'
+check "status.md doesn't change because of run.log" '! grep -q "run.log" .work/T3/status.md'
+git switch -q "$(bash -c 'source scripts/agent/config.sh; state_branch T1')"   # start-task.sh switched to T3's branch
+
 # ---------- plan: stops only on a flag or more than 6 slices ----------
 # plan_md <slices> [gaps] [migration] [flag] [team]: a plan with unchecked S slices.
 plan_md() {
@@ -204,6 +230,7 @@ check "the same run again with nothing changed: stop stalled" '[[ "$out" == "sto
 check "and the round isn't counted twice" 'grep -qx "Fix round: 1/2" $W/status.md'
 next T1
 check "asked again without an approval: still stalled" '[[ "$out" == "stop stalled implementer "* ]]'
+check "run.log grows on each call, and the stall is still seen (run.log isn't an input)" '[ "$(grep -c " stop stalled " $W/run.log)" -ge 2 ]'
 commit_change; next T1
 check "HEAD moved since the FAIL: verify again" '[ "$out" = "$VERIFY" ]'
 verify FAIL; next T1
@@ -294,6 +321,7 @@ next T1 approve; next T1
 check "approved with the new auto-decision: the shipper ships" '[ "$out" = "run shipper AUTO RUN. Ship T1. The user confirmed the push at the pre-ship stop." ]'
 mr_opened; next T1
 check "MR open: the run ends until Duo has reviewed" '[ "$out" = "end MR open. Run /fetch-review T1 after Duo has reviewed it." ]'
+check "end: logged with - for the id" 'tail -n1 $W/run.log | grep -qE "^[0-9TZ:-]+ end - round=[0-9]+/2 head=[0-9a-f]+$"'
 
 # ---------- the Duo round ----------
 TRIAGE="run review-responder AUTO RUN. Triage T1."
@@ -369,6 +397,7 @@ if git -C "$ROOT" cat-file -e "v1.2.2^{commit}" 2>/dev/null; then
   cp -r "$ROOT/payload/scripts/agent" scripts/; cp -r "$ROOT/payload/.github/agents" .github/
   next T2
   check "after the update, the run carries on to the planner" '[ $rc -eq 0 ] && [ "$out" = "run planner AUTO RUN. Plan T2." ]'
+  check "a task from v1.2.2 has no run.log; it starts with this decision" '[ "$(wc -l < .work/T2/run.log)" -eq 1 ] && grep -q " run planner " .work/T2/run.log'
   cd "$T/proj"
 else
   echo "skip: v1.2.2 carry-on test (v1.2.2 isn't in this clone, e.g. a shallow one)"
