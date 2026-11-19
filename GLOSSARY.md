@@ -48,4 +48,10 @@ _Avoid_: state file, task env
 
 **Protected path**:
 A file or folder that belongs to the user or to the pipeline's own scripts, which agents may not change (and, for secrets, may not read).
-_Avoid_: locked file, guarded path, pipeline file
+_Avoid_: locked file, guarded path
+
+### Installing
+
+**Pipeline file**:
+A file the installer owns in the user's project, such as an agent, skill, hook or pipeline script; an update replaces it unless the user changed it. Many pipeline files are protected paths, but not all (the guide isn't), and not every protected path is a pipeline file (secrets, `.agent.env`).
+_Avoid_: managed file, installed file

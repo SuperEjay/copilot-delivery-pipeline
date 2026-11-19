@@ -2,7 +2,7 @@
 
 A ClickUp → GitLab delivery pipeline built from GitHub Copilot custom agents in
 VS Code. Eight agents take a task from requirements to a merged MR, with you
-approving at each checkpoint:
+deciding wherever a decision is yours:
 
 ```
 /start-task → requirements → (you) → planner → (you) → implementer → verifier

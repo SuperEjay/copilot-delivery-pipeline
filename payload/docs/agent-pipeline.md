@@ -300,7 +300,7 @@ instructions into enforcement:
 | **Deny** | Destructive git: force push, remote branch delete, `reset --hard`, `clean -f`, `branch -D`, `checkout -- .`, `--no-verify` |
 | **Deny** | Raw `git push`, `glab` write commands, or direct ClickUp API calls (the scripts must be used) |
 | **Deny** | Raw test, lint and typecheck commands (`npm test`, `npx vitest`, `npx playwright test`, `npx tsc`…), so output always goes through the condensed `run-checks.sh` |
-| **Deny** | Agent changes to pipeline config, through edit tools or the shell: agent files (including their pinned models), hooks, the pipeline's skills, `copilot-instructions.md`, `scripts/agent/`, `.agent.env`. Copying a pipeline file elsewhere (`cp scripts/agent/x.sh /tmp`) is refused too: the guard can't tell which way a copy goes. |
+| **Deny** | Agent changes to pipeline config, through edit tools or the shell: agent files (including their pinned models), hooks, the pipeline's skills, `copilot-instructions.md`, `scripts/agent/`, `.agent.env`. Copying one of these files elsewhere (`cp scripts/agent/x.sh /tmp`) is refused too: the guard can't tell which way a copy goes. |
 
 The agent sees the reason and adjusts. Every ask or deny is logged to
 `.work/hooks.log`, so you can see what was blocked. **You** can still edit all
