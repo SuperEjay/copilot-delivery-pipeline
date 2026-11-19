@@ -15,7 +15,7 @@ We want a task to move through the pipeline without the user picking the next ag
 - **A stage that changed nothing:** if a stage runs and none of the run's inputs changed, the run stops instead of looping. That includes a stage that returns blocked.
 - **Before shipping:** one stop. The user reviews `evidence.md`, `mr.md` and the auto-decisions summary, runs `approve-evidence.sh`, and confirms the push. The chat go-ahead that came before the push goes away. The shipper runs twice around it: first it writes `mr.md` without pushing, and only after this stop is approved does it push and open the MR. The push confirmation is part of this stop, not left to the guard's ask prompt, because VS Code can remember an approval for the rest of the session, so a later push would go through without a prompt.
 - **MR open:** the run ends there. `/fetch-review` resumes it after Duo has reviewed. Each Duo round then stops at most once, for its ASK threads and the push of its fixes together, and the run ends again when the round is answered.
-- **Answering a stop:** only an explicit approval moves the run on. It's tied to what the stop was about, so if that changes afterwards, the stop comes back. Any other reply is folded in as feedback, and the same stop repeats.
+- **Answering a stop:** only an explicit approval moves the run on. It's tied to what the stop was about, so if that changes afterwards, the stop comes back. Any other reply is folded in as feedback, and the same stop repeats. The exception is a reply of `retry` or `continue`: it sends nothing to a stage and runs the router again, for when the user has changed a file by hand.
 
 ## How it works
 
