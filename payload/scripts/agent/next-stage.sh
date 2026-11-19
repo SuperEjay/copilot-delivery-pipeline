@@ -61,8 +61,9 @@
 #   review-triage.md       "Round: <n>", "Replied: yes", an "ASK" table cell
 #
 # Approvals are tied to a checksum of what the stop is about (requirements.md;
-# plan.md and requirements.md; code-review.md; HEAD, mr.md and the evidence;
-# HEAD and review-triage.md), so a change after approval brings the stop back.
+# plan.md and requirements.md; code-review.md; HEAD, mr.md, the evidence and
+# auto-decisions.md; HEAD and review-triage.md), so a change after approval
+# brings the stop back.
 # Ticks don't count as a change: building a slice ticks plan.md, and the user
 # ticks evidence.md and runs approve-evidence.sh after the pre-ship stop is
 # shown (approve then checks the evidence approval itself).
@@ -226,7 +227,7 @@ decide() {
 
   STAGE=ship
   if [ ! -f "$DIR/mr.md" ]; then _run shipper "Write mr.md for $TASK. Don't push or create the MR."; return; fi
-  fp="$(_fp @HEAD mr.md @unticked:evidence/evidence.md)"
+  fp="$(_fp @HEAD mr.md @unticked:evidence/evidence.md auto-decisions.md)"
   if ! _approved pre-ship "$fp"; then
     local why
     why="$(approval_verify "$TASK" 2>&1 > /dev/null)" || APPROVE_BLOCK="$why"
@@ -376,7 +377,7 @@ apply_fix_round() {
 # means the stage ran and changed nothing: stop instead of looping. Approving
 # that stop lets the stage run once more.
 INPUTS=(@HEAD requirements.md plan.md verification.md code-review.md evidence/evidence.md
-        evidence/APPROVED mr.md review-triage.md state.env verified-head)
+        evidence/APPROVED mr.md auto-decisions.md review-triage.md state.env verified-head)
 check_stall() {
   [ "$VERB" = run ] || return 0
   INPUTS_FP="$(_fp "${INPUTS[@]}")"

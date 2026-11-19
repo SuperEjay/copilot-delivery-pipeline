@@ -284,6 +284,10 @@ echo "retaken" > $W/evidence/AC-1.md; echo "- note" >> $W/evidence/evidence.md; 
 check "evidence.md changed beyond its ticks after approval: the pre-ship stop again" '[[ "$out" == "stop pre-ship "* ]]'
 approve_evidence; next T1; next T1 approve; next T1
 check "approved again: the shipper ships" '[ "$out" = "run shipper AUTO RUN. Ship T1. The user confirmed the push at the pre-ship stop." ]'
+echo "- CR-9: decided after the stop" >> $W/auto-decisions.md; next T1
+check "auto-decisions.md changed after approval: the pre-ship stop again" '[[ "$out" == "stop pre-ship "* ]]'
+next T1 approve; next T1
+check "approved with the new auto-decision: the shipper ships" '[ "$out" = "run shipper AUTO RUN. Ship T1. The user confirmed the push at the pre-ship stop." ]'
 mr_opened; next T1
 check "MR open: the run ends until Duo has reviewed" '[ "$out" = "end MR open. Run /fetch-review T1 after Duo has reviewed it." ]'
 
