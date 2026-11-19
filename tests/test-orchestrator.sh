@@ -69,6 +69,17 @@ for id in $(grep -oE '_unreadable [a-z-]+ ' "$NS" | awk '{ print $2 }' | sort -u
   check "docs: the $id stop is listed as one no approval passes" 'unapprovable_row | cut -d"|" -f2 | grep -q "\`$id\`"'
 done
 check "docs: the run also ends when a Duo round is answered" 'grep -q "^The run ends when the MR is open.*Duo round is answered" "$DOC"'
+# diagram: the first fenced block in the guide, its pipeline diagram (#56).
+diagram() { awk '/^```/ { if (on) exit; on = 1; next } on' "$DOC"; }
+for id in $(grep -oE '_stop [a-z-]+ ' "$NS" | awk '{ print $2 }' | sort -u); do
+  check "diagram: shows the $id stop" 'diagram | grep -qE "⏸ $id:| $id \("'   # "⏸ plan: …", or "stalled (…)" in the key
+done
+for a in $(sed -n 's/^STAGE_AGENTS="\(.*\)"$/\1/p' "$NS"); do
+  check "diagram: shows the $a stage" 'diagram | grep -qw "$a"'
+done
+check "diagram: names the orchestrator and the router" 'diagram | grep -q "pipeline agent" && diagram | grep -q "next-stage.sh"'
+check "diagram: the fail and quick-fix loops back to the implementer" 'diagram | grep -q "fail" && diagram | grep -q "quick fix"'
+check "diagram: the Duo round loops from /fetch-review" '[ "$(diagram | grep -c "/fetch-review")" -ge 2 ]'
 check "feedback: then next-stage.sh again" 'sec Feedback "run \`scripts/agent/next-stage.sh <task-id>\` again"'
 check "retry or continue: next-stage.sh again, nothing sent to a stage" 'sec Feedback "\`retry\` or \`continue\`"'
 

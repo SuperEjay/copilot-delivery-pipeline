@@ -107,5 +107,41 @@ else
   echo "skip: v1.1.0 update test ($V110 isn't in this clone, e.g. a shallow one)"
 fi
 
+# ---------- the README's install and update steps match the installer ----------
+README="$ROOT/README.md"
+GUIDE="$ROOT/payload/docs/agent-pipeline.md"
+# readme_section <heading>: the lines under that "##"/"###" heading, up to the next heading of that level or higher.
+readme_section() { awk -v h="$1" 'index($0, "#") == 1 { lvl = index($0, " ") - 1; if (on && lvl <= L) exit; if ($0 == h) { on = 1; L = lvl; next } } on' "$README"; }
+# slug <heading text>: GitHub's anchor for a heading.
+slug() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9 _-]//g; s/ /-/g'; }
+version="$(sed -n 's/^PIPELINE_VERSION="\(.*\)"$/\1/p' "$ROOT/install.sh")"
+check "README: the pinned curl install is this version" 'grep -q "copilot-delivery-pipeline/$version/install.sh | bash$" "$README"'
+check "README: the pinned curl update is this version" 'grep -q "copilot-delivery-pipeline/$version/install.sh | bash -s -- --update$" "$README"'
+check "README: every pinned release (clone --branch, checkout, curl URL) is this version" '[ -z "$(grep -oE "(--branch|checkout|copilot-delivery-pipeline/) ?v[0-9]+\.[0-9]+\.[0-9]+" "$README" | grep -v "$version\$")" ]'
+for flag in $(sed -n 's/^    \(--[a-z-]*\)[)|].*/\1/p' "$ROOT/install.sh"); do
+  check "README: the $flag option is documented" 'grep -q -- "\`install.sh [^\`]*$flag" "$README"'
+done
+for platform in "### macOS" "### Linux" "### Windows with WSL" "### Windows with Git Bash"; do
+  check "README: $platform has its own steps" '[ -n "$(readme_section "$platform")" ]'
+  for t in git jq curl glab node; do
+    check "README: $platform says how to get $t" 'readme_section "$platform" | grep -qw "$t"'
+  done
+done
+check "README: Git Bash is marked unverified" 'readme_section "### Windows with Git Bash" | grep -qi "unverified"'
+check "README: Windows warns about CRLF in .sh files" 'readme_section "## Requirements" | grep -q "eol=lf"'
+check "README: the update finds the installed version in the manifest" 'readme_section "## Updating an existing install" | grep -q "agent-pipeline.manifest"'
+check "README: the update says to merge each .new" 'readme_section "## Updating an existing install" | grep -q "\.new"'
+check "README: the update links the CHANGELOG's per-version steps" 'readme_section "## Updating an existing install" | grep -q "(CHANGELOG.md"'
+# readme_guide_links_resolve: every link into the guide names a heading that exists there.
+readme_guide_links_resolve() {
+  local a slugs
+  slugs="$(grep '^#' "$GUIDE" | sed -E 's/^#+ //' | while IFS= read -r h; do slug "$h"; echo; done)"
+  for a in $(grep -oE 'payload/docs/agent-pipeline\.md#[a-z0-9_-]+' "$README" | sed 's/.*#//' | sort -u); do
+    printf '%s\n' "$slugs" | grep -qx "$a" || { echo "  no heading for #$a" >&2; return 1; }
+  done
+}
+check "README: links into the guide's Setup" 'grep -q "payload/docs/agent-pipeline.md#setup-about-15-minutes" "$README"'
+check "README: every link into the guide resolves" 'readme_guide_links_resolve'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]
