@@ -7,7 +7,9 @@ safe limits. You stay in charge of every decision that matters.
 
 ## What it does
 
-Give it a ClickUp task id with `/start-task <id> <slug>`, and the agents:
+Pick the **pipeline** agent, give it a ClickUp task id with
+`/start-task <id> <slug>`, and it runs each stage for you as an **auto run**,
+stopping only where a decision is yours:
 
 1. **Read the task** (description, comments, attachments, linked docs) and write
    the requirements, with open questions for you to answer.
@@ -23,18 +25,19 @@ Give it a ClickUp task id with `/start-task <id> <slug>`, and the agents:
 7. **Answer GitLab Duo's review:** triage its comments, fix, re-verify, push and
    reply.
 
-You can pick each agent yourself, or pick the **pipeline** agent to run the
-steps for you, stopping only where a decision is yours. It never merges the MR:
-that stays with you and your team. Everything runs in your VS Code, using your
+It never merges the MR: that stays with you and your team. When an auto run
+can't be used (say, a VS Code update breaks subagents), fall back to
+manual mode: pick each stage agent yourself, following the **Next:** line at
+the end of its reply. Everything runs in your VS Code, using your
 Copilot plan and your own ClickUp and GitLab accounts. There's no server to host.
 
 ## Why use it
 
-- **Auto run:** pick the `pipeline` agent and it runs the stages for you as
-  subagents, stopping only where a decision is yours (requirements, a risky plan,
-  unclear review findings, before the push). Never with **Auto** in the model
-  picker: it cancels the pinned models. See "Hands-off: auto run" in
-  `payload/docs/agent-pipeline.md`.
+- **Auto run:** the `pipeline` agent runs the stages for you as subagents,
+  stopping only where a decision is yours (requirements, a risky plan, unclear
+  review findings, before the push). Never with **Auto** in the model picker: it
+  cancels the pinned models. See
+  [Daily use: auto run](payload/docs/agent-pipeline.md#daily-use-auto-run).
 - **No MCP needed:** ClickUp goes through its REST API, GitLab through `glab`.
 - **Enforced rules:** a hook guards every agent tool call. Publishing needs your
   confirmation; secrets, destructive git, raw pushes and edits to the pipeline
@@ -48,7 +51,7 @@ Copilot plan and your own ClickUp and GitLab accounts. There's no server to host
 New here? Start with [Requirements](#requirements), then
 [First-time install](#first-time-install). Already installed? See
 [Updating an existing install](#updating-an-existing-install). The full guide
-(setup, daily use, models, hooks, evidence approval, code review) is installed
+(setup, the auto run, manual mode, models, hooks, evidence approval, code review) is installed
 into your project as [`docs/agent-pipeline.md`](payload/docs/agent-pipeline.md).
 
 ## Requirements
@@ -117,7 +120,7 @@ use `npx playwright install --with-deps chromium`.
 
 ### Windows with WSL
 
-The recommended way on Windows, and the setup the auto run was tested on: VS
+The supported way on Windows, and the setup the auto run was tested on: VS
 Code runs on Windows, and everything else (Copilot's agents, the hooks, the
 terminal) runs inside Linux.
 
@@ -135,10 +138,11 @@ terminal) runs inside Linux.
 
 ### Windows with Git Bash
 
-**Unverified:** nobody has run the pipeline this way yet. Prefer WSL. The hook
-file (`.github/hooks/pipeline-guard.json`) has only a `bash` command, and it
-isn't known whether VS Code on Windows runs it. If it doesn't, the guard is
-off. The last check in [First-time install](#first-time-install) tells you.
+**Unsupported:** nobody has run the pipeline this way, and it isn't tested. Use
+[WSL](#windows-with-wsl). The hook file (`.github/hooks/pipeline-guard.json`)
+has only a `bash` command, and it isn't known whether VS Code on Windows runs
+it. If it doesn't, the guard is off and nothing stops an agent from pushing or
+reading secrets. `scripts/agent/doctor.sh` fails on Git Bash for this reason. The notes below are kept for anyone who tries it anyway.
 
 1. In PowerShell, install the tools: `git`, `jq`, `glab` and Node.js (`node`).
    Git for Windows also brings Git Bash and `curl`.
@@ -189,10 +193,12 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.2/install.sh | bash
    ```
 
-3. Read the installer's output. Under **Checking tools**, install anything
-   marked missing. The last lines should include
-   `hook guard works (a test 'git push' was blocked)`.
-4. Configure the pipeline, following steps 4 to 9 of the guide's
+3. Read the installer's output. It ends by running `scripts/agent/doctor.sh`,
+   which prints one line per check: PASS, WARN, FAIL or INFO. The guard's line
+   should read `PASS  hook guard works (a test 'git push' was blocked)`. A FAIL
+   for the token or `.agent.env` is expected now: the next step fixes it. Run
+   `scripts/agent/doctor.sh` again after setup, until it shows no FAIL.
+4. Configure the pipeline, following steps 4 to 10 of the guide's
    [Setup](payload/docs/agent-pipeline.md#setup-about-15-minutes):
    - your test commands in `.agent.env` (the installer created it)
    - `export CLICKUP_API_TOKEN="pk_..."` in your shell profile (`~/.zshrc` on
@@ -216,11 +222,11 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
      Copilot Chat agent picker
    - `/start-task` and `/fetch-review` appear when you type `/`
    - asking any agent to run `git push` is refused, with the guard's reason
-8. Start your first task with `/start-task <clickup-id> <short-slug>`: with the
-   **requirements** agent picked to go
-   [stage by stage](payload/docs/agent-pipeline.md#daily-use-stage-by-stage), or
-   with **pipeline** picked for an
-   [auto run](payload/docs/agent-pipeline.md#hands-off-auto-run).
+8. Pick **pipeline** and start your first task with
+   `/start-task <clickup-id> <short-slug>`: see
+   [Daily use: auto run](payload/docs/agent-pipeline.md#daily-use-auto-run). To
+   go stage by stage instead, pick **requirements** first: see
+   [Manual mode](payload/docs/agent-pipeline.md#manual-mode-fallback).
 
 ## Updating an existing install
 
@@ -267,8 +273,10 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    [Upgrading from v1.1.0](CHANGELOG.md#upgrading-from-v110).
 6. If the output lists settings your `.agent.env` doesn't set, copy the ones you
    want from `.agent.env.example`. The installer never writes `.agent.env`.
-7. Check the output for `hook guard works`, commit the updated pipeline files
-   (the same `git add` as in First-time install), and fully quit and reopen VS Code.
+7. Check the `doctor.sh` lines at the end of the output: fix any FAIL, then run
+   `scripts/agent/doctor.sh` until there's none. Commit the updated pipeline
+   files (the same `git add` as in First-time install), and fully quit and
+   reopen VS Code.
 
 ## Installer options
 
@@ -306,6 +314,7 @@ tests/test-task-state.sh  # checks that .work/<id>/state.env is read as data and
 tests/test-next-stage.sh  # checks the auto run's router: the next stage or stop for fixture .work/ folders
 tests/test-agents.sh      # checks the stage agents: subagent frontmatter, no handoffs, the "In an auto run" sections
 tests/test-orchestrator.sh  # checks the orchestrator (pipeline agent) against the router's verbs and stop ids
+tests/test-doctor.sh      # checks doctor.sh: each PASS, WARN and FAIL, with fake tools on PATH, and that it changes nothing
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release

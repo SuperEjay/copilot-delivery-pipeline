@@ -1,8 +1,9 @@
 # ClickUp → GitLab agent pipeline (GitHub Copilot custom agents)
 
 ```
-By hand: pick each agent from its "Next:" line. Auto run: the pipeline agent runs each
-stage as a subagent, in the order scripts/agent/next-stage.sh decides, and stops at ⏸.
+Auto run: the pipeline agent runs each stage as a subagent, in the order
+scripts/agent/next-stage.sh decides, and stops at ⏸. Manual mode: pick each agent
+from its "Next:" line.
 
               /start-task <id> <slug>
                     │
@@ -45,7 +46,7 @@ stage as a subagent, in the order scripts/agent/next-stage.sh decides, and stops
   │                 ▼
   └─────────── ■ end: round answered. After the next Duo review: /fetch-review <id>
 
-⏸ An auto run waits for your reply here; by hand, you decide as you go. Any stage can
+⏸ An auto run waits for your reply here; in manual mode, you decide as you go. Any stage can
   also stop: stalled (it changed nothing), fix-limit (MAX_AUTO_FIX_ROUNDS used).
 ```
 
@@ -58,11 +59,11 @@ branch, verified commit, evidence approved at it) are the **ship gate**, in one
 file: `scripts/agent/ship-gate.sh`.
 
 Each stage writes one file into `.work/<task-id>/`, and the next stage reads it.
-**Moving between stages:** every agent ends its reply with a **Next:** line
-naming the agent to pick and what to say, e.g. *"Next: pick the **planner**
-agent and say 'Plan 86c1abcde'"*. Pick that agent in the Copilot Chat agent
-picker, preferably in a new chat. The Next line is the only way to move on: the
-agents have no handoff buttons.
+**Moving between stages:** in an auto run, the **pipeline** agent does it for
+you (see "Daily use: auto run"). In manual mode, the fallback, every agent ends
+its reply with a **Next:** line naming the agent to pick and what to say, e.g.
+*"Next: pick the **planner** agent and say 'Plan 86c1abcde'"* (see "Manual mode
+(fallback)").
 
 ## What's in here
 
@@ -73,7 +74,7 @@ agents have no handoff buttons.
 | `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then on to review-responder, or resumes the auto run when **pipeline** is picked |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
 | `.github/copilot-instructions.md` | Six short rules every agent follows (kept short on purpose: it's sent with every request) |
-| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, thread reply/resolve |
+| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, thread reply/resolve, and `doctor.sh`, which checks your setup |
 | `.agent.env.example` | Your test commands, Duo username, round limit, ClickUp workspace and status |
 
 **No MCP needed.** ClickUp goes through its REST API (`scripts/agent/clickup.sh`)
@@ -114,12 +115,17 @@ admin policy that blocks MCP servers doesn't affect any of this.
      the requirements agent works from a paste too.
 7. **Find Duo's username:** open any MR Duo has reviewed, check the author name
    on its comment, and put it in `DUO_USERNAMES`.
-8. **Fully quit and reopen VS Code.** The agents appear in the Copilot Chat
+8. **Check the setup:** run `scripts/agent/doctor.sh`. It checks the tools,
+   your `glab` login, that `CLICKUP_API_TOKEN` is exported (and in no file),
+   settings `.agent.env` doesn't set, line endings, the hook guard and your VS
+   Code version, one line each, and changes nothing. Fix every FAIL. Run it again
+   whenever something acts up, or when a teammate sets up.
+9. **Fully quit and reopen VS Code.** The agents appear in the Copilot Chat
    agent picker, and `/start-task` and `/fetch-review` appear when you type `/`.
    They're agent skills, not prompt files, because Copilot (Agent Host)
    sessions don't load prompt files. If they're missing, check that VS Code is
    open on the project's root folder.
-9. **Evidence screenshots (Playwright):**
+10. **Evidence screenshots (Playwright):**
    - If the repo doesn't have it yet: `npm i -D @playwright/test && npx playwright install chromium`.
    - Set `EVIDENCE_BASE_URL` and `EVIDENCE_START_CMD` in `.agent.env`.
    - If pages need a login, save a **test account's** session once:
@@ -152,38 +158,12 @@ premium-speed variant of a model. Fast variants cost several times more than
 the standard model for the same work. The pinned names above are all standard
 variants. Leave them that way.
 
-## Daily use: stage by stage
+## Daily use: auto run
 
-To have the stages run for you instead, see **Hands-off: auto run** below.
-By hand, follow the **Next:** line at the end of each reply. The usual path:
-
-| Step | Pick agent / run | Say |
-|---|---|---|
-| 1 | `/start-task 86c1abcde invoice-export` | (sets up, then tells you to pick requirements) |
-| 2 | **requirements** | `Analyse 86c1abcde`. Answer its questions, then say "approved". |
-| 3 | **planner** | `Plan 86c1abcde`, then review `plan.md` |
-| 4 | **implementer** | `Build 86c1abcde`, then `Next slice` until all slices are done |
-| 5 | **verifier** | `Verify 86c1abcde`. FAIL goes back to the implementer. |
-| 6 | **reviewer** | `Review 86c1abcde`. Decide per finding; fixes loop back (see "Code review and tech debt"). |
-| 7 | **evidence** | `Capture evidence for 86c1abcde`, then review, tick and run `approve-evidence.sh` |
-| 8 | **shipper** | `Ship 86c1abcde`. Confirm the push when VS Code asks. |
-| 9 | `/fetch-review 86c1abcde` | When Duo has reviewed: hands over to review-responder |
-| 10 | **review-responder** | `Triage 86c1abcde`, then approve the table. It commits the fixes without pushing. |
-| 11 | **verifier**, then **review-responder** | `Re-verify 86c1abcde`, then `Push and reply 86c1abcde`. Confirm the push. |
-
-After `MAX_REVIEW_ROUNDS` Duo rounds, the fetch script stops and leaves the
-rest to you. Fetching the same set of threads again doesn't count as a new round. Picking a later agent too early is safe: each one checks that the
-earlier stages are done, and tells you what's missing.
-
-**Start a new chat for each stage** when you pick the next agent. The files
-carry the context, so each agent starts small instead of dragging the whole
-history along.
-
-## Hands-off: auto run
-
-Instead of picking each agent yourself, let the **pipeline** agent (the
-**orchestrator**) run the stages for you. It comes back to you only at a
-**stop**, where a decision is yours. The design is in ADR 0001.
+The way to run a task: the **pipeline** agent (the **orchestrator**) runs the
+stages for you. It comes back to you only at a **stop**, where a decision is
+yours. The design is in ADR 0001, and ADR 0002 makes it the main path. When an
+auto run can't be used, see "Manual mode (fallback)" below.
 
 **Don't use Auto in the model picker.** Under Auto, every stage runs on Auto's
 choice and ignores its pinned model. The orchestrator warns about this once per
@@ -303,9 +283,10 @@ can't use is ignored without any error, and that a model named on the subagent
 call is applied. Whether the pinned models hold on a paid plan still needs
 checking. On Copilot Free, the run works, but not on the pinned models.
 
-### Recommended settings (alerts)
+### Optional settings (alerts)
 
-A stop waits for you, so you may want an alert. The installer doesn't touch
+A stop waits for you, so you may want an alert. These are optional, and
+nothing in the pipeline depends on them. The installer doesn't touch
 `.vscode/settings.json`. Add these yourself if you want them:
 
 ```json
@@ -318,6 +299,35 @@ A stop waits for you, so you may want an alert. The installer doesn't touch
 **Unverified:** the spike didn't confirm whether these fire in Agent Host. A
 stop ends the orchestrator's turn; it isn't a confirm prompt, so these may
 alert you only for the guard's confirm prompts, not at a stop.
+
+## Manual mode (fallback)
+
+Use manual mode when an auto run can't be used: say a VS Code update breaks
+subagents or pinned models, or you want to drive one stage closely. You pick
+each stage agent yourself and follow the **Next:** line at the end of its
+reply. The usual path:
+
+| Step | Pick agent / run | Say |
+|---|---|---|
+| 1 | `/start-task 86c1abcde invoice-export` | (sets up, then tells you to pick requirements) |
+| 2 | **requirements** | `Analyse 86c1abcde`. Answer its questions, then say "approved". |
+| 3 | **planner** | `Plan 86c1abcde`, then review `plan.md` |
+| 4 | **implementer** | `Build 86c1abcde`, then `Next slice` until all slices are done |
+| 5 | **verifier** | `Verify 86c1abcde`. FAIL goes back to the implementer. |
+| 6 | **reviewer** | `Review 86c1abcde`. Decide per finding; fixes loop back (see "Code review and tech debt"). |
+| 7 | **evidence** | `Capture evidence for 86c1abcde`, then review, tick and run `approve-evidence.sh` |
+| 8 | **shipper** | `Ship 86c1abcde`. Confirm the push when VS Code asks. |
+| 9 | `/fetch-review 86c1abcde` | When Duo has reviewed: hands over to review-responder |
+| 10 | **review-responder** | `Triage 86c1abcde`, then approve the table. It commits the fixes without pushing. |
+| 11 | **verifier**, then **review-responder** | `Re-verify 86c1abcde`, then `Push and reply 86c1abcde`. Confirm the push. |
+
+After `MAX_REVIEW_ROUNDS` Duo rounds, the fetch script stops and leaves the
+rest to you. Fetching the same set of threads again doesn't count as a new round. Picking a later agent too early is safe: each one checks that the
+earlier stages are done, and tells you what's missing.
+
+**Start a new chat for each stage** when you pick the next agent. The files
+carry the context, so each agent starts small instead of dragging the whole
+history along.
 
 ## Hooks (enforced rules)
 
