@@ -16,7 +16,7 @@
 # Run via curl:       curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/TAG/install.sh | bash
 set -euo pipefail
 
-PIPELINE_VERSION="v1.2.0"
+PIPELINE_VERSION="v1.2.1"
 PIPELINE_REPO="${PIPELINE_REPO:-SuperEjay/copilot-delivery-pipeline}"
 MANIFEST=".github/agent-pipeline.manifest"
 BEGIN_MARK="<!-- BEGIN agent-pipeline (managed by install.sh; edits inside are replaced on update) -->"

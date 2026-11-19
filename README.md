@@ -38,7 +38,7 @@ git clone https://github.com/SuperEjay/copilot-delivery-pipeline.git /tmp/cdp
 /tmp/cdp/install.sh .
 
 # Option B: one line, pinned to a release
-curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.1/install.sh | bash
 ```
 
 Then follow the "Next steps" the installer prints: fill in `.agent.env`, export

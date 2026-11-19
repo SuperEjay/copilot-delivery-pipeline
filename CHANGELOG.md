@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## v1.2.1
+
+A fix to the pre-ship stop, and docs and code cleanups. To upgrade from v1.2.0, run `install.sh --update`; there are no other steps.
 
 - **The pre-ship approval covers `auto-decisions.md`.** The pre-ship stop asks you to review it, but a change to it after you approved didn't bring the stop back, so the shipper could ship on decisions you never saw. It's now part of the stop's checksum, and of the inputs that tell a stalled stage from one that has new work. A task already approved at pre-ship gets the stop once more after the update.
 - Docs: `--update` replaces everything between the `BEGIN/END agent-pipeline` markers in `.gitignore` and `.github/copilot-instructions.md`, so a line you add inside them is lost. The README and `docs/agent-pipeline.md` now say to keep your own lines outside the markers.
+- Cleanups in `scripts/agent/next-stage.sh`, with no behaviour change: the six-slice plan limit is one constant (`MAX_PLAN_SLICES`), the stage agents are one list (`STAGE_AGENTS`), one parser reads `Key:` lines, and some names are clearer. If you changed `next-stage.sh`, `--update` writes the new version next to it as `next-stage.sh.new` to merge.
 
 ## v1.2.0
 
