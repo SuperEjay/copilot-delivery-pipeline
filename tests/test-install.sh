@@ -7,6 +7,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 pass=0; fail=0
 check() { if eval "$2"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $1"; fi; }
 run() { "$ROOT/install.sh" --yes "$@" "$T/proj" > "$T/out.txt" 2>&1; }
+unset CLICKUP_API_TOKEN   # so doctor.sh, run at the end of each install, has a FAIL to report
 
 git init -q -b main "$T/proj"; cd "$T/proj"
 git config user.email t@t; git config user.name t
@@ -28,6 +29,9 @@ check "pipeline rules appended once" '[ "$(grep -c "BEGIN agent-pipeline" .githu
 check "gitignore kept + block added" 'grep -q node_modules .gitignore && grep -q "^.work/$" .gitignore'
 check ".agent.env created" '[ -f .agent.env ]'
 check "guard smoke test passed" 'grep -q "hook guard works" "$T/out.txt"'
+check "the installer ends by running doctor.sh" 'grep -q "^Checking the setup (scripts/agent/doctor.sh)" "$T/out.txt" && grep -qE "^(PASS|WARN|FAIL|INFO) " "$T/out.txt"'
+check "a FAIL from doctor.sh doesn't fail the install, and says to run it again" 'grep -q "^FAIL " "$T/out.txt" && grep -q "run scripts/agent/doctor.sh again" "$T/out.txt"'
+check "the installer has no guard test of its own (doctor.sh does it)" '! grep -q "permissionDecision" "$ROOT/install.sh"'
 
 # 2. second install refused
 run; check "reinstall refused" 'grep -q "already installed" "$T/out.txt"'

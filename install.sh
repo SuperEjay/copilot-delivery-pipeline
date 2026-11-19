@@ -241,24 +241,6 @@ else
   cp .agent.env.example .agent.env; ok "created .agent.env from the example: fill in your project's values"
 fi
 
-# ---------- dependencies ----------
-say ""
-say "Checking tools:"
-missing=0
-for t in git jq curl glab; do
-  if command -v "$t" >/dev/null 2>&1; then ok "$t"; else warn "$t is missing"; missing=$((missing + 1)); fi
-done
-if command -v npx >/dev/null 2>&1; then ok "node/npx"; else warn "node/npx is missing (needed for Playwright evidence and skills)"; fi
-for t in pdftotext pandoc; do command -v "$t" >/dev/null 2>&1 && ok "$t (optional)" || say "  - $t (optional) not found: attachments won't be converted to text"; done
-case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) warn "Windows detected: run the pipeline scripts from Git Bash or WSL." ;; esac
-
-# ---------- guard smoke test ----------
-if command -v jq >/dev/null 2>&1; then
-  d="$(jq -n --arg c "$TARGET" '{toolName:"bash",toolArgs:{command:"git push origin main"},cwd:$c}' \
-       | PIPELINE_GUARD=on scripts/agent/hooks/pre-tool-guard.sh | jq -r '.permissionDecision // "allow"')"
-  [ "$d" = deny ] && ok "hook guard works (a test 'git push' was blocked)" || warn "hook guard test failed: got '$d' instead of deny"
-fi
-
 # ---------- optional skills ----------
 if $SKILLS || { [ "$MODE" = install ] && confirm "Install the ponytail and caveman skills for Copilot now?"; }; then
   if command -v npx >/dev/null 2>&1; then
@@ -270,12 +252,21 @@ if $SKILLS || { [ "$MODE" = install ] && confirm "Install the ponytail and cavem
   fi
 fi
 
+# ---------- check the setup ----------
+# doctor.sh checks the tools, glab login, the token, .agent.env, line endings,
+# the hook guard and VS Code, and changes nothing. A FAIL doesn't fail the
+# install: the files are in place, and the setup steps below fix most FAILs.
+say ""
+say "Checking the setup (scripts/agent/doctor.sh):"
+doctor_failed=false
+bash scripts/agent/doctor.sh || doctor_failed=true
+
 say ""
 say "Done. Next steps:"
 say "  1. Fill in .agent.env (test commands, Duo username, ClickUp workspace ID)."
 say "  2. Export CLICKUP_API_TOKEN in your shell profile, and run 'glab auth login'."
 say "  3. Check the model names in .github/agents/*.agent.md match your Copilot model picker."
-say "  4. Fully quit and reopen VS Code, then type in Copilot Chat:  /start-task <clickup-id> <short-slug>"
+say "  4. Fully quit and reopen VS Code, pick the pipeline agent, then type in Copilot Chat:  /start-task <clickup-id> <short-slug>"
 say "Full guide: docs/agent-pipeline.md"
-[ "$missing" -gt 0 ] && say "Install the missing tools above before your first task."
+$doctor_failed && say "Fix the FAIL lines above, then run scripts/agent/doctor.sh again before your first task."
 exit 0

@@ -74,7 +74,7 @@ its reply with a **Next:** line naming the agent to pick and what to say, e.g.
 | `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then on to review-responder, or resumes the auto run when **pipeline** is picked |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
 | `.github/copilot-instructions.md` | Six short rules every agent follows (kept short on purpose: it's sent with every request) |
-| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, thread reply/resolve |
+| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, thread reply/resolve, and `doctor.sh`, which checks your setup |
 | `.agent.env.example` | Your test commands, Duo username, round limit, ClickUp workspace and status |
 
 **No MCP needed.** ClickUp goes through its REST API (`scripts/agent/clickup.sh`)
@@ -115,12 +115,17 @@ admin policy that blocks MCP servers doesn't affect any of this.
      the requirements agent works from a paste too.
 7. **Find Duo's username:** open any MR Duo has reviewed, check the author name
    on its comment, and put it in `DUO_USERNAMES`.
-8. **Fully quit and reopen VS Code.** The agents appear in the Copilot Chat
+8. **Check the setup:** run `scripts/agent/doctor.sh`. It checks the tools,
+   your `glab` login, that `CLICKUP_API_TOKEN` is exported (and in no file),
+   settings `.agent.env` doesn't set, line endings, the hook guard and your VS
+   Code version, one line each, and changes nothing. Fix every FAIL. Run it again
+   whenever something acts up, or when a teammate sets up.
+9. **Fully quit and reopen VS Code.** The agents appear in the Copilot Chat
    agent picker, and `/start-task` and `/fetch-review` appear when you type `/`.
    They're agent skills, not prompt files, because Copilot (Agent Host)
    sessions don't load prompt files. If they're missing, check that VS Code is
    open on the project's root folder.
-9. **Evidence screenshots (Playwright):**
+10. **Evidence screenshots (Playwright):**
    - If the repo doesn't have it yet: `npm i -D @playwright/test && npx playwright install chromium`.
    - Set `EVIDENCE_BASE_URL` and `EVIDENCE_START_CMD` in `.agent.env`.
    - If pages need a login, save a **test account's** session once:

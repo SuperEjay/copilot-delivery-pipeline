@@ -142,8 +142,7 @@ terminal) runs inside Linux.
 [WSL](#windows-with-wsl). The hook file (`.github/hooks/pipeline-guard.json`)
 has only a `bash` command, and it isn't known whether VS Code on Windows runs
 it. If it doesn't, the guard is off and nothing stops an agent from pushing or
-reading secrets. The last check in [First-time install](#first-time-install)
-tells you. The notes below are kept for anyone who tries it anyway.
+reading secrets. `scripts/agent/doctor.sh` fails on Git Bash for this reason. The notes below are kept for anyone who tries it anyway.
 
 1. In PowerShell, install the tools: `git`, `jq`, `glab` and Node.js (`node`).
    Git for Windows also brings Git Bash and `curl`.
@@ -194,10 +193,12 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.2/install.sh | bash
    ```
 
-3. Read the installer's output. Under **Checking tools**, install anything
-   marked missing. The last lines should include
-   `hook guard works (a test 'git push' was blocked)`.
-4. Configure the pipeline, following steps 4 to 9 of the guide's
+3. Read the installer's output. It ends by running `scripts/agent/doctor.sh`,
+   which prints one line per check: PASS, WARN, FAIL or INFO. The guard's line
+   should read `PASS  hook guard works (a test 'git push' was blocked)`. A FAIL
+   for the token or `.agent.env` is expected now: the next step fixes it. Run
+   `scripts/agent/doctor.sh` again after setup, until it shows no FAIL.
+4. Configure the pipeline, following steps 4 to 10 of the guide's
    [Setup](payload/docs/agent-pipeline.md#setup-about-15-minutes):
    - your test commands in `.agent.env` (the installer created it)
    - `export CLICKUP_API_TOKEN="pk_..."` in your shell profile (`~/.zshrc` on
@@ -272,8 +273,10 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    [Upgrading from v1.1.0](CHANGELOG.md#upgrading-from-v110).
 6. If the output lists settings your `.agent.env` doesn't set, copy the ones you
    want from `.agent.env.example`. The installer never writes `.agent.env`.
-7. Check the output for `hook guard works`, commit the updated pipeline files
-   (the same `git add` as in First-time install), and fully quit and reopen VS Code.
+7. Check the `doctor.sh` lines at the end of the output: fix any FAIL, then run
+   `scripts/agent/doctor.sh` until there's none. Commit the updated pipeline
+   files (the same `git add` as in First-time install), and fully quit and
+   reopen VS Code.
 
 ## Installer options
 
@@ -311,6 +314,7 @@ tests/test-task-state.sh  # checks that .work/<id>/state.env is read as data and
 tests/test-next-stage.sh  # checks the auto run's router: the next stage or stop for fixture .work/ folders
 tests/test-agents.sh      # checks the stage agents: subagent frontmatter, no handoffs, the "In an auto run" sections
 tests/test-orchestrator.sh  # checks the orchestrator (pipeline agent) against the router's verbs and stop ids
+tests/test-doctor.sh      # checks doctor.sh: each PASS, WARN and FAIL, with fake tools on PATH, and that it changes nothing
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release
