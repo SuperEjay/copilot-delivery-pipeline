@@ -61,7 +61,7 @@ st state_branch T1
 check "no BRANCH: one message, status 1" '[ $? -eq 1 ] && out "" && err "No BRANCH in .work/T1/state.env. start-task.sh writes it, so the file was changed by hand or is damaged."'
 for r in state_branch state_mr_iid state_review_round state_review_ids state_reviewed_sha; do
   st $r T9
-  check "$r: no state file is an error" '[ $? -eq 1 ] && out "" && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first."'
+  check "$r: no task state is an error" '[ $? -eq 1 ] && out "" && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first."'
 done
 
 # ---------- writers ----------
@@ -91,7 +91,7 @@ st state_init T3 $'feature/T3\nMR_IID=1'
 check "state_init refuses a branch with a newline" '[ $? -eq 1 ] && [ ! -e .work/T3/state.env ]'
 for w in "state_set_mr_iid T9 1" "state_set_review T9 1 2" "state_set_reviewed_sha T9 abc"; do
   st $w
-  check "${w%% *}: no state file is an error" '[ $? -eq 1 ] && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first." && [ ! -e .work/T9/state.env ]'
+  check "${w%% *}: no task state is an error" '[ $? -eq 1 ] && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first." && [ ! -e .work/T9/state.env ]'
 done
 
 # ---------- deprecated load_state / set_state, for scripts --update kept ----------
