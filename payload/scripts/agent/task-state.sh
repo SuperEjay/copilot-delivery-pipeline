@@ -102,23 +102,14 @@ state_set_reviewed_sha() {
   _state_put "$1" REVIEWED_SHA "$2"
 }
 
-# ---------- deprecated ----------
-# Kept so a script you changed, which --update keeps, still works. They parse
-# the file like the readers do. Use the functions above instead; these go in a
-# later release.
-
-# load_state <task>: set TASK, BRANCH, MR_IID, REVIEW_ROUND, REVIEW_IDS and
-# REVIEWED_SHA for the keys the file has. Exits the script if there's no file.
-load_state() {
-  local key value
-  _state_require_file "$1" || exit 1
-  for key in TASK BRANCH MR_IID REVIEW_ROUND REVIEW_IDS REVIEWED_SHA; do
-    if value="$(_state_get "$1" "$key")"; then printf -v "$key" '%s' "$value"; fi
-  done
+# ---------- removed ----------
+# load_state and set_state were removed in v2.0.0 (ADR 0002). These stubs stay
+# so a script you changed (which --update keeps) stops at the call with a
+# message, instead of running on with empty values: several pipeline scripts
+# run without set -e, where "command not found" would not stop them.
+_state_removed() {
+  echo "$1 was removed in v2.0.0. Use the state_* functions in scripts/agent/task-state.sh (see CHANGELOG.md, v2.0.0)." >&2
+  exit 1
 }
-
-# set_state <task> <KEY> <value>: exits the script if it can't write.
-set_state() {
-  { _state_require_file "$1" && _state_check "$1" "$2" "$3"; } || exit 1
-  _state_put "$1" "$2" "$3"
-}
+load_state() { _state_removed load_state; }
+set_state() { _state_removed set_state; }

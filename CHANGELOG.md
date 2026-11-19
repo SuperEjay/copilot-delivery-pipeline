@@ -3,6 +3,7 @@
 ## Unreleased
 
 - **Breaking: the stage agents have no handoffs** (ADR 0002). The `handoffs:` buttons only ever showed in the Local harness, which VS Code removes in February 2027, and never in Copilot (Agent Host) sessions. In manual mode, move on with each agent's **Next:** line, as before; the agents' steps that said "use the handoff" now point to the matching **Next:** line. If you changed an agent file, `--update` keeps yours and writes the new one next to it as `<file>.new`: drop its `handoffs:` block when you merge. `tests/test-agents.sh` now fails on any stage agent with a `handoffs:` block.
+- **Breaking: `load_state` and `set_state` are removed** (ADR 0002), deprecated since v1.2.0. No pipeline script calls them. If a script you changed still does, switch it to the `state_*` functions in `scripts/agent/task-state.sh`: `state_branch`, `state_mr_iid`, `state_review_round`, `state_review_ids` and `state_reviewed_sha` to read; `state_init`, `state_set_mr_iid`, `state_set_review` and `state_set_reviewed_sha` to write. A call to either name now stops the script with exit code 1 and a message saying so. It doesn't rely on bash's "command not found", which wouldn't stop a script without `set -e`, such as `review-signals.sh` or `run-checks.sh`, so it would run on with empty values.
 
 ## v1.2.2
 
