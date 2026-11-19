@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## v2.0.0-rc.1
+
+A release candidate for v2 (ADR 0002): the auto run is the main path, with manual mode as the fallback, ahead of VS Code removing the Local harness in February 2027. It's a GitHub pre-release: the README still installs v1.2.2. v2.0.0 follows once pinned models are checked on a paid Copilot plan (#67).
+
+### Upgrading to v2
+
+1. Be on v1.2.0 or later. From an older install, update to v1.2.2 first: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.2/install.sh | bash -s -- --update`. `--update` refuses anything older, even with `--force`.
+2. Run `install.sh --update` from this release, for example `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.0.0-rc.1/install.sh | bash -s -- --update --version v2.0.0-rc.1`.
+3. Merge each `<file>.new` it reports into the file you changed. In an agent file, drop the `handoffs:` block: the agents have none now.
+4. If you changed a pipeline script, check it doesn't call `load_state` or `set_state`. They now stop the script; use the `state_*` functions in `scripts/agent/task-state.sh` (listed below).
+5. On Windows, move to WSL: Git Bash is unsupported.
+6. Run `scripts/agent/doctor.sh` and fix every FAIL.
+
+Tasks you started on v1.2.x carry on: their `.work/<id>/` files are read as before.
+
+### Changes
 
 - **Breaking: the stage agents have no handoffs** (ADR 0002). The `handoffs:` buttons only ever showed in the Local harness, which VS Code removes in February 2027, and never in Copilot (Agent Host) sessions. In manual mode, move on with each agent's **Next:** line, as before; the agents' steps that said "use the handoff" now point to the matching **Next:** line. If you changed an agent file, `--update` keeps yours and writes the new one next to it as `<file>.new`: drop its `handoffs:` block when you merge. `tests/test-agents.sh` now fails on any stage agent with a `handoffs:` block.
 - **Breaking: `load_state` and `set_state` are removed** (ADR 0002), deprecated since v1.2.0. No pipeline script calls them. If a script you changed still does, switch it to the `state_*` functions in `scripts/agent/task-state.sh`: `state_branch`, `state_mr_iid`, `state_review_round`, `state_review_ids` and `state_reviewed_sha` to read; `state_init`, `state_set_mr_iid`, `state_set_review` and `state_set_reviewed_sha` to write. A call to either name now stops the script with exit code 1 and a message saying so. It doesn't rely on bash's "command not found", which wouldn't stop a script without `set -e`, such as `review-signals.sh` or `run-checks.sh`, so it would run on with empty values.
@@ -10,6 +25,8 @@
 - `tests/test-install.sh` installs the real v1.1.0, v1.2.0, v1.2.1 and v1.2.2 releases with their own installers and updates each with the current one: v1.1.0 (with and without `--force`) and a manifest with no readable version are refused without changing a file, and each v1.2.x updates. The checks on kept files and `.new` copies now run on a v1.2.2 install instead of v1.1.0.
 - **The run log.** `next-stage.sh` appends one line to `.work/<id>/run.log` for each decision it prints and each approval it records: `<UTC time> <run|stop|end|approve> <agent or stop id, - for end> round=<n>/<max> head=<short HEAD>` (ADR 0002). A refused approval adds nothing. The file isn't one of the run's inputs, so writing it never hides a stalled stage. A task started on v1.2.x has no run log yet; it starts with the next decision. The hook guard protects it like `status.md`: agents may read it, but edit tools and shell writes are denied. A product file named `run.log` elsewhere stays editable.
 - **`install.sh` run by a relative path installs from its clone.** Run as `./install.sh /path/to/project`, it looked for its clone only after moving into the project, where `./install.sh` no longer pointed anywhere. So it downloaded the release named in the script from GitHub instead of using the clone's `payload/`, or failed with no network. It now finds its clone first. An absolute path, such as the README's `/tmp/cdp/install.sh .`, and `curl … | bash` work as before.
+- **`scripts/agent/doctor.sh` checks a setup and changes nothing.** One line per check, PASS, WARN, FAIL or INFO: the required tools (`git`, `curl`, `jq`, `glab`, `node`, `npx`) and the optional ones, `glab` logged in, `CLICKUP_API_TOKEN` exported and its value in no tracked file and not in `.agent.env`, settings `.agent.env` doesn't set, CRLF line endings in `scripts/agent/`, the hook guard blocking a test `git push` (and `PIPELINE_GUARD=off`), VS Code 1.106 or later, and Windows with Git Bash. It exits 1 on any FAIL and never prints the token. Pinned models can't be checked by a script, so it says how to check them by hand. The installer runs it at the end, in place of its own tool list and guard test; a FAIL there doesn't fail the install. New `tests/test-doctor.sh`.
+- Docs: the README and `docs/agent-pipeline.md` lead with the auto run. The guide's sections are now "Daily use: auto run" and "Manual mode (fallback)" (were "Hands-off: auto run" and "Daily use: stage by stage"). Windows with Git Bash is marked unsupported, WSL is the supported way, and the alert settings are optional.
 
 ## v1.2.2
 
