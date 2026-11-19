@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.0.0-rc.2
+
+The second v2 release candidate, with one installer fix. To upgrade, follow "Upgrading to v2" under v2.0.0-rc.1, with `v2.0.0-rc.2` in place of `v2.0.0-rc.1`. From v2.0.0-rc.1, run `install.sh --update --version v2.0.0-rc.2`; there are no other steps.
+
+- **`curl … | bash` runs the whole installer again.** Piped from curl, the installer reads its own script from stdin, and `npx skills add` (for the optional skills, which `--yes` turns on) read the rest of it, so everything after the skills step silently never ran: in v2.0.0-rc.1 that's the `doctor.sh` check and the "Done. Next steps" lines. `npx` and `doctor.sh` now get no stdin. `tests/test-install.sh` pipes the installer into bash with an `npx` and a `glab` that read stdin, and checks it reaches the end.
+
 ## v2.0.0-rc.1
 
 A release candidate for v2 (ADR 0002): the auto run is the main path, with manual mode as the fallback, ahead of VS Code removing the Local harness in February 2027. It's a GitHub pre-release: the README still installs v1.2.2. v2.0.0 follows once pinned models are checked on a paid Copilot plan (#67).
