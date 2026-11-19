@@ -258,6 +258,13 @@ starts with `AUTO RUN`. Run by hand, the agents work as before. In an auto run:
   `Fix round: <n>/<max>`, and an `Approved <stop>:` line per approval. Only
   `next-stage.sh` writes it. Agents may read it, and the guard denies them any
   change to it, so an agent can't approve a stop.
+- **`.work/<id>/run.log`:** the **run log**: one line for each decision
+  `next-stage.sh` prints and each stop you approve, oldest first, for example
+  `2026-11-19T10:02:11Z stop requirements round=0/2 head=4f2a91c`. Each line has
+  the time (UTC), `run`, `stop`, `end` or `approve`, the agent or stop (`-` for
+  an end), the fix round and the commit. Read it to see how a run got where it
+  is. Only `next-stage.sh` writes it, and agents can't change it. It has no
+  token or model counts: Copilot doesn't give them to scripts.
 - **`.work/<id>/auto-decisions.md`:** each **auto-decision**: what the pipeline
   decided for you, when, why and under which rule. A plan that went on without
   a stop has an entry, and so does each review finding the reviewer decided.
@@ -323,7 +330,7 @@ instructions into enforcement:
 | **Ask you** | Anything that publishes: `create-mr.sh`, `push-branch.sh`, `upload-evidence.sh`, and `clickup.sh comment / status / attach`. VS Code shows a confirm prompt, which is your final go-ahead. |
 | **Deny** | Running `approve-evidence.sh`, or touching `evidence/APPROVED`, `evidence/UPLOADED` or `verified-head` |
 | **Deny** | Running `next-stage.sh` from a subagent, however it's spelled (quoted, through a variable or a glob, piped into a shell). Only the orchestrator runs the auto run's router, so a stage agent can't approve a stop itself. Reading it with `cat`, `grep` or `git diff` is fine. |
-| **Deny** | Changing `.work/<id>/state.env` (the task state) or `.work/<id>/status.md` (the auto run's record, including stop approvals) through edit tools or the shell. Agents may read them; only the scripts write them. |
+| **Deny** | Changing `.work/<id>/state.env` (the task state), `.work/<id>/status.md` (the auto run's record, including stop approvals) or `.work/<id>/run.log` (the run log) through edit tools or the shell. Agents may read them; only the scripts write them. |
 | **Deny** | Sourcing the pipeline's scripts (`source scripts/agent/config.sh`, `. scripts/agent/ship-gate.sh`…). Their functions would record a verified commit, approve evidence or change the task state without the scripts' checks. Agents run the scripts instead. |
 | **Deny** | Reading or printing secrets: token variables, `printenv`/`env`, `.auth/` sessions, `~/.ssh`, `.netrc`, `.npmrc`, literal `pk_`/`glpat-` tokens |
 | **Deny** | Destructive git: force push, remote branch delete, `reset --hard`, `clean -f`, `branch -D`, `checkout -- .`, `--no-verify` |

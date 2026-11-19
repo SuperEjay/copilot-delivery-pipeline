@@ -75,7 +75,8 @@
 # run is the planner updating plan.md for changed requirements, approving it
 # keeps the plan as it is. The script writes all this to status.md (Key: value
 # lines, read as data, never sourced) and owns that file; the orchestrator only
-# reads it.
+# reads it. It also appends one line per decision and approval to the run log,
+# run.log (see log_run).
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
@@ -439,6 +440,16 @@ write_status() {
   mv "$STATUS.tmp" "$STATUS"
 }
 
+# ---------- run.log writer ----------
+# One line per decision printed and per approval recorded (ADR 0002), only ever
+# appended: "<UTC time> <run|stop|end|approve> <agent or stop id, - for end>
+# round=<n>/<max> head=<short HEAD>". Not one of the run's INPUTS, so writing it
+# never hides a stalled stage.
+log_run() {
+  printf '%s %s %s round=%s/%s head=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "${2:--}" \
+    "$NEW_ROUND" "$MAX_AUTO_FIX_ROUNDS" "$(git rev-parse --short HEAD 2>/dev/null || echo none)" >> "$DIR/run.log"
+}
+
 # Approvals: one fingerprint per stop id.
 # A plain list of "<stop-id>: <fingerprint>" lines: bash 3.2 (macOS) has no
 # associative arrays.
@@ -472,6 +483,7 @@ if [ "$CMD" = approve ]; then
   fi
   LINE="$(_status_value "Last decision")"
   write_status
+  log_run approve "$WHAT"
   echo "Approved the $WHAT stop."
   exit 0
 fi
@@ -482,5 +494,6 @@ case "$VERB" in
   end)  LINE="end $TEXT" ;;
 esac
 write_status
+log_run "$VERB" "$WHAT"
 [ -n "$AUTO_PLAN" ] && record_auto_plan "$AUTO_PLAN"
 echo "$LINE"

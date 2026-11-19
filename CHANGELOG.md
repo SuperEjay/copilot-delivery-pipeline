@@ -8,6 +8,7 @@
 - **A task started on v1.2.x carries on after the update.** Its `.work/<id>/` files are read as before. `tests/test-next-stage.sh` runs v1.2.2's own router up to an approved requirements stop, then the current one, which moves on to the planner.
 - `next-stage.sh` no longer has a separate check for a task started before auto run. A `plan.md` with no `## Stop flags` heading is now the same plan stop as one missing a line: it names the missing line, and the planner adds it.
 - `tests/test-install.sh` installs the real v1.1.0, v1.2.0, v1.2.1 and v1.2.2 releases with their own installers and updates each with the current one: v1.1.0 (with and without `--force`) and a manifest with no readable version are refused without changing a file, and each v1.2.x updates. The checks on kept files and `.new` copies now run on a v1.2.2 install instead of v1.1.0.
+- **The run log.** `next-stage.sh` appends one line to `.work/<id>/run.log` for each decision it prints and each approval it records: `<UTC time> <run|stop|end|approve> <agent or stop id, - for end> round=<n>/<max> head=<short HEAD>` (ADR 0002). A refused approval adds nothing. The file isn't one of the run's inputs, so writing it never hides a stalled stage. A task started on v1.2.x has no run log yet; it starts with the next decision. The hook guard protects it like `status.md`: agents may read it, but edit tools and shell writes are denied. A product file named `run.log` elsewhere stays editable.
 
 ## v1.2.2
 

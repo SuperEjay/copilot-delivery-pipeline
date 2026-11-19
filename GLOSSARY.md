@@ -45,7 +45,7 @@ The scripts' record of a task in `.work/<id>/state.env`: its branch, merge reque
 _Avoid_: state file, task env
 
 **Run log**:
-The router's record of an auto run in `.work/<id>/run.log`: one line for each decision and each approval. Only the router writes it.
+The router's record of an auto run in `.work/<id>/run.log`: one line for each decision it prints and each approval it records, only ever appended. Only the router writes it; it is not one of the inputs that tell a stalled stage.
 _Avoid_: history, audit log, trace
 
 **Manual mode**:
