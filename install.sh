@@ -19,6 +19,8 @@ set -euo pipefail
 PIPELINE_VERSION="v1.2.2"
 PIPELINE_REPO="${PIPELINE_REPO:-SuperEjay/copilot-delivery-pipeline}"
 MANIFEST=".github/agent-pipeline.manifest"
+UPDATE_FROM="v1.2.0"         # --update refuses an older install (ADR 0002)
+UPDATE_VIA="v1.2.2"          # ... and says to update to this release first
 BEGIN_MARK="<!-- BEGIN agent-pipeline (managed by install.sh; edits inside are replaced on update) -->"
 END_MARK="<!-- END agent-pipeline -->"
 GI_BEGIN="# BEGIN agent-pipeline"
@@ -82,6 +84,27 @@ if [ "$MODE" = uninstall ]; then
   say ""
   say "Done. Kept: .agent.env (your settings) and .work/ (task folders). Delete them yourself if you no longer need them."
   exit 0
+fi
+
+# ---------- the oldest install --update accepts ----------
+# The manifest's first line, written by every installer since v1.0.0, is
+# "# agent-pipeline <version> installed <time>". --force doesn't skip this:
+# an update from an older release is the path v2 dropped. It runs before the
+# payload is downloaded, so a refused update touches nothing.
+# minor_at_least <version> <floor>: vX.Y[.Z][-suffix] is at or above the floor's X.Y.
+minor_at_least() {
+  local v="${1#v}" f="${2#v}" vmaj vmin fmaj fmin
+  vmaj="${v%%.*}"; vmin="${v#*.}"; vmin="${vmin%%[.-]*}"
+  fmaj="${f%%.*}"; fmin="${f#*.}"; fmin="${fmin%%[.-]*}"
+  case "$vmaj.$vmin" in *[!0-9.]*|.*|*.) return 2 ;; esac
+  [ "$vmaj" -gt "$fmaj" ] || { [ "$vmaj" -eq "$fmaj" ] && [ "$vmin" -ge "$fmin" ]; }
+}
+if [ "$MODE" = update ] && [ -f "$MANIFEST" ]; then
+  installed="$(head -n1 "$MANIFEST" | sed -n 's/^# agent-pipeline \(v[^ ]*\) installed.*/\1/p')"
+  rc=0; [ -n "$installed" ] && { minor_at_least "$installed" "$UPDATE_FROM" || rc=$?; } || rc=2
+  first_step="Update to $UPDATE_VIA first: curl -fsSL https://raw.githubusercontent.com/$PIPELINE_REPO/$UPDATE_VIA/install.sh | bash -s -- --update (or install.sh --update from a $UPDATE_VIA clone), then run this update again."
+  [ "$rc" -eq 2 ] && die "Not updating: can't tell which version is installed (the first line of $MANIFEST should read '# agent-pipeline <version> installed …'). $first_step"
+  [ "$rc" -ne 0 ] && die "Not updating: this install is $installed, and this release updates only from $UPDATE_FROM or later. $first_step"
 fi
 
 # ---------- get the payload ----------

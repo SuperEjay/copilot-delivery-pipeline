@@ -19,8 +19,7 @@
 #
 # Exit 0 for any decision. Exit 1 with the reason on stderr when it can't
 # decide (no task state yet: run /start-task first; a stage agent has no
-# "## In an auto run" section; plan.md has no "## Stop flags" heading, so the
-# task predates auto run and goes on stage by stage), or when approve refuses:
+# "## In an auto run" section), or when approve refuses:
 # no stop is pending, the stop changed since it was shown, a file needs fixing,
 # a review finding has no decision, or the evidence isn't approved at HEAD.
 #
@@ -104,9 +103,8 @@ PLAN_UPDATE="Requirements for $TASK changed; update plan.md."   # the planner's 
 # ---------- before deciding: can this task use an auto run at all? ----------
 # A stage agent without its "## In an auto run" section (a file you changed,
 # which install.sh --update keeps) writes none of the lines read below, so
-# every plan would hit a stop no approval passes. So does a plan.md from
-# before auto run, which has no "## Stop flags" heading at all. Neither is a
-# stop: the run can't start until it's fixed.
+# every plan would hit a stop no approval passes. That isn't a stop: the run
+# can't start until it's fixed.
 for _agent in $STAGE_AGENTS; do
   _af=".github/agents/$_agent.agent.md"
   grep -qx '## In an auto run' "$REPO_ROOT/$_af" 2>/dev/null && continue
@@ -119,10 +117,6 @@ for _agent in $STAGE_AGENTS; do
   echo "$_af $_what, so an auto run can't use it. $_fix Until then, run the stages yourself." >&2
   exit 1
 done
-if [ -f "$DIR/plan.md" ] && ! grep -qx '## Stop flags' "$DIR/plan.md"; then
-  echo "$TASK was started before auto run ($REL/plan.md has no '## Stop flags' heading). Finish it stage by stage; auto run works for tasks you start from now on." >&2
-  exit 1
-fi
 
 # ---------- Key: value lines, parsed, never sourced ----------
 # _last_value <file> <prefix> [section]: the rest of the last line that starts
