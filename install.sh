@@ -245,8 +245,8 @@ fi
 if $SKILLS || { [ "$MODE" = install ] && confirm "Install the ponytail and caveman skills for Copilot now?"; }; then
   if command -v npx >/dev/null 2>&1; then
     say ""
-    npx -y skills add DietrichGebert/ponytail -a github-copilot && ok "ponytail" || warn "ponytail install failed: install it later"
-    npx -y skills add JuliusBrussee/caveman -a github-copilot && ok "caveman" || warn "caveman install failed: install it later"
+    npx -y skills add DietrichGebert/ponytail -a github-copilot </dev/null && ok "ponytail" || warn "ponytail install failed: install it later"
+    npx -y skills add JuliusBrussee/caveman -a github-copilot </dev/null && ok "caveman" || warn "caveman install failed: install it later"
   else
     warn "skipped skills: npx is missing"
   fi
@@ -259,7 +259,7 @@ fi
 say ""
 say "Checking the setup (scripts/agent/doctor.sh):"
 doctor_failed=false
-bash scripts/agent/doctor.sh || doctor_failed=true
+bash scripts/agent/doctor.sh </dev/null || doctor_failed=true
 
 say ""
 say "Done. Next steps:"

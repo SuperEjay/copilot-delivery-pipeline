@@ -81,6 +81,21 @@ check "relative-path run exits 0" '[ $? -eq 0 ]'
 check "relative-path run doesn't download" '! grep -q "Downloading" "$T/out.txt"'
 check "relative-path run installs the clone's payload" 'cmp -s "$T/rel/.github/agents/pipeline.agent.md" "$ROOT/payload/.github/agents/pipeline.agent.md"'
 
+# 7c. piped like curl | bash: the script arrives on stdin, so no step may read
+# stdin, or it eats the rest of the script. A fake npx that reads stdin (as the
+# real one can) and a fake curl that serves this clone's payload as the release.
+git init -q -b main "$T/piped"; git -C "$T/piped" commit -q --allow-empty -m init
+mkdir -p "$T/pipebin" "$T/rel-src/copilot-delivery-pipeline-x"
+cp -r "$ROOT/install.sh" "$ROOT/VERSION" "$ROOT/payload" "$T/rel-src/copilot-delivery-pipeline-x/"
+tar -czf "$T/release.tgz" -C "$T/rel-src" copilot-delivery-pipeline-x
+printf '#!/bin/sh\ncat "%s"\n' "$T/release.tgz" > "$T/pipebin/curl"
+printf '#!/bin/sh\ncat > /dev/null\nexit 0\n' > "$T/pipebin/npx"
+printf '#!/bin/sh\ncat > /dev/null\nexit 1\n' > "$T/pipebin/glab"
+chmod +x "$T/pipebin/curl" "$T/pipebin/npx" "$T/pipebin/glab"
+(cd "$T/piped" && PATH="$T/pipebin:$PATH" bash -s -- --yes --with-skills < "$ROOT/install.sh") > "$T/out.txt" 2>&1
+check "piped install: the skills step doesn't eat the rest of the script" 'grep -q "^Checking the setup (scripts/agent/doctor.sh)" "$T/out.txt"'
+check "piped install: doctor.sh doesn't eat it either, the install reaches Done" 'grep -q "^Done. Next steps:" "$T/out.txt"'
+
 # ---------- 8. updates accept v1.2.x and later only (ADR 0002) ----------
 version="$(cat "$ROOT/VERSION")"
 # old_install <tag> <dir>: a real install of that release, by its own installer.
