@@ -46,6 +46,7 @@ We want a task to move through the pipeline without the user picking the next ag
   4. **`copilot-instructions.md` reached a subagent only with `include-custom-instructions: true`.** The two subagents compared ran on different models, so this result is indicative, not clean.
   5. **The hook input names subagents, not the top-level agent.** A subagent's call carries `agentId`, `agentType` and `parentAgentId`; a top-level call carries none of them.
   6. **Alerts: unverified.**
+- **Installs from before auto run don't run it as they are.** A task started at v1.1.0 has no Stop flags, and an agent file the user changed (which `--update` keeps) has no auto-run section, so `next-stage.sh` refuses both up front instead of stopping. The upgrade steps are in the CHANGELOG under "Upgrading from v1.1.0" and in the README.
 - **Agent Host lists every custom agent twice in `task`:** once by name and once as `vscode-agent-<hash>` (microsoft/vscode#345479). The orchestrator calls stages by name.
 
 ## Sources (checked 2026-11-18)

@@ -47,11 +47,18 @@ Then follow the "Next steps" the installer prints: fill in `.agent.env`, export
 | Command | What it does |
 |---|---|
 | `install.sh [dir]` | Install into a project |
-| `install.sh --update [dir]` | Update to this version. Files you changed are kept and reported. |
+| `install.sh --update [dir]` | Update to this version. Files you changed are kept, with the new version next to each as `<file>.new` to merge. |
 | `install.sh --update --force [dir]` | Update and replace changed files (your versions saved as `.bak`) |
 | `install.sh --uninstall [dir]` | Remove the pipeline. Keeps `.agent.env` and `.work/`. |
 | `install.sh --with-skills` | Also install the ponytail and caveman skills for Copilot |
 | `install.sh --yes` | No questions asked |
+
+**Upgrading from v1.1.0:**
+
+1. Run `install.sh --update`.
+2. Merge each `<file>.new` it reports into the file you changed (or re-run with `--force` to take the new version; yours is kept as `.bak`). An auto run needs every stage agent's `## In an auto run` section, and `next-stage.sh` names any agent file that lacks it.
+3. Finish tasks you started before the update stage by stage. Their `plan.md` has no `## Stop flags`, so `next-stage.sh` won't run them.
+4. Optional: add `MAX_AUTO_FIX_ROUNDS` (default 2) to `.agent.env`. `--update` lists every setting in `.agent.env.example` that your `.agent.env` doesn't set, and never writes the file.
 
 **What the installer touches:**
 - **Pipeline files** (listed with fingerprints in `.github/agent-pipeline.manifest`):
