@@ -5,6 +5,11 @@
 # Counts review rounds and refuses past MAX_REVIEW_ROUNDS unless --force.
 # A fetch that returns the same set of threads as the last one is the same
 # round, so running this twice for one review doesn't use up a round.
+#
+# For an MR review (task mr-<iid>, ADR 0003) it writes .work/mr-<iid>/threads.json
+# instead: every author's open threads (unresolved ones, and plain comments,
+# not system notes), for the reviewer to read first. DUO_USERNAMES doesn't
+# filter them, and no round is counted.
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 require glab jq
@@ -13,6 +18,30 @@ TASK="${1:?usage: fetch-duo-review.sh <task-id> [--force]}"
 FORCE="${2:-}"
 DIR="$(task_dir "$TASK")"
 MR_IID="$(state_mr_iid "$TASK")" || exit 1
+
+# trimmed: the jq filter that keeps what an agent needs from one discussion.
+TRIM='{
+    id,
+    author: .notes[0].author.username,
+    resolvable: (.notes[0].resolvable == true),
+    file: (.notes[0].position.new_path // .notes[0].position.old_path),
+    line: (.notes[0].position.new_line // .notes[0].position.old_line),
+    body: .notes[0].body,
+    replies: [ .notes[1:][] | {author: .author.username, body: (.body | .[0:400])} ]
+  }'
+
+if [ "$(state_kind "$TASK")" = MR_REVIEW ]; then
+  OUT="$DIR/threads.json"
+  TMP="$OUT.tmp"; trap 'rm -f "$TMP"' EXIT
+  glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=100" \
+  | jq -s "[ (add // [])[]
+            | select((.notes[0].system == true) | not)
+            | select(if .notes[0].resolvable == true then (.notes[0].resolved | not) else true end)
+            | $TRIM ]" > "$TMP"
+  mv "$TMP" "$OUT"
+  echo "$(jq 'length' "$OUT") open thread(s) from every author in ${OUT#"$REPO_ROOT"/}"
+  exit 0
+fi
 LAST_ROUND="$(state_review_round "$TASK")"
 LAST_IDS="$(state_review_ids "$TASK")"
 
