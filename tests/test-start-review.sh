@@ -112,5 +112,55 @@ mkdir -p .work/mr-5; cp .work/T1/state.env .work/mr-5/state.env
 spec 5 86abc
 check "set-review-spec.sh refuses a delivery task" '[ $rc -eq 1 ] && grep -q "isn.t an MR review" "$T/out.txt" && ! grep -q CLICKUP_ID .work/mr-5/state.env'
 
+# ---------- dependencies in the review worktree (#80) ----------
+# The user's checkout has installed dependencies for its lockfile. INSTALL_CMD
+# is a stub that records where it ran and how often.
+git switch -q main   # start-task.sh switched to T1's branch
+echo '{"lock":1}' > package-lock.json; git add package-lock.json; git commit -qm lock; git push -q origin main
+mkdir -p node_modules/dep; echo main > node_modules/dep/index.js
+cat > .agent.env <<'EOF'
+LINT_CMD='pwd > "$STUB/lint-dir"; [ -f node_modules/dep/index.js ]'
+TYPECHECK_CMD=
+UNIT_CMD='false'
+INTEGRATION_CMD=
+E2E_CMD=
+INSTALL_CMD='pwd >> "$STUB/installs"; mkdir -p node_modules/dep && echo fresh > node_modules/dep/index.js'
+EOF
+: > "$STUB/installs"
+mr_push 11 eleven main
+mr 11 opened; review 11
+check "same lockfile: node_modules is linked from the main checkout, no install" '[ $rc -eq 0 ] && [ -L "$WT/mr-11/node_modules" ] && [ "$(cat "$WT/mr-11/node_modules/dep/index.js")" = main ] && [ ! -s "$STUB/installs" ]'
+check "it says the dependencies are linked" 'grep -q "Dependencies: linked" "$T/out.txt"'
+
+# the author changes the lockfile
+git -C "$T/proj" worktree add -q --detach "$T/fork" "$(cat "$T/head-11")"
+echo '{"lock":2}' > "$T/fork/package-lock.json"; git -C "$T/fork" commit -qam "bump dep"
+git -C "$T/fork" push -q origin "HEAD:refs/merge-requests/11/head" --force; git -C "$T/proj" worktree remove --force "$T/fork"
+review 11
+check "a changed lockfile: INSTALL_CMD runs in the worktree, the link is replaced" '[ $rc -eq 0 ] && [ "$(cat "$STUB/installs")" = "$WT/mr-11" ] && [ ! -L "$WT/mr-11/node_modules" ] && [ "$(cat "$WT/mr-11/node_modules/dep/index.js")" = fresh ]'
+check "the main checkout's node_modules is untouched" '[ ! -L node_modules ] && [ "$(cat node_modules/dep/index.js)" = main ]'
+check "the install log is kept" 'grep -q "Dependencies: installed" "$T/out.txt" && [ -f .work/mr-11/logs/install.log ]'
+review 11
+check "the same lockfile again: no second install" '[ $rc -eq 0 ] && [ "$(wc -l < "$STUB/installs")" -eq 1 ]'
+sed -i "s|^INSTALL_CMD=.*|INSTALL_CMD='echo npm ERR boom; exit 3'|" .agent.env
+echo '{"lock":3}' > "$T/lock3"
+git -C "$T/proj" worktree add -q --detach "$T/fork" "$(git -C "$WT/mr-11" rev-parse HEAD)"
+cp "$T/lock3" "$T/fork/package-lock.json"; git -C "$T/fork" commit -qam "bump again"
+git -C "$T/fork" push -q origin "HEAD:refs/merge-requests/11/head" --force; git -C "$T/proj" worktree remove --force "$T/fork"
+review 11
+check "a failed install stops the review, pointing at its log" '[ $rc -eq 1 ] && grep -q "INSTALL_CMD failed" "$T/out.txt" && grep -q ".work/mr-11/logs/install.log" "$T/out.txt"'
+
+# ---------- run-checks.sh in an MR review: the worktree, no verified commit ----------
+sed -i "s|^INSTALL_CMD=.*|INSTALL_CMD='true'|" .agent.env
+$S/run-checks.sh mr-11 all > "$T/out.txt" 2>&1; rc=$?
+check "run-checks.sh runs an MR review's checks in its worktree" '[ "$(cat "$STUB/lint-dir")" = "$WT/mr-11" ] && grep -q "^PASS  lint" "$T/out.txt"'
+check "a failing check still fails the run" '[ $rc -eq 1 ] && grep -q "^FAIL  unit" "$T/out.txt"'
+sed -i "s|^UNIT_CMD=.*|UNIT_CMD=true|" .agent.env
+$S/run-checks.sh mr-11 all > "$T/out.txt" 2>&1; rc=$?
+check "a passing full run records no verified commit in an MR review" '[ $rc -eq 0 ] && [ ! -e .work/mr-11/verified-head ] && ! grep -q "^VERIFIED" "$T/out.txt"'
+check "it says which commit it checked" 'grep -q "^CHECKED $(git -C "$WT/mr-11" rev-parse HEAD)" "$T/out.txt"'
+$S/run-checks.sh T1 lint > "$T/out.txt" 2>&1
+check "a delivery task's checks still run in the main checkout" '[ "$(cat "$STUB/lint-dir")" = "$PWD" ]'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

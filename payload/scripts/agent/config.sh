@@ -25,6 +25,7 @@ fi
 : "${EVIDENCE_START_CMD=}"
 : "${EVIDENCE_STORAGE_STATE:=}"
 : "${EVIDENCE_VIEWPORT:=1440x900}"
+: "${INSTALL_CMD=npm ci}"
 : "${MR_REVIEW_MAX_FILES:=40}"
 : "${MR_REVIEW_SKIP_PATTERN:=(^|/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Gemfile\.lock|poetry\.lock|Cargo\.lock|composer\.lock|go\.sum)$|\.min\.(js|css)$|\.map$|\.snap$|(^|/)(dist|build|__generated__)/}"
 

@@ -10,6 +10,8 @@
   - **focus**: only when the MR changes more than `MR_REVIEW_MAX_FILES` files. That's a new setting, default 40. Files matching the new `MR_REVIEW_SKIP_PATTERN`, lockfiles and generated files by default, don't count. Your choice goes in `focus.md`. Approving without one reviews the files with the most churn.
   - **findings**: always. Approving it needs post, debt or skip on every finding. A posted finding gets a `- **Thread:**` line in `code-review.md`, which doesn't bring this stop back.
 - `start-review.sh` also stores the MR's target branch (`state_target_branch`) and fetches it: the router counts the MR's files from there. New `scripts/agent/set-review-spec.sh <iid> <clickup-id>` stores the ClickUp id you give at the spec stop and changes nothing else. The requirements agent runs it.
+- **MR review, part 3: dependencies and checks in the review worktree** (ADR 0003, #80). When the worktree's lockfiles match your checkout's, `start-review.sh` links its `node_modules` to yours. When the MR changes a lockfile, it runs the new `INSTALL_CMD` setting (default `npm ci`) in the worktree instead. It installs once per lockfile version and logs to `.work/mr-<iid>/logs/install.log`. A failed install stops the review with the log's last lines. With `INSTALL_CMD` empty, nothing is installed.
+- `run-checks.sh <task-id>` runs an MR review's checks in its review worktree: the task kind picks the folder, so a review's checks can't run on your HEAD by mistake. It records no verified commit there and prints `CHECKED <sha>` with the commit it checked. Delivery tasks run as before.
 
 ## v2.0.0
 

@@ -10,6 +10,9 @@
 # Only one line per check plus the failing lines is printed, so an agent's
 # context gets the verdict instead of thousands of lines of test output.
 # Exit code: 0 all passed, 1 something failed, 2 bad arguments.
+#
+# In an MR review (ADR 0003) the checks run in the review worktree, on the MR's
+# head, and nothing is recorded: it prints "CHECKED <sha>", the commit checked.
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/ship-gate.sh"
@@ -19,6 +22,8 @@ shift
 if [ $# -eq 0 ]; then set -- fast; fi
 LOGS="$(task_dir "$TASK")/logs"
 mkdir -p "$LOGS"
+CHECK_DIR="$REPO_ROOT"; REVIEW=false
+if [ "$(state_kind "$TASK" 2>/dev/null)" = MR_REVIEW ]; then CHECK_DIR="$(review_worktree "$TASK")"; REVIEW=true; fi
 
 expand() {
   case "$1" in
@@ -57,7 +62,7 @@ for group in "$@"; do
 
     log="$LOGS/$check.log"
     start=$(date +%s)
-    (cd "$REPO_ROOT" && CI=1 NO_COLOR=1 FORCE_COLOR=0 bash -c "$cmd") 2>&1 | strip_ansi > "$log"
+    (cd "$CHECK_DIR" && CI=1 NO_COLOR=1 FORCE_COLOR=0 bash -c "$cmd") 2>&1 | strip_ansi > "$log"
     code=${PIPESTATUS[0]}
     secs=$(( $(date +%s) - start ))
 
@@ -78,5 +83,6 @@ done
 
 full=true
 for c in lint types unit integration e2e; do case "$ran" in *" $c "*) ;; *) full=false ;; esac; done
-$full && gate_record_run "$TASK" "$overall"
+if $REVIEW; then echo "CHECKED $(git -C "$CHECK_DIR" rev-parse HEAD)"
+elif $full; then gate_record_run "$TASK" "$overall"; fi
 exit "$overall"

@@ -6,8 +6,14 @@
 # uncommitted work are never touched, so a dirty checkout is fine.
 # A ClickUp id given here is stored and wins over one found later; a run
 # without one keeps the stored id.
+#
+# Dependencies: when the worktree's lockfiles match the main checkout's, its
+# node_modules is a link to the main checkout's. When they differ (the MR
+# changes one), INSTALL_CMD installs them fresh in the worktree, once per
+# lockfile version; the log goes to .work/mr-<iid>/logs/install.log.
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
+source "$(dirname "$0")/evidence-lib.sh"   # sha256
 require git glab jq
 
 IID="${1:?usage: start-review.sh <mr-iid> [clickup-task-id]}"
@@ -52,5 +58,42 @@ state_init_review "$TASK" "$IID"
 state_set_target_branch "$TASK" "$TARGET"
 [ -z "$CLICKUP_ID" ] || state_set_clickup_id "$TASK" "$CLICKUP_ID"
 
+# ---------- dependencies ----------
+LOCKFILES="package-lock.json npm-shrinkwrap.json yarn.lock pnpm-lock.yaml bun.lock bun.lockb"
+# _locks <dir>: one checksum over the lockfiles in <dir> (a missing one counts too).
+_locks() {
+  local f
+  for f in $LOCKFILES; do echo "== $f"; if [ -f "$1/$f" ]; then cat "$1/$f"; fi; done | sha256 /dev/stdin | cut -c1-16
+}
+STAMP="$DIR/installed-lock"   # the lockfiles' checksum at the last install
+mkdir -p "$DIR/logs"
+WT_LOCKS="$(_locks "$WT")"
+if [ "$WT_LOCKS" = "$(_locks "$REPO_ROOT")" ]; then
+  rm -f "$STAMP"
+  if [ -d "$REPO_ROOT/node_modules" ]; then
+    [ -L "$WT/node_modules" ] || rm -rf "$WT/node_modules"
+    ln -sfn "$REPO_ROOT/node_modules" "$WT/node_modules"
+    DEPS="linked from the main checkout"
+  else
+    DEPS="none (the main checkout has no node_modules)"
+  fi
+elif [ -z "$INSTALL_CMD" ]; then
+  DEPS="not installed (the MR changes a lockfile and INSTALL_CMD is empty)"
+elif [ "$(cat "$STAMP" 2>/dev/null)" = "$WT_LOCKS" ]; then
+  DEPS="installed (unchanged since the last run)"
+else
+  [ -L "$WT/node_modules" ] && rm -f "$WT/node_modules"
+  LOG="$DIR/logs/install.log"
+  if ! (cd "$WT" && CI=1 bash -c "$INSTALL_CMD") > "$LOG" 2>&1; then
+    rm -f "$STAMP"
+    echo "The MR changes a lockfile, and INSTALL_CMD failed in the review worktree. See ${LOG#"$REPO_ROOT"/}." >&2
+    tail -n "$FAIL_TAIL_LINES" "$LOG" | sed 's/^/      /' >&2
+    exit 1
+  fi
+  echo "$WT_LOCKS" > "$STAMP"
+  DEPS="installed with INSTALL_CMD (the MR changes a lockfile)"
+fi
+
 DRAFT=""; [ "$(jq -r '.draft // false' <<<"$MR_JSON")" = true ] && DRAFT=" (draft)"
 echo "MR !$IID$DRAFT at ${HEAD_SHA:0:12}. Review worktree: $WT. Work folder: ${DIR#"$REPO_ROOT"/}"
+echo "Dependencies: $DEPS"
