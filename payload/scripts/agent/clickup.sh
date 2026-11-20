@@ -4,7 +4,11 @@
 #   clickup.sh fetch   <task-id>             Pull the task into .work/<task-id>/clickup/
 #   clickup.sh comment <task-id> <file>      Post the file's text as a task comment
 #   clickup.sh status  <task-id> ["<status>"] Move the task to a status (default: CLICKUP_REVIEW_STATUS)
-#   clickup.sh attach  <task-id> <file>...   Upload files as task attachments#
+#   clickup.sh attach  <task-id> <file>...   Upload files as task attachments
+#
+# For an MR review (<task-id> is mr-<iid>, ADR 0003), fetch reads the ClickUp
+# task stored in its task state into .work/mr-<iid>/clickup/, and every write
+# is refused: an MR review never writes to ClickUp.
 # Needs CLICKUP_API_TOKEN (personal token, "pk_...") in the environment, and
 # CLICKUP_TEAM_ID (your Workspace ID) for custom task IDs and ClickUp Docs.
 # The token is only ever sent in a header. This script never prints it.
@@ -23,6 +27,16 @@ fi
 
 CMD="${1:?usage: clickup.sh fetch|comment|status <task-id> ...}"
 TASK="${2:?task id}"
+WORK="$TASK"   # the work folder's task id; for an MR review, not the ClickUp id
+if [ -f "$(task_dir "$TASK")/state.env" ] && [ "$(state_kind "$TASK")" = MR_REVIEW ]; then
+  if [ "$CMD" != fetch ]; then
+    echo "An MR review never writes to ClickUp (ADR 0003): clickup.sh $CMD $TASK refused." >&2; exit 1
+  fi
+  TASK="$(state_clickup_id "$WORK")"
+  if [ -z "$TASK" ]; then
+    echo "No ClickUp task for $WORK yet. Run scripts/agent/set-review-spec.sh ${WORK#mr-} <clickup-id> first." >&2; exit 1
+  fi
+fi
 
 # api METHOD PATH [JSON_BODY]: prints the response body, fails on HTTP >= 400
 api() {
@@ -55,7 +69,7 @@ real_id() {
 
 fetch() {
   local dir out q task tid
-  dir="$(task_dir "$TASK")/clickup"
+  dir="$(task_dir "$WORK")/clickup"
   mkdir -p "$dir/attachments" "$dir/docs"
   out="$dir/task.md"
   q="$(id_query "$TASK")"

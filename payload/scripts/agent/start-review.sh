@@ -55,6 +55,12 @@ else
 fi
 
 state_init_review "$TASK" "$IID"
+# The MR's details and commit messages, where the requirements agent looks
+# for the ClickUp task (ADR 0003): branch, title and description, then commits.
+COMMITS_JSON="$(glab api --paginate "projects/:id/merge_requests/$IID/commits?per_page=100" | jq -s 'add // []')"
+jq --argjson commits "$COMMITS_JSON" '{iid, title, description, source_branch, target_branch, web_url,
+    author: .author.username, draft: (.draft // false),
+    commits: [ $commits[] | {id, title, message} ]}' <<<"$MR_JSON" > "$DIR/mr.json"
 state_set_target_branch "$TASK" "$TARGET"
 [ -z "$CLICKUP_ID" ] || state_set_clickup_id "$TASK" "$CLICKUP_ID"
 

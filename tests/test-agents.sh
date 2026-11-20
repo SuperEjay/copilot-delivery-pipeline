@@ -26,8 +26,9 @@ for a in "${AGENTS[@]}"; do
   check "$a: no handoffs (ADR 0002)" '! frontmatter $a | grep -q "^handoffs:"'
 done
 
-# section <agent> <heading>: the lines under "## <heading>", up to the next "## ".
-section() { awk -v h="## $2" '/^## / { on = ($0 == h); next } on' "$A/$1.agent.md"; }
+# section <agent> <heading>: the lines under "## <heading>", up to the next "## "
+# outside a ~~~ fence (a template in the section may have its own headings).
+section() { awk -v h="## $2" '/^~~~/ { fence = !fence } !fence && /^## / { on = ($0 == h); next } on' "$A/$1.agent.md"; }
 # auto <agent> <ERE>: the agent's "In an auto run" section matches the pattern.
 auto() { section "$1" "In an auto run" | grep -qE -- "$2"; }
 
@@ -85,6 +86,18 @@ for a in "${REVIEW[@]}"; do
   check "$a: has an In an MR review section, after In an auto run and before Next step" '[ "$(grep -E "^## (In an auto run|In an MR review|Next step)$" $A/$a.agent.md | tr "\n" "|")" = "## In an auto run|## In an MR review|## Next step|" ]'
 done
 mr() { section "$1" "In an MR review" | grep -qE -- "$2"; }
+check "REVIEW_AGENTS has the requirements agent" 'printf "%s\n" "${REVIEW[@]}" | grep -qx requirements'
+check "requirements: the router's spec prompts start it" 'mr requirements "Find the spec for mr-<iid>" && mr requirements "approved the MR description as the spec"'
+check "requirements: looks in order: stored id, branch/title/description, commits" 'mr requirements "^1\. .*state_clickup_id|^1\. .*task state" && mr requirements "^2\. .*branch.*title.*description" && mr requirements "^3\. .*commit messages.*CU-<id>.*#<id>"'
+check "requirements: reads the MR from mr.json" 'mr requirements "mr.json"'
+check "requirements: never guesses" 'mr requirements "[Nn]ever guess"'
+check "requirements: nothing found: Spec source: none, and return" 'mr requirements "Spec source: none"'
+check "requirements: stores a found id, then fetches it" 'mr requirements "set-review-spec.sh <iid> <id>" && mr requirements "clickup.sh fetch mr-<iid>"'
+check "requirements: the weak spec from the MR description" 'mr requirements "Spec source: MR description \(weak\)"'
+check "requirements: a reply at the spec stop: an id or the ACs" 'mr requirements "spec stop" && mr requirements "Spec source: ACs from the user"'
+check "requirements: always a Spec source line" 'mr requirements "always has a .Spec source:. line"'
+check "requirements: no open questions; gaps become spec-gap findings" 'mr requirements "## Spec gaps" && mr requirements "spec-gap" && mr requirements "[Nn]o .## Open questions."'
+check "requirements: never writes to ClickUp" 'mr requirements "[Nn]ever write to ClickUp"'
 check "verifier: in an MR review, the router's prompt starts it" 'mr verifier "Run the checks for mr-<iid> in its review worktree"'
 check "verifier: runs every check once through run-checks.sh" 'mr verifier "scripts/agent/run-checks.sh mr-<iid> all" && mr verifier "once"'
 check "verifier: Commit is the CHECKED sha, not your HEAD" 'mr verifier "CHECKED <sha>" && mr verifier "Commit:.*CHECKED"'

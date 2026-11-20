@@ -17,6 +17,9 @@ export STUB="$T/stub"; mkdir -p "$STUB"
 cat > "$STUB/glab" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
+  "api --paginate projects/:id/merge_requests/"*/commits*)
+    i="${3#projects/:id/merge_requests/}"; i="${i%%/*}"
+    cat "$STUB/commits-$i.json" 2>/dev/null || echo '[]' ;;
   "api projects/:id/merge_requests/"*)
     f="$STUB/mr-${2##*/}.json"
     if [ -f "$f" ]; then cat "$f"; else echo '{"message":"404 Not found"}'; echo "glab: 404 Not Found" >&2; exit 1; fi ;;
@@ -24,7 +27,8 @@ case "$*" in
 esac
 EOF
 chmod +x "$STUB/glab"; export PATH="$STUB:$PATH"
-mr() { printf '{"iid":%s,"state":"%s","draft":%s,"target_branch":"%s"}\n' "$1" "$2" "${3:-false}" "${4:-main}" > "$STUB/mr-$1.json"; }
+mr() { printf '{"iid":%s,"state":"%s","draft":%s,"target_branch":"%s","source_branch":"feature/86abc-export","title":"Export invoices","description":"Closes CU-86abc","web_url":"https://gitlab.test/mr/%s","author":{"username":"ann"}}\n' "$1" "$2" "${3:-false}" "${4:-main}" "$1" > "$STUB/mr-$1.json"; }
+printf '[{"id":"c1","title":"feat: export","message":"feat: export\\n\\nRefs #86xyz"}]' > "$STUB/commits-7.json"
 
 # ---------- scratch repo: the MR's commits live only under refs/merge-requests/ ----------
 git init -q --bare -b main "$T/remote.git"
@@ -72,6 +76,7 @@ check "a dirty checkout doesn't block it, and is left as it was" '[ "$(cat a.txt
 check "the user stays on their branch at their commit" '[ "$(git branch --show-current)" = feature/mine ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse main)" ]'
 check "the task state is an MR review of !7" '[ "$(st state_kind mr-7)" = MR_REVIEW ] && [ "$(st state_mr_iid mr-7)" = 7 ]'
 check "the MR's target branch is stored and fetched" '[ "$(st state_target_branch mr-7)" = main ] && git rev-parse -q --verify refs/remotes/origin/main >/dev/null'
+check "the MR's details and commit messages are saved for the spec lookup" 'jq -e ".title == \"Export invoices\" and .description == \"Closes CU-86abc\" and .source_branch == \"feature/86abc-export\" and .web_url == \"https://gitlab.test/mr/7\" and (.commits[0].message | test(\"#86xyz\"))" .work/mr-7/mr.json >/dev/null'
 check "the ClickUp id passed at the start is stored" '[ "$(st state_clickup_id mr-7)" = 86abc ]'
 check "it says where the worktree and work folder are" 'grep -q "$WT/mr-7" "$T/out.txt" && grep -q "Work folder: .work/mr-7" "$T/out.txt"'
 
@@ -102,6 +107,27 @@ spec 7 'CU-86 x'
 check "set-review-spec.sh refuses an id with spaces" '[ $rc -eq 1 ] && grep -q "ClickUp id" "$T/out.txt" && [ "$(st state_clickup_id mr-7)" = 86new ]'
 spec 8 86abc
 check "set-review-spec.sh needs a started review" '[ $rc -eq 1 ] && grep -q "/review-mr 8" "$T/out.txt" && [ ! -e .work/mr-8 ]'
+
+# ---------- clickup.sh in an MR review: the stored id, read only ----------
+cat > "$STUB/curl" <<'EOF'
+#!/usr/bin/env bash
+url="${@: -1}"; echo "$url" >> "$STUB/curl.log"
+case "$url" in
+  */comment*) printf '{"comments":[]}\n200' ;;
+  */task/*) printf '{"id":"86new","name":"Export","url":"https://app.clickup.com/t/86new"}\n200' ;;
+  *) printf '{}\n200' ;;
+esac
+EOF
+chmod +x "$STUB/curl"; : > "$STUB/curl.log"
+cu() { CLICKUP_API_TOKEN=pk_test $S/clickup.sh "$@" > "$T/out.txt" 2>&1; rc=$?; }
+cu fetch mr-7
+check "clickup.sh fetch mr-<iid> fetches the stored ClickUp id" '[ $rc -eq 0 ] && grep -q "/v2/task/86new?" "$STUB/curl.log" && ! grep -q "mr-7" "$STUB/curl.log"'
+check "... into the review's own work folder" 'grep -q "^# Export" .work/mr-7/clickup/task.md && [ ! -e .work/86new ]'
+: > "$STUB/curl.log"; echo note > "$T/note.txt"
+for w in "comment mr-7 $T/note.txt" "status mr-7" "attach mr-7 $T/note.txt"; do
+  cu $w
+  check "clickup.sh ${w%% *} in an MR review: refused, nothing sent" '[ $rc -eq 1 ] && grep -q "An MR review never writes to ClickUp" "$T/out.txt" && [ ! -s "$STUB/curl.log" ]'
+done
 
 # ---------- a delivery task is not an MR review ----------
 git stash -q -u; git switch -q main
@@ -149,6 +175,8 @@ cp "$T/lock3" "$T/fork/package-lock.json"; git -C "$T/fork" commit -qam "bump ag
 git -C "$T/fork" push -q origin "HEAD:refs/merge-requests/11/head" --force; git -C "$T/proj" worktree remove --force "$T/fork"
 review 11
 check "a failed install stops the review, pointing at its log" '[ $rc -eq 1 ] && grep -q "INSTALL_CMD failed" "$T/out.txt" && grep -q ".work/mr-11/logs/install.log" "$T/out.txt"'
+cu fetch mr-11
+check "clickup.sh fetch for a review with no ClickUp id says how to set one" '[ $rc -eq 1 ] && grep -q "No ClickUp task for mr-11 yet" "$T/out.txt" && grep -q "set-review-spec.sh 11 <clickup-id>" "$T/out.txt"'
 
 # ---------- run-checks.sh in an MR review: the worktree, no verified commit ----------
 sed -i "s|^INSTALL_CMD=.*|INSTALL_CMD='true'|" .agent.env
