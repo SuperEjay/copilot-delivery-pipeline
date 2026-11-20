@@ -121,5 +121,26 @@ check "/review-mr: its description names the auto run" 'grep "^description:" "$S
 check "/start-task: its description names the auto run" 'grep "^description:" "$SK/start-task/SKILL.md" | grep -q "pipeline agent, start the auto run"'
 check "/fetch-review: its description names the auto run" 'grep "^description:" "$SK/fetch-review/SKILL.md" | grep -q "pipeline agent, resume the auto run"'
 
+# ---------- the MR review route is documented (ADR 0003, #88) ----------
+# guide_sec <heading> <ERE>: the guide's "## <heading>" section matches.
+# (The section is read into a variable first: grep -q stopping early would
+# break awk's pipe, which pipefail turns into a random failure.)
+guide_sec() { local t; t="$(awk -v h="## $1" '/^```/ { f = !f } !f && /^## / { on = ($0 == h); next } on' "$DOC")"; grep -qE -- "$2" <<<"$t"; }
+G="MR review (a teammate's MR)"
+check "guide: an MR review section" 'grep -qx "## $G" "$DOC"'
+check "guide: how it starts, the iid explained" 'guide_sec "$G" "/review-mr <iid> \[clickup-id\]" && guide_sec "$G" "!142"'
+check "guide: the stages and its three stops" 'guide_sec "$G" "\`spec\`" && guide_sec "$G" "\`focus\`" && guide_sec "$G" "\`findings\`"'
+check "guide: read-only, in a review worktree" 'guide_sec "$G" "read-only" && guide_sec "$G" "\.git/pipeline-reviews/mr-<iid>"'
+check "guide: posting, each confirmed, with the header" 'guide_sec "$G" "post-review-thread\.sh" && guide_sec "$G" "\[pipeline review\]"'
+check "guide: re-review, never resolving a thread" 'guide_sec "$G" "[Rr]e-review" && guide_sec "$G" "never resolves"'
+check "guide: --done and the doctor warning" 'guide_sec "$G" "/review-mr <iid> --done" && guide_sec "$G" "doctor\.sh"'
+check "guide: the new settings" 'guide_sec "$G" "INSTALL_CMD" && guide_sec "$G" "MR_REVIEW_MAX_FILES" && guide_sec "$G" "MR_REVIEW_SKIP_PATTERN"'
+W="What's in here"
+check "guide: the skill is listed in What's in here" 'guide_sec "$W" "skills/review-mr/SKILL\.md"'
+check "guide: the guard table has the MR review rules" 'guide_sec "Hooks (enforced rules)" "pipeline-reviews" && guide_sec "Hooks (enforced rules)" "post-review-thread\.sh"'
+README="$ROOT/README.md"
+check "README: a Review a teammate's MR section with /review-mr" 'grep -qx "## Review a teammate.s MR" "$README" && grep -q "/review-mr <iid>" <<<"$(awk "/^## Review a teammate/ { on = 1; next } /^## / { on = 0 } on" "$README")"'
+check "rules for every agent: an MR review is read-only" 'grep -q "/review-mr" "$ROOT/payload/pipeline-instructions.md" && grep -q "read-only" "$ROOT/payload/pipeline-instructions.md"'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

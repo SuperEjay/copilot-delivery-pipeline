@@ -91,10 +91,11 @@ its reply with a **Next:** line naming the agent to pick and what to say, e.g.
 | `.github/agents/*.agent.md` | The eight stage agents (requirements, planner, implementer, verifier, reviewer, evidence, shipper, review-responder) and `pipeline`, the orchestrator of an auto run |
 | `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>`: branch, work folder, ClickUp fetch, then on to requirements, or starts the auto run when **pipeline** is picked |
 | `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then on to review-responder, or resumes the auto run when **pipeline** is picked |
+| `.github/skills/review-mr/SKILL.md` | `/review-mr <iid> [clickup-id]`: check out an existing MR for a read-only review and start its auto run when **pipeline** is picked; `/review-mr <iid> --done` cleans up (see "MR review (a teammate's MR)") |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
 | `.github/copilot-instructions.md` | Six short rules every agent follows (kept short on purpose: it's sent with every request) |
-| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, thread reply/resolve, and `doctor.sh`, which checks your setup |
-| `.agent.env.example` | Your test commands, Duo username, round limit, ClickUp workspace and status |
+| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, thread reply/resolve, MR review setup and posting (`start-review.sh`, `set-review-spec.sh`, `post-review-thread.sh`), and `doctor.sh`, which checks your setup |
+| `.agent.env.example` | Your test commands, Duo username, round limit, ClickUp workspace and status, and the MR review settings |
 
 **No MCP needed.** ClickUp goes through its REST API (`scripts/agent/clickup.sh`)
 and GitLab through `glab`. The agents only run scripts in the terminal, so an
@@ -230,7 +231,7 @@ afterwards, the stop comes back.
 | `findings` | MR review: always, once the review is written | Mark each finding in code-review.md post, debt or skip, then approve. Each post asks for your confirmation |
 | `plan`, `review`, `duo`, `verify`, `evidence`, `spec` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:`, requirements.md's `Spec source:` in an MR review | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
 
-The run ends when the MR is open, and again each time a Duo round is answered: run `/fetch-review <id>` after Duo's next review.
+The run ends when the MR is open, and again each time a Duo round is answered: run `/fetch-review <id>` after Duo's next review. An MR review ends once its findings are posted.
 
 ### What the stages do in an auto run
 
@@ -253,6 +254,9 @@ starts with `AUTO RUN`. Run by hand, the agents work as before. In an auto run:
   approve `pre-ship`.
 - **The review-responder** triages Duo's threads and commits the fixes without
   waiting for an OK. ASK threads wait for the `duo` stop.
+- **In an MR review,** the requirements agent, the verifier and the reviewer
+  each follow their "In an MR review" section instead: see "MR review (a
+  teammate's MR)".
 
 ### Files to check
 
@@ -322,6 +326,110 @@ nothing in the pipeline depends on them. The installer doesn't touch
 stop ends the orchestrator's turn; it isn't a confirm prompt, so these may
 alert you only for the guard's confirm prompts, not at a stop.
 
+## MR review (a teammate's MR)
+
+The pipeline's second route (ADR 0003): a **read-only review of an MR that
+already exists**, usually one a teammate wrote by hand or with another tool. It
+reviews the MR against its spec and reports bugs, technical debt and
+improvements. It posts only the findings you pick, and it never changes the
+MR's code.
+
+### Start
+
+Pick **pipeline** and run `/review-mr <iid> [clickup-id]`. `<iid>` is the MR's
+number in its project: the `142` in `!142`. Add the ClickUp task id when the MR
+doesn't name its task. Open and draft MRs are fine, including MRs from a fork.
+Merged and closed ones are refused.
+
+`/review-mr` checks the MR's head out into a **review worktree** at
+`.git/pipeline-reviews/mr-<iid>`. That's a separate checkout, so your branch and
+uncommitted work are never touched, and a dirty tree doesn't block it. It sits
+in the git folder, where your test runner and linter don't see it. Its work
+folder is `.work/mr-<iid>/`.
+
+Dependencies: when the MR's lockfiles match yours, the worktree's
+`node_modules` is a link to your checkout's. When the MR changes a lockfile,
+`INSTALL_CMD` (default `npm ci`) installs them fresh in the worktree, once per
+lockfile version.
+
+An MR review can run while a delivery task is in progress, in a second chat.
+They share nothing but the repository.
+
+### The stages and stops
+
+`next-stage.sh mr-<iid>` runs these, in this order:
+
+1. **Spec** (requirements agent): it looks for the ClickUp task in this order:
+   the id you passed, then the MR's branch, title and description, then its
+   commit messages (`CU-<id>` or `#<id>`). It never guesses. When it finds
+   nothing, the run stops at **`spec`**. Reply with a ClickUp id or the
+   acceptance criteria, or approve reviewing against the MR description alone.
+   In that case the report says the spec check was weak. Gaps in the spec
+   become `spec-gap` findings, not questions.
+2. **`focus`** stop, only when the MR changes more than `MR_REVIEW_MAX_FILES`
+   files (default 40). Files matching `MR_REVIEW_SKIP_PATTERN`, lockfiles and
+   generated files by default, don't count. Reply with what to review, or
+   approve to review the files with the most churn.
+3. **Checks** (verifier): your lint, type check and tests on the MR's head, in
+   the worktree. A failure doesn't stop the review: it becomes a blocker or
+   major finding.
+4. **Review** (reviewer): the MR's open threads first, from people and Duo, so
+   it doesn't repeat what's already raised. Then the diff against the spec,
+   with the same checklist as delivery.
+5. **`findings`** stop, always. In `.work/mr-<iid>/code-review.md`, each
+   finding is marked **post**, **debt** (kept in `tech-debt.md`, on your
+   machine only) or **skip**, from the reviewer's recommendation. Change any of
+   them by replying, then approve.
+6. **Post** (reviewer): each finding marked post becomes its own thread on the
+   MR, through `scripts/agent/post-review-thread.sh`, and **you confirm every
+   post**. A thread sits on the diff line when the finding's line is in the
+   diff, and is general otherwise. It starts with
+   `**[pipeline review] CR-n · <severity> · <category>**`, so the author can
+   tell it's AI-assisted, and it's posted under your GitLab account. There's no
+   summary comment.
+
+The run then ends with the counts: posted, parked as debt, skipped.
+
+### Re-review
+
+After the author pushes, run `/review-mr <iid>` again. The worktree moves to
+the new head. With no new commits, the run ends at once. Otherwise:
+- **Only what's new is reviewed:** the commits since the last review. The focus
+  stop counts only the files they change.
+- **Each posted finding is checked** and marked verified or still open. New
+  findings get new CR numbers, and decisions already made aren't reopened.
+- **Replies:** after the findings stop and any new posts, the reviewer replies
+  on each verified finding's thread, and you confirm each reply.
+
+It never resolves a thread: that stays with the author and the team.
+
+### Read-only, enforced
+
+The guard denies any change to the review worktree, any commit or push there,
+and any ClickUp write for an `mr-<iid>` task. The only things that leave your
+machine are the findings and replies you confirmed. See "Hooks (enforced
+rules)".
+
+### Cleanup
+
+The worktree is kept for re-reviews. When you're done (the MR is merged or
+closed), run `/review-mr <iid> --done`. It removes the worktree and keeps the
+text files in `.work/mr-<iid>/`. `scripts/agent/doctor.sh` warns about review
+worktrees whose MR is merged or closed, with the `--done` command for each.
+
+### Settings
+
+In `.agent.env`:
+
+```
+INSTALL_CMD="npm ci"          # installs dependencies when the MR changes a lockfile; empty = never
+MR_REVIEW_MAX_FILES=40        # more changed files than this: the focus stop
+MR_REVIEW_SKIP_PATTERN='…'    # files that don't count (extended regex; see .agent.env.example)
+```
+
+**On Copilot Free,** large MRs cost the most tokens: the focus stop caps them,
+and a re-review looks only at new commits.
+
 ## Manual mode (fallback)
 
 Use manual mode when an auto run can't be used: say a VS Code update breaks
@@ -359,7 +467,7 @@ instructions into enforcement:
 
 | Decision | What |
 |---|---|
-| **Ask you** | Anything that publishes: `create-mr.sh`, `push-branch.sh`, `upload-evidence.sh`, and `clickup.sh comment / status / attach`. VS Code shows a confirm prompt, which is your final go-ahead. |
+| **Ask you** | Anything that publishes: `create-mr.sh`, `push-branch.sh`, `upload-evidence.sh`, and `clickup.sh comment / status / attach`. In an MR review: each `post-review-thread.sh` (a finding posted on the MR) and each `reply-thread.sh mr-<iid>` reply. VS Code shows a confirm prompt, which is your final go-ahead. |
 | **Deny** | Running `approve-evidence.sh`, or touching `evidence/APPROVED`, `evidence/UPLOADED` or `verified-head` |
 | **Deny** | Running `next-stage.sh` from a subagent, however it's spelled (quoted, through a variable or a glob, piped into a shell). Only the orchestrator runs the auto run's router, so a stage agent can't approve a stop itself. Reading it with `cat`, `grep` or `git diff` is fine. |
 | **Deny** | Changing `.work/<id>/state.env` (the task state), `.work/<id>/status.md` (the auto run's record, including stop approvals) or `.work/<id>/run.log` (the run log) through edit tools or the shell. Agents may read them; only the scripts write them. |
@@ -367,6 +475,7 @@ instructions into enforcement:
 | **Deny** | Reading or printing secrets: token variables, `printenv`/`env`, `.auth/` sessions, `~/.ssh`, `.netrc`, `.npmrc`, literal `pk_`/`glpat-` tokens |
 | **Deny** | Destructive git: force push, remote branch delete, `reset --hard`, `clean -f`, `branch -D`, `checkout -- .`, `--no-verify` |
 | **Deny** | Raw `git push`, `glab` write commands, or direct ClickUp API calls (the scripts must be used) |
+| **Deny** | In an MR review: changing the review worktree (`.git/pipeline-reviews/`) through edit tools or the shell, committing or pushing there, any ClickUp write for an `mr-<iid>` task, and `reply-thread.sh mr-<iid> … --resolve`. Agents may read the worktree. |
 | **Deny** | Raw test, lint and typecheck commands (`npm test`, `npx vitest`, `npx playwright test`, `npx tsc`…), so output always goes through the condensed `run-checks.sh` |
 | **Deny** | Agent changes to pipeline config, through edit tools or the shell: agent files (including their pinned models), hooks, the pipeline's skills, `copilot-instructions.md`, `scripts/agent/`, `.agent.env`. Copying one of these files elsewhere (`cp scripts/agent/x.sh /tmp`) is refused too: the guard can't tell which way a copy goes. |
 

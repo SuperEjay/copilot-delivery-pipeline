@@ -1,6 +1,7 @@
 # Delivery pipeline (applies to every agent)
 
 - One ClickUp task = one folder, `.work/<task-id>/`. `state.env` holds TASK, BRANCH and MR_IID.
+- An MR review (`/review-mr <iid>`) is read-only: its folder is `.work/mr-<iid>/`, and the MR's code in `.git/pipeline-reviews/mr-<iid>/` is never changed, committed or pushed.
 - Files are the handoff: requirements.md → plan.md → verification.md → code-review.md → evidence/evidence.md → mr.md → review.json. Read the file; don't ask the user to repeat what's in it.
 - Evidence approval belongs to the user alone. Never tick evidence checkboxes, and never run `approve-evidence.sh` or edit `evidence/APPROVED`.
 - Run tests, lint and typechecks only through `scripts/agent/run-checks.sh <task-id> <checks>`, never as raw commands. Full logs are in `.work/<task-id>/logs/`; search them, don't read them whole.

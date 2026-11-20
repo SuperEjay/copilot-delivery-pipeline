@@ -30,7 +30,9 @@ done
 # outside a ~~~ fence (a template in the section may have its own headings).
 section() { awk -v h="## $2" '/^~~~/ { fence = !fence } !fence && /^## / { on = ($0 == h); next } on' "$A/$1.agent.md"; }
 # auto <agent> <ERE>: the agent's "In an auto run" section matches the pattern.
-auto() { section "$1" "In an auto run" | grep -qE -- "$2"; }
+# (Read into a variable first: grep -q stopping early would break awk's pipe,
+# which pipefail turns into a random failure.)
+auto() { local t; t="$(section "$1" "In an auto run")"; grep -qE -- "$2" <<<"$t"; }
 
 # ---------- the shared "In an auto run" rules ----------
 # The one copy of the rules every stage agent's "## In an auto run" section
@@ -85,7 +87,7 @@ check "next-stage.sh sets REVIEW_AGENTS once" '[ "$(grep -c "^REVIEW_AGENTS=" "$
 for a in "${REVIEW[@]}"; do
   check "$a: has an In an MR review section, after In an auto run and before Next step" '[ "$(grep -E "^## (In an auto run|In an MR review|Next step)$" $A/$a.agent.md | tr "\n" "|")" = "## In an auto run|## In an MR review|## Next step|" ]'
 done
-mr() { section "$1" "In an MR review" | grep -qE -- "$2"; }
+mr() { local t; t="$(section "$1" "In an MR review")"; grep -qE -- "$2" <<<"$t"; }
 check "REVIEW_AGENTS has the requirements agent" 'printf "%s\n" "${REVIEW[@]}" | grep -qx requirements'
 check "requirements: the router's spec prompts start it" 'mr requirements "Find the spec for mr-<iid>" && mr requirements "approved the MR description as the spec"'
 check "requirements: looks in order: stored id, branch/title/description, commits" 'mr requirements "^1\. .*state_clickup_id|^1\. .*task state" && mr requirements "^2\. .*branch.*title.*description" && mr requirements "^3\. .*commit messages.*CU-<id>.*#<id>"'

@@ -36,6 +36,11 @@
   - **Posted findings:** the reviewer marks each one `Status: verified` or `open`. Decisions already made aren't reopened.
   - **Replies:** after any new posts, the router has the reviewer reply on each verified finding's thread through `reply-thread.sh`, and you confirm each reply. `- **Replied:** yes|declined` is recorded and doesn't bring the findings stop back. The end line counts the verified findings.
   - **Never resolves a thread:** `reply-thread.sh mr-<iid> … --resolve` is refused by the script and the guard, and the guard asks you to confirm every reply on an MR review's thread.
+- **Docs: the MR review route** (ADR 0003, #88).
+  - **README:** a "Review a teammate's MR" section.
+  - **Guide:** `docs/agent-pipeline.md` has a new section, "MR review (a teammate's MR)": how it starts, the stages and their three stops, posting, re-review, read-only enforcement, `--done`, and the settings `INSTALL_CMD`, `MR_REVIEW_MAX_FILES` and `MR_REVIEW_SKIP_PATTERN`. Its file list and its hooks table include the review skill, scripts and guard rules.
+  - **Agent rules:** the rules every agent gets (`copilot-instructions.md`) say an MR review is read-only.
+  - **Tests:** `tests/test-orchestrator.sh` checks that the docs cover the route. Several test helpers no longer pipe into `grep -q`, which with `pipefail` could fail at random.
 
 ## v2.0.0
 
