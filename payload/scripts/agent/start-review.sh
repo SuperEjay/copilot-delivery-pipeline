@@ -31,9 +31,14 @@ case "$MR_STATE" in
   *) echo "MR !$IID is ${MR_STATE:-in an unknown state}: only open MRs (drafts too) can be reviewed." >&2; exit 1 ;;
 esac
 
-# The MR's head through GitLab's own ref, so a fork MR works too.
+TARGET="$(jq -r '.target_branch // empty' <<<"$MR_JSON")"
+[ -n "$TARGET" ] || { echo "glab gave no target branch for MR !$IID." >&2; exit 1; }
+
+# The MR's head through GitLab's own ref, so a fork MR works too. The target
+# branch, fetched too, is what the router counts the MR's changes against.
 git fetch --quiet origin "refs/merge-requests/$IID/head"
 HEAD_SHA="$(git rev-parse FETCH_HEAD)"
+git fetch --quiet origin "$TARGET"
 
 git worktree prune
 if [ -f "$WT/.git" ]; then   # a worktree has a .git file; a bare folder in .git/ would fool git -C
@@ -44,6 +49,7 @@ else
 fi
 
 state_init_review "$TASK" "$IID"
+state_set_target_branch "$TASK" "$TARGET"
 [ -z "$CLICKUP_ID" ] || state_set_clickup_id "$TASK" "$CLICKUP_ID"
 
 DRAFT=""; [ "$(jq -r '.draft // false' <<<"$MR_JSON")" = true ] && DRAFT=" (draft)"

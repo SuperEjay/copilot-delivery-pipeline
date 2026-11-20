@@ -66,6 +66,9 @@ Then print its `▶` line and run `scripts/agent/next-stage.sh <task-id>` again.
 | `evidence` | evidence |
 | `pre-ship` | evidence, when the reply is about the evidence or screenshots ("retake AC-2"); otherwise shipper, with the prompt starting `AUTO RUN. Write mr.md for <task-id>. Don't push or create the MR.` and then the reply |
 | `duo` | review-responder |
+| `spec` | requirements (MR review: a ClickUp id it stores with `set-review-spec.sh`, or the ACs) |
+| `focus` | reviewer (MR review: it writes what to review to `focus.md`) |
+| `findings` | reviewer (MR review: it records post, debt or skip on each finding) |
 
 A reply of `retry` or `continue` sends nothing to a stage: the user changed a file by hand. Run `scripts/agent/next-stage.sh <task-id>` again.
 

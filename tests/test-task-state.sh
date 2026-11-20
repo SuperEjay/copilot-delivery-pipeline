@@ -110,6 +110,9 @@ check "state_init_review leaves an existing file alone" '[ $? -eq 0 ] && grep -q
 st state_init_review mr-8 $'8\nKIND=x'
 check "state_init_review refuses an iid with a newline" '[ $? -eq 1 ] && [ ! -e .work/mr-8/state.env ]'
 
+st state_target_branch mr-7; check "TARGET_BRANCH defaults to empty" '[ $? -eq 0 ] && out ""'
+st state_set_target_branch mr-7 release/1; st state_target_branch mr-7
+check "state_set_target_branch writes the MR's target branch" 'out release/1'
 st state_clickup_id mr-7; check "CLICKUP_ID defaults to empty" '[ $? -eq 0 ] && out ""'
 st state_set_clickup_id mr-7 86abc; st state_set_clickup_id mr-7 86def; st state_clickup_id mr-7
 check "state_set_clickup_id replaces the value, one line per key" 'out 86def && [ "$(grep -c "^CLICKUP_ID=" .work/mr-7/state.env)" -eq 1 ]'

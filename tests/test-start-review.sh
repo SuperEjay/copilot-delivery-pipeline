@@ -24,7 +24,7 @@ case "$*" in
 esac
 EOF
 chmod +x "$STUB/glab"; export PATH="$STUB:$PATH"
-mr() { printf '{"iid":%s,"state":"%s","draft":%s}\n' "$1" "$2" "${3:-false}" > "$STUB/mr-$1.json"; }
+mr() { printf '{"iid":%s,"state":"%s","draft":%s,"target_branch":"%s"}\n' "$1" "$2" "${3:-false}" "${4:-main}" > "$STUB/mr-$1.json"; }
 
 # ---------- scratch repo: the MR's commits live only under refs/merge-requests/ ----------
 git init -q --bare -b main "$T/remote.git"
@@ -71,6 +71,7 @@ check "git knows the worktree" 'git worktree list | grep -q "pipeline-reviews/mr
 check "a dirty checkout doesn't block it, and is left as it was" '[ "$(cat a.txt)" = mine ] && [ -f untracked.txt ]'
 check "the user stays on their branch at their commit" '[ "$(git branch --show-current)" = feature/mine ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse main)" ]'
 check "the task state is an MR review of !7" '[ "$(st state_kind mr-7)" = MR_REVIEW ] && [ "$(st state_mr_iid mr-7)" = 7 ]'
+check "the MR's target branch is stored and fetched" '[ "$(st state_target_branch mr-7)" = main ] && git rev-parse -q --verify refs/remotes/origin/main >/dev/null'
 check "the ClickUp id passed at the start is stored" '[ "$(st state_clickup_id mr-7)" = 86abc ]'
 check "it says where the worktree and work folder are" 'grep -q "$WT/mr-7" "$T/out.txt" && grep -q "Work folder: .work/mr-7" "$T/out.txt"'
 
@@ -92,11 +93,24 @@ rm -rf "$WT/mr-7"; mkdir -p "$WT/mr-7"
 review 7
 check "an empty folder left in its place is made a worktree again" '[ $rc -eq 0 ] && [ -f "$WT/mr-7/.git" ] && [ "$(git -C "$WT/mr-7" rev-parse HEAD)" = "$(cat "$T/head-7")" ]'
 
+# ---------- set-review-spec.sh: the ClickUp id given at the spec stop ----------
+spec() { $S/set-review-spec.sh "$@" > "$T/out.txt" 2>&1; rc=$?; }
+spec 7 86new
+check "set-review-spec.sh stores the id" '[ $rc -eq 0 ] && [ "$(st state_clickup_id mr-7)" = 86new ]'
+check "set-review-spec.sh leaves the worktree where it was" '[ "$(git -C "$WT/mr-7" rev-parse HEAD)" = "$(cat "$T/head-7")" ]'
+spec 7 'CU-86 x'
+check "set-review-spec.sh refuses an id with spaces" '[ $rc -eq 1 ] && grep -q "ClickUp id" "$T/out.txt" && [ "$(st state_clickup_id mr-7)" = 86new ]'
+spec 8 86abc
+check "set-review-spec.sh needs a started review" '[ $rc -eq 1 ] && grep -q "/review-mr 8" "$T/out.txt" && [ ! -e .work/mr-8 ]'
+
 # ---------- a delivery task is not an MR review ----------
 git stash -q -u; git switch -q main
 printf 'LINT_CMD=\nTYPECHECK_CMD=\nUNIT_CMD=\nINTEGRATION_CMD=\nE2E_CMD=\n' > .agent.env
 $S/start-task.sh T1 gate > "$T/out.txt" 2>&1
 check "a task started with start-task.sh still reads as delivery" '[ "$(st state_kind T1)" = DELIVERY ]'
+mkdir -p .work/mr-5; cp .work/T1/state.env .work/mr-5/state.env
+spec 5 86abc
+check "set-review-spec.sh refuses a delivery task" '[ $rc -eq 1 ] && grep -q "isn.t an MR review" "$T/out.txt" && ! grep -q CLICKUP_ID .work/mr-5/state.env'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

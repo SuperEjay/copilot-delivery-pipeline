@@ -46,6 +46,25 @@ from its "Next:" line.
   │                 ▼
   └─────────── ■ end: round answered. After the next Duo review: /fetch-review <id>
 
+MR review (ADR 0003): a read-only review of an existing MR, in a review worktree.
+
+              /review-mr <iid> [clickup-id]
+                    │
+                    ▼
+              requirements: the spec ············ ⏸ spec: no ClickUp task found
+                    │
+                    ▼  ·································· ⏸ focus: more than MR_REVIEW_MAX_FILES files
+              verifier: checks (failures are findings)
+                    │
+                    ▼
+              reviewer ·························· ⏸ findings: post, debt or skip each one
+                    │
+                    ▼
+              reviewer: posts the ones marked post, each confirmed by you
+                    │
+                    ▼
+              ■ end. After the author pushes: /review-mr <iid>
+
 ⏸ An auto run waits for your reply here; in manual mode, you decide as you go. Any stage can
   also stop: stalled (it changed nothing), fix-limit (MAX_AUTO_FIX_ROUNDS used).
 ```
@@ -206,7 +225,10 @@ afterwards, the stop comes back.
 | `stalled` | A stage ran and changed nothing | Read its **Result:** line in the block. Approve to run it once more, or say how to go on. When it's the planner updating plan.md for changed requirements, approving keeps the plan as it is |
 | `pre-ship` | Before the push | Review evidence.md, mr.md and auto-decisions.md, tick the evidence, run `scripts/agent/approve-evidence.sh <id>` in your own terminal, then approve. This approval is your push confirmation. |
 | `duo` | After a Duo round: ASK threads, or fixes not yet pushed | Review review-triage.md, then approve the push or answer the ASK threads |
-| `plan`, `review`, `duo`, `verify`, `evidence` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:` | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
+| `spec` | MR review: no ClickUp task found for the MR | Reply with a ClickUp task id or the acceptance criteria, or approve reviewing against the MR description alone (the report says the spec check was weak) |
+| `focus` | MR review: the MR changes more than `MR_REVIEW_MAX_FILES` files (lockfiles and generated files don't count) | Reply with what to review, or approve to review the files with the most churn |
+| `findings` | MR review: always, once the review is written | Mark each finding in code-review.md post, debt or skip, then approve. Each post asks for your confirmation |
+| `plan`, `review`, `duo`, `verify`, `evidence`, `spec` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:`, requirements.md's `Spec source:` in an MR review | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
 
 The run ends when the MR is open, and again each time a Duo round is answered: run `/fetch-review <id>` after Duo's next review.
 
