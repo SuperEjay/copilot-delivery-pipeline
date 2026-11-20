@@ -48,6 +48,14 @@ _Avoid_: state file, task env
 The router's record of an auto run in `.work/<id>/run.log`: one line for each decision it prints and each approval it records, only ever appended. Only the router writes it; it is not one of the inputs that tell a stalled stage.
 _Avoid_: history, audit log, trace
 
+**MR review**:
+The pipeline's second route: a read-only review of an existing merge request, usually a teammate's, against its spec, started with `/review-mr <iid>`. It finds bugs, technical debt and improvements, and posts only the findings the user picks. It never changes the MR's code.
+_Avoid_: verifier, MR verification, PR review
+
+**Review worktree**:
+The separate git worktree an MR review checks the MR's head out into, so the user's own branch and uncommitted work are never touched. Agents may read it but not change it.
+_Avoid_: review checkout, sandbox
+
 **Manual mode**:
 Running a task by picking each stage agent yourself and following its **Next:** line, instead of an auto run. It is the fallback when an auto run can't be used.
 _Avoid_: stage-by-stage mode, step mode
