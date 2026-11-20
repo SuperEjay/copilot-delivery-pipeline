@@ -15,7 +15,10 @@
 #   deny  raw test commands (run-checks.sh / capture-evidence.sh must be used)
 #   deny  agent edits to pipeline config (agents, hooks, prompts, instructions, scripts, .agent.env),
 #         through edit tools or the shell
-#   ask   anything that publishes: create-mr, push-branch, upload-evidence, ClickUp writes
+#   deny  in an MR review (ADR 0003): changing the review worktree (.git/pipeline-reviews/),
+#         committing or pushing there, and any ClickUp write for an mr-<iid> task
+#   ask   anything that publishes: create-mr, push-branch, upload-evidence, ClickUp writes,
+#         post-review-thread (a finding posted on someone else's MR)
 #
 # Every decision other than allow is logged to .work/hooks.log.
 # To switch the guard off for a session, start VS Code with PIPELINE_GUARD=off.
@@ -28,6 +31,7 @@
 #   record  denied if mentioned at all   denied     allowed
 #   config  denied when a write targets  denied     allowed
 #   state   denied when a write targets  denied     allowed
+#   review  denied when a write targets  denied     allowed
 # Entries are literal paths; a folder ends in "/" and covers itself and
 # everything in it. A "*" segment stands for any one path segment (a task id).
 # A match starts at a path segment, anywhere in the path.
@@ -55,10 +59,12 @@ config  .agent.env
 state   state.env
 state   .work/*/status.md
 state   .work/*/run.log
+review  .git/pipeline-reviews/
 '
 REASON_secret="That file holds credentials or a saved login session. Agents never need to read or change it."
 REASON_record="verified-head and evidence/APPROVED|UPLOADED are written only by the pipeline's scripts: run-checks.sh records the verified commit, and the user approves evidence with approve-evidence.sh. Run scripts/agent/run-checks.sh <task-id> all to re-verify."
 REASON_state="state.env (the task's state), .work/<id>/status.md (the auto run's record, including stop approvals) and .work/<id>/run.log (the run log) are written only by the pipeline's scripts: start-task.sh, start-review.sh, set-review-spec.sh, create-mr.sh, fetch-duo-review.sh and review-signals.sh --mark-reviewed write state.env, next-stage.sh writes status.md and run.log. Read them if you need to; don't change them. Only the user approves a stop."
+REASON_review="That's an MR review's worktree: the MR's code, checked out read-only (ADR 0003). An MR review never changes, commits or pushes it. Write what you found in .work/mr-<iid>/code-review.md instead."
 REASON_config="Pipeline config (agents and their models, hooks, prompts, instructions, scripts, .agent.env) is user-owned, from the shell too. Tell the user what you'd change and why."
 
 if [ "${1:-}" = "--list-protected" ]; then
@@ -75,7 +81,7 @@ re_escape() {   # re_escape <text>: escape ERE metacharacters into $REPLY (no su
     case "$c" in [].\\[*^\$+?\(\)\{\}\|/]) REPLY+="\\$c" ;; *) REPLY+="$c" ;; esac
   done
 }
-PATHS_secret=''; PATHS_record=''; PATHS_config=''; PATHS_state=''
+PATHS_secret=''; PATHS_record=''; PATHS_config=''; PATHS_state=''; PATHS_review=''
 ANY_SEG='[^/[:space:]]+'   # what a "*" entry segment matches
 while read -r kind entry; do
   [ -n "$kind" ] || continue
@@ -85,10 +91,11 @@ while read -r kind entry; do
     record) PATHS_record+="${PATHS_record:+|}$alt" ;;
     config) PATHS_config+="${PATHS_config:+|}$alt" ;;
     state)  PATHS_state+="${PATHS_state:+|}$alt" ;;
+    review) PATHS_review+="${PATHS_review:+|}$alt" ;;
   esac
 done <<<"$PROTECTED"
 SEG_END='([^A-Za-z0-9._-]|$)'
-for kind in secret record config state; do
+for kind in secret record config state review; do
   v="PATHS_$kind"; printf -v "$v" '(%s)%s' "${!v}" "$SEG_END"
 done
 SHELL_START='(^|[/[:space:]"'"'"'=<>(`])'   # where a path can start inside a command
@@ -198,7 +205,7 @@ if $is_shell; then
   # the csh-style `>&word` in half. It may put a relative prefix (./, ../,
   # dir/) before the path. A writer command (cp, rm, sed -i ...) is checked per
   # segment, so `rm -rf x && scripts/agent/...` is fine.
-  for kind in config state; do
+  for kind in config state review; do
     v="PATHS_$kind"; r="REASON_$kind"
     redirect=">[|&]?[[:space:]]*[\"']?([^[:space:];&|]*/)?${!v}"
     [[ $path_cmd =~ $redirect ]] && decide deny "${!r}"
@@ -206,11 +213,27 @@ if $is_shell; then
   split_segments "$path_cmd"; path_segs="$REPLY"
   writer='(^|[[:space:]/(])(tee|cp|mv|rm|rmdir|ln|chmod|chown|truncate|install|dd|patch|unlink|shred|rsync|sed[[:space:]]+([^|;&]*[[:space:]])?(-[a-zA-Z]*i|--in-place)|perl[[:space:]]+-[a-zA-Z]*i|(python[0-9.]*|node|ruby|perl)[[:space:]]+-[a-zA-Z]*[ce]|git[[:space:]]+(checkout|restore|rm|mv|apply|stash))([[:space:]]|$)'
   while IFS= read -r seg; do
-    for kind in config state; do
+    for kind in config state review; do
       v="PATHS_$kind"; r="REASON_$kind"
       [[ $seg =~ $writer ]] && [[ $seg =~ $SHELL_START${!v} ]] && decide deny "${!r}"
     done
   done <<<"$path_segs"
+
+  # An MR review's worktree: no commit or push that names it, and nothing
+  # changed from inside it (a relative path there names no protected segment).
+  in_review=false
+  [[ $cwd =~ $PATH_START$PATHS_review || $cwd =~ /\.git/pipeline-reviews$ ]] && in_review=true
+  vcs_write='git[[:space:]].*(commit|push|merge|rebase|cherry-pick|revert|am|tag|reset|switch)([[:space:]]|$)'
+  if $in_review || [[ $path_cmd =~ $SHELL_START$PATHS_review ]]; then
+    has "$vcs_write" && decide deny "$REASON_review"
+  fi
+  if $in_review; then
+    [[ $path_cmd =~ \>[|\&]?[[:space:]]*[^[:space:]\&] && ! $path_cmd =~ \>[|]?[[:space:]]*/dev/(null|stdout|stderr) ]] && decide deny "$REASON_review"
+    while IFS= read -r seg; do [[ $seg =~ $writer ]] && decide deny "$REASON_review"; done <<<"$path_segs"
+  fi
+  # An MR review never writes to ClickUp.
+  has '(clickup\.sh[[:space:]]+(comment|status|attach)|upload-evidence\.sh)[[:space:]]+mr-[0-9]+' &&
+    decide deny "An MR review never writes to ClickUp (ADR 0003). The only thing it publishes is a finding, through scripts/agent/post-review-thread.sh."
 
   [[ $path_cmd =~ $SHELL_START$PATHS_secret ]] && decide deny "$REASON_secret"
   has '(\$\{?[A-Za-z_]*(TOKEN|SECRET|PASSWORD|API_KEY)|(^|[;&|[:space:]])(printenv|env|set|export -p)([[:space:]]*($|[;&|>]))|pk_[A-Za-z0-9]{6,}|glpat-)' &&
@@ -226,7 +249,7 @@ if $is_shell; then
   has '(^|[;&|(][[:space:]]*)git[[:space:]]+push' &&
     decide deny "Don't push directly. Use scripts/agent/create-mr.sh (shipper) or scripts/agent/push-branch.sh <task-id> (after the user approved the triage)."
   has 'glab[[:space:]]+(mr[[:space:]]+(create|update|merge|close|approve|revoke|note|delete)|api.*-X[[:space:]]*(POST|PUT|PATCH|DELETE)|api.*--method[[:space:]]*(POST|PUT|PATCH|DELETE))' &&
-    decide deny "Don't write to GitLab directly. Use scripts/agent/create-mr.sh or scripts/agent/reply-thread.sh."
+    decide deny "Don't write to GitLab directly. Use scripts/agent/create-mr.sh, scripts/agent/reply-thread.sh or, in an MR review, scripts/agent/post-review-thread.sh."
   has 'curl.*api\.clickup\.com' &&
     decide deny "Don't call the ClickUp API directly. Use scripts/agent/clickup.sh."
 
@@ -238,6 +261,9 @@ if $is_shell; then
   fi
   if has 'upload-evidence\.sh' && ! has 'upload-evidence\.sh[[:space:]]+[^[:space:]]+[[:space:]]+--check'; then
     decide ask "This uploads your approved evidence to ClickUp."
+  fi
+  if has 'post-review-thread\.sh'; then
+    decide ask "This posts a review finding as a thread on the MR, under your GitLab account. Approve only if you marked it post."
   fi
   if has 'clickup\.sh[[:space:]]+(comment|status|attach)'; then
     decide ask "This writes to the ClickUp task (comment, status or attachment)."
@@ -258,6 +284,7 @@ if $is_edit || $is_read; then
       [[ $p =~ $PATH_START$PATHS_record ]] && decide deny "$REASON_record"
       [[ $p =~ $PATH_START$PATHS_config ]] && decide deny "$REASON_config"
       [[ $p =~ $PATH_START$PATHS_state ]] && decide deny "$REASON_state"
+      [[ $p =~ $PATH_START$PATHS_review ]] && decide deny "$REASON_review"
     fi
   done <<<"$paths"
 fi

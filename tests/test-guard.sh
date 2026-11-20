@@ -123,9 +123,10 @@ declare -A want=(
   [record]='deny deny deny allow'
   [config]='deny allow deny allow'
   [state]='deny allow deny allow'
+  [review]='deny allow deny allow'
 )
 list="$(bash "$GUARD" --list-protected)"
-for kind in secret record config state; do
+for kind in secret record config state review; do
   if grep -q "^$kind	" <<<"$list"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: --list-protected has no $kind entries"; fi
 done
 while IFS=$'\t' read -r kind entry; do
@@ -318,6 +319,40 @@ sh allow 'rm -rf .work/T-1/tmp 2>&1 && cat scripts/agent/config.sh 2>&1'
 # ---------- switch ----------
 got="$(jq -n '{toolName: "bash", toolArgs: {command: "git push"}}' | PIPELINE_GUARD=off bash "$GUARD")"
 if [ "$got" = "{}" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: PIPELINE_GUARD=off should allow"; fi
+
+# ---------- an MR review is read-only (ADR 0003) ----------
+WTP=.git/pipeline-reviews/mr-142
+# sh_in <dir> <decision> <command>: the command run with <dir> as the working folder.
+sh_in() {
+  local got; got="$(jq -n --arg c "$3" --arg cwd "$1" '{toolName: "bash", toolArgs: {command: $c}, cwd: $cwd}' |
+    PIPELINE_GUARD=on bash "$GUARD" | jq -r '.permissionDecision // "allow"')"
+  if [ "$got" = "$2" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: expected $2, got $got in $1: $3"; fi
+}
+mkdir -p "$T/$WTP/src"
+ed deny  editFiles "$WTP/src/a.ts"
+ed deny  editFiles "/home/u/proj/$WTP/src/a.ts"
+ed allow read_file "$WTP/src/a.ts"
+sh allow "git -C $WTP diff origin/main...HEAD"
+sh allow "cat $WTP/src/a.ts"
+sh deny  "echo x > $WTP/src/a.ts"
+sh deny  "sed -i s/a/b/ $WTP/src/a.ts"
+sh deny  "git -C $WTP commit -am fix"
+sh deny  "cd $WTP && git commit -am fix"
+sh deny  "git -C $WTP push origin HEAD:refs/heads/fix"
+sh_in "$T/$WTP" deny  'git commit -am fix'
+sh_in "$T/$WTP" deny  'echo x > src/a.ts'
+sh_in "$T/$WTP" deny  'sed -i s/a/b/ src/a.ts'
+sh_in "$T/$WTP" allow 'git log --oneline -5'
+sh_in "$T/$WTP" allow 'grep -rn TODO src'
+sh_in "$T" allow 'git commit -am "feat: mine"'          # the user's own checkout is unaffected
+sh deny  'scripts/agent/clickup.sh comment mr-142 note.md'
+sh deny  'scripts/agent/clickup.sh status mr-142 done'
+sh deny  'scripts/agent/clickup.sh attach mr-142 x.png'
+sh deny  'scripts/agent/upload-evidence.sh mr-142'
+sh allow 'scripts/agent/clickup.sh fetch mr-142'
+sh ask   'scripts/agent/clickup.sh comment T-1 note.md'    # delivery: still a confirmation
+sh ask   'scripts/agent/post-review-thread.sh 142 CR-3'
+sh ask   'bash scripts/agent/post-review-thread.sh 142 CR-1'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

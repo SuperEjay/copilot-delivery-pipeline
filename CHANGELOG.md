@@ -19,6 +19,11 @@
   - **What it writes:** `requirements.md` always has a `Spec source:` line: `ClickUp <id>`, `MR description (weak)`, `ACs from the user` or `none`. `none` brings the spec stop. Gaps in the spec go under `## Spec gaps`, for the reviewer to raise as `spec-gap` findings. There are no open questions.
   - **New `.work/mr-<iid>/mr.json`:** `start-review.sh` saves the MR's title, description, branches and commit messages there, so the lookup reads one file.
   - **`clickup.sh` in an MR review:** `clickup.sh fetch mr-<iid>` fetches the stored ClickUp id into the review's own folder. `comment`, `status` and `attach` are refused for an MR review, and nothing is sent.
+- **MR review, part 7: posting findings, and read-only enforced** (ADR 0003, #84).
+  - **New `scripts/agent/post-review-thread.sh <iid> <CR-n>`** posts one finding marked post as its own MR thread, starting with `**[pipeline review] CR-n · <severity> · <category>**`. When the finding's `file:line` is in the MR's diff (an added line, or an unchanged line in a hunk), the thread sits on that line. Otherwise it's a general thread that names the location. The thread id goes back under the finding as `- **Thread:** <id>`.
+  - **What it refuses:** a finding not marked post, one already posted, and an MR that moved on since the review. In that last case, run `/review-mr <iid>` again first.
+  - **The hook guard asks you to confirm every post.**
+  - **The guard keeps an MR review read-only.** The review worktree (`.git/pipeline-reviews/`) is a new protected kind, `review`: agents may read it and name it, but not change it. A git commit or push that names the worktree is denied, and so is one run from inside it. From inside it, so is a write to any file. `clickup.sh comment|status|attach` and `upload-evidence.sh` for an `mr-<iid>` task are denied, not just confirmed. The rest of your checkout is unaffected.
 
 ## v2.0.0
 
