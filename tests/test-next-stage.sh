@@ -394,14 +394,16 @@ mr_change() { local f; for f in "$@"; do mkdir -p "$WT/$(dirname "$f")"; echo "$
 spec_md() { printf '# Requirements: mr-7\n%s\n## Acceptance criteria\n- AC-1: x\n' "$1" > $R/requirements.md; }
 checks_md() { printf '# Verification: mr-7\nResult: %s\nCommit: %s\n' "$1" "${2:-$(mrhead)}" > $R/verification.md; }
 mr_reviewed() { bash -c 'source scripts/agent/config.sh; state_set_reviewed_sha mr-7 "$1"' _ "$(mrhead)"; }
-# mr_review_md "<decision> [thread]"...: an MR review's code-review.md, one finding per argument.
+# mr_review_md "<decision> [thread|-] [status|-] [replied]"...: an MR review's
+# code-review.md, one finding per argument.
 mr_review_md() {
-  local i=0 f d th
+  local i=0 f d th st rp
   { echo "# Code review: mr-7"; echo "## Findings"
     for f in "$@"; do
-      i=$((i + 1)); read -r d th <<< "$f"
+      i=$((i + 1)); read -r d th st rp <<< "$f"
       echo "### CR-$i · major · Correctness · \`a.txt:$i\`"; echo "- **Problem:** p"
-      echo "- **Decision:** $d"; [ -n "$th" ] && echo "- **Thread:** $th"
+      echo "- **Decision:** $d"; [ -n "$th" ] && [ "$th" != - ] && echo "- **Thread:** $th"
+      [ -n "$st" ] && [ "$st" != - ] && echo "- **Status:** $st"; [ -n "$rp" ] && echo "- **Replied:** $rp"
     done
   } > $R/code-review.md
 }
@@ -480,11 +482,29 @@ check "review: every post has its thread: end, with the counts" '[ "$out" = "end
 mr_review_md "skip" "debt" "skip" "post 102"; next mr-7
 check "review: a changed decision brings the findings stop back" 'grep -q "^stop findings " "$T/out.txt"'
 
-# ---------- the author pushes again ----------
+# ---------- re-review: nothing new (#86) ----------
+mr_review_md "post 101" "debt" "skip" "post 102"; next mr-7   # back to the decisions approved
+check "re-review: no new commits since the review: end, nothing to do" '[ "${out%% *}" = end ] && grep -q "Review of !7 done at $(mrhead --short)" "$T/out.txt"'
+
+# ---------- re-review: the author pushes again (#86) ----------
+OLD_HEAD="$(mrhead)"
 mr_change src/a.ts; next mr-7
-check "review: a new MR head over the file limit: the focus stop again" 'grep -q "^stop focus " "$T/out.txt"'
+check "re-review: only the files since the review count: no focus stop for one file" '[ "$(echo "$out" | cut -d" " -f2)" = verifier ]'
+checks_md PASS; next mr-7
+check "re-review: the reviewer runs on the new head" '[ "$out" = "run reviewer AUTO RUN. Review mr-7." ]'
+mr_reviewed
+mr_review_md "post 101 verified" "debt" "skip" "post 102 open" "post"; next mr-7
+check "re-review: new findings and statuses bring the findings stop back" 'grep -q "^stop findings " "$T/out.txt"'
 next mr-7 approve; next mr-7
-check "review: a new MR head: the checks run again" '[ "$(echo "$out" | cut -d" " -f2)" = verifier ]'
+check "re-review: the new finding is posted first" '[ "$out" = "run reviewer AUTO RUN. Post the findings marked post for mr-7: CR-5." ]'
+mr_review_md "post 101 verified" "debt" "skip" "post 102 open" "post 103"; next mr-7
+check "re-review: then a reply on each verified finding's thread" '[ "$out" = "run reviewer AUTO RUN. Reply on the threads of the findings verified for mr-7: CR-1. Don'"'"'t resolve them." ]'
+mr_review_md "post 101 verified yes" "debt" "skip" "post 102 open" "post 103"; next mr-7
+check "re-review: replied: end, with the verified count, and no findings stop again" '[ "$out" = "end Review of !7 done at $(mrhead --short): 3 posted, 1 parked in .work/mr-7/tech-debt.md, 1 skipped, 1 verified since posting. Run /review-mr 7 again after the author pushes." ]'
+mr_review_md "post 101 verified declined" "debt" "skip" "post 102 open" "post 103"; next mr-7
+check "re-review: a declined reply counts as answered" '[ "${out%% *}" = end ]'
+for i in 1 2 3 4 5; do mr_change "src/many$i.ts"; done; next mr-7
+check "re-review: more new files than the limit: the focus stop" 'grep -q "^stop focus !7 changes 5 files" "$T/out.txt"'
 
 # ---------- a task started on v1.2.2 carries on (ADR 0002) ----------
 # v1.2.2's own scripts start the task, stop it at requirements and record the

@@ -31,6 +31,11 @@
   - **What it decides:** post, debt or skip for each finding, with no fix and no route. It keeps `tech-debt.md` matching the debt decisions. It posts only what you approved, one finding at a time, and a post you decline becomes skip.
   - **The template:** the MR review `code-review.md` template has `- **Decision:** post | debt | skip`.
   - **`review-signals.sh mr-<iid>`** works in the review worktree. It compares the MR's head against its target branch, or on a later run covers only the commits since the last review. `--mark-reviewed` records the MR's head.
+- **MR review, part 10: re-review after the author pushes** (ADR 0003, #86). Run `/review-mr <iid>` again: the worktree moves to the new head. With no new commits, the run ends at once. With new commits:
+  - **What's reviewed:** the focus stop counts only the files changed since the last review. The reviewer reviews only the new code, with new CR numbers.
+  - **Posted findings:** the reviewer marks each one `Status: verified` or `open`. Decisions already made aren't reopened.
+  - **Replies:** after any new posts, the router has the reviewer reply on each verified finding's thread through `reply-thread.sh`, and you confirm each reply. `- **Replied:** yes|declined` is recorded and doesn't bring the findings stop back. The end line counts the verified findings.
+  - **Never resolves a thread:** `reply-thread.sh mr-<iid> … --resolve` is refused by the script and the guard, and the guard asks you to confirm every reply on an MR review's thread.
 
 ## v2.0.0
 

@@ -119,9 +119,17 @@ Follow this section when the task is an MR review: the task id is `mr-<iid>`, an
 6. Go through the checklist. Write `code-review.md` from the template below. Recommend **post**, **debt** or **skip** for each finding, and set its Decision to the same. There's no fix and no route: the MR isn't yours to change. Then run `scripts/agent/review-signals.sh mr-<iid> --mark-reviewed`.
 7. Append each **debt** finding to `tech-debt.md` (the template above, Status `parked`). Keep tech-debt.md matching the debt decisions whenever they change.
 
+**Re-review** (a later `Review mr-<iid>.` after the author pushed: review-signals.md says "delta since last review"):
+- Fetch the threads again; the author may have answered.
+- Check each posted finding (one with a `- **Thread:**` line) against the new commits. Add `- **Status:** verified` when the change addresses it, or `- **Status:** open` when it doesn't yet, with one line on why.
+- Review only the new code, and give what you find new CR numbers after the last one.
+- Don't reopen decisions already made, and don't change the text of a posted finding.
+
 **A reply from the findings stop:** change each Decision the user names to **post**, **debt** or **skip**, and keep tech-debt.md matching. Don't post anything: the findings stop comes back for the user's approval. **A reply from the focus stop:** write what to review to `focus.md`, one path or glob per line.
 
 **"Post the findings marked post for mr-<iid>: CR-…":** for each finding listed, one at a time, run `scripts/agent/post-review-thread.sh <iid> CR-n`. The user confirms each one. If the user declines one, set that finding's Decision to `skip (declined at posting)`, so the findings stop shows it again. Don't post anything else, and don't change the text of a finding that's already posted.
+
+**"Reply on the threads of the findings verified for mr-<iid>: CR-…":** for each finding listed, one at a time, write a short reply to `.work/mr-<iid>/replies/CR-n.md` ("Looks addressed in <short sha>: <how>. Thanks!"), and run `scripts/agent/reply-thread.sh mr-<iid> <thread-id> .work/mr-<iid>/replies/CR-n.md`, never with `--resolve`. The user confirms each one. Then add `- **Replied:** yes` under the finding, or `- **Replied:** declined` when the user declined.
 
 ~~~markdown
 # Code review: mr-<iid> (!<iid>: <MR title>)

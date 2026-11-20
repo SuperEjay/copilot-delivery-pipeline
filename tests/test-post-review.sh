@@ -16,6 +16,7 @@ S=scripts/agent
 export STUB="$T/stub"; mkdir -p "$STUB"
 cat > "$STUB/glab" <<'EOF'
 #!/usr/bin/env bash
+echo "$*" >> "$STUB/calls.log"
 case "$*" in
   "api -X POST projects/:id/merge_requests/7/discussions"*)
     n=$(( $(ls "$STUB"/post-*.json 2>/dev/null | wc -l) + 1 ))
@@ -98,6 +99,14 @@ mr_json
 bash -c 'source scripts/agent/config.sh; state_init T1 feature/T1-x'
 post 1 CR-1
 check "a task that isn't an MR review is refused" '[ $rc -eq 1 ] && grep -q "No MR review of !1" "$T/out.txt"'
+
+# ---------- replies on an MR review's threads never resolve them ----------
+echo "Verified in the new commits." > "$T/reply.md"
+: > "$STUB/calls.log"
+$S/reply-thread.sh mr-7 disc1 "$T/reply.md" --resolve > "$T/out.txt" 2>&1; rc=$?
+check "reply-thread.sh --resolve in an MR review: refused, nothing sent" '[ $rc -eq 1 ] && grep -q "never resolves a thread" "$T/out.txt" && [ ! -s "$STUB/calls.log" ]'
+$S/reply-thread.sh mr-7 disc1 "$T/reply.md" > "$T/out.txt" 2>&1; rc=$?
+check "reply-thread.sh in an MR review replies on the thread, and doesn't resolve it" '[ $rc -eq 0 ] && grep -q "Replied to disc1" "$T/out.txt" && grep -q "discussions/disc1/notes" "$STUB/calls.log" && ! grep -q "PUT" "$STUB/calls.log"'
 
 # ---------- review signals for an MR review: the worktree, against the target ----------
 git commit -q --allow-empty -m "the user's own work"   # the main checkout moves on; it must not matter

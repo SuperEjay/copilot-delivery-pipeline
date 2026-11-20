@@ -352,6 +352,9 @@ sh deny  'scripts/agent/upload-evidence.sh mr-142'
 sh allow 'scripts/agent/clickup.sh fetch mr-142'
 sh ask   'scripts/agent/clickup.sh comment T-1 note.md'    # delivery: still a confirmation
 sh ask   'scripts/agent/post-review-thread.sh 142 CR-3'
+sh ask   'scripts/agent/reply-thread.sh mr-142 disc1 .work/mr-142/replies/CR-1.md'
+sh deny  'scripts/agent/reply-thread.sh mr-142 disc1 .work/mr-142/replies/CR-1.md --resolve'
+sh allow 'scripts/agent/reply-thread.sh T-1 disc1 .work/T-1/reply.md --resolve'   # delivery: the duo stop confirmed it
 sh ask   'bash scripts/agent/post-review-thread.sh 142 CR-1'
 
 echo "passed=$pass failed=$fail"

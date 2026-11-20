@@ -64,7 +64,10 @@
 #   reviewed          REVIEWED_SHA = the MR head, or run reviewer.
 #   findings          always a stop; approve needs post, debt or skip on each.
 #   post              a "post" finding without a "Thread:" line: run reviewer
-#                     to post it. Then end.
+#                     to post it. A posted finding "Status: verified" without a
+#                     "Replied:" line: run reviewer to reply on its thread. End.
+#   A re-review (the MR's head moved since REVIEWED_SHA) counts only the files
+#   changed since then for the focus stop.
 #
 # Lines it reads, which the agents' templates write (anything missing or
 # unreadable is a stop no approval can pass):
@@ -78,7 +81,9 @@
 #   In an MR review:
 #   requirements.md        "Spec source: <ClickUp id | MR description (weak) | none>"
 #   code-review.md         "### CR-n …", "- **Decision:** post|debt|skip",
-#                          "- **Thread:** <discussion id>" once posted
+#                          "- **Thread:** <discussion id>" once posted,
+#                          "- **Status:** verified|open" and "- **Replied:** …"
+#                          on a re-review
 #
 # Approvals are tied to a checksum of what the stop is about (requirements.md;
 # plan.md and requirements.md; code-review.md; HEAD, mr.md, the evidence and
@@ -177,15 +182,16 @@ _status_value() { _last_value "$STATUS" "$1: "; }
 # _checksum <file|@HEAD|@unticked:file|@nothreads:file>...: one checksum over
 # these inputs (a missing file counts too). @unticked:<file> reads every "- [x]"
 # as "- [ ]", so ticking a slice in plan.md or an item in evidence.md isn't a
-# change to what was approved. @nothreads:<file> leaves out "- **Thread:**"
-# lines, so posting a finding isn't a change to the decisions approved.
+# change to what was approved. @nothreads:<file> leaves out "- **Thread:**" and
+# "- **Replied:**" lines, so posting a finding or replying on its thread isn't
+# a change to the decisions approved.
 _checksum() {
   local f
   for f in "$@"; do
     echo "== $f"
     if [ "$f" = @HEAD ]; then _head
     elif [ "${f#@nothreads:}" != "$f" ] && [ -f "$DIR/${f#@nothreads:}" ]; then
-      grep -v '^- \*\*Thread:\*\*' "$DIR/${f#@nothreads:}"
+      grep -vE '^- \*\*(Thread|Replied):\*\*' "$DIR/${f#@nothreads:}"
     elif [ "${f#@unticked:}" != "$f" ] && [ -f "$DIR/${f#@unticked:}" ]; then
       sed -E 's/^([[:space:]]*- )\[[xX]\]/\1[ ]/' "$DIR/${f#@unticked:}"
     elif [ -f "$DIR/$f" ]; then cat "$DIR/$f"
@@ -314,8 +320,8 @@ decide_review() {
     return
   fi
 
-  STAGE=focus
-  n="$(_review_files | wc -l | tr -d ' ')"
+  STAGE=focus   # moot once this head is reviewed
+  n=0; [ "$(state_reviewed_sha "$TASK")" = "$head" ] || n="$(_review_files | wc -l | tr -d ' ')"
   if [ "$n" -gt "$MR_REVIEW_MAX_FILES" ]; then
     fp="$(_checksum @HEAD focus.md)"
     if ! _approved focus "$fp"; then
@@ -342,10 +348,12 @@ decide_review() {
   fi
 
   STAGE=findings
-  local id d th pending=() unposted=() posted=0 debt=0 skipped=0
-  while IFS=$'\037' read -r id d th; do
+  local id d th st rp pending=() unposted=() unreplied=() posted=0 debt=0 skipped=0 verified=0
+  while IFS=$'\037' read -r id d th st rp; do
     case "$d" in
-      post) if [ -n "$th" ]; then posted=$((posted + 1)); else unposted+=("$id"); fi ;;
+      post) if [ -z "$th" ]; then unposted+=("$id"); continue; fi
+            posted=$((posted + 1))
+            if [ "$st" = verified ]; then verified=$((verified + 1)); [ -n "$rp" ] || unreplied+=("$id"); fi ;;
       debt) debt=$((debt + 1)) ;;
       skip) skipped=$((skipped + 1)) ;;
       *) pending+=("$id") ;;
@@ -362,29 +370,42 @@ decide_review() {
   if [ "${#unposted[@]}" -gt 0 ]; then
     _run reviewer "Post the findings marked post for $TASK: ${unposted[*]}."; return
   fi
-  _end "Review of !$iid done at $(_head --short): $posted posted, $debt parked in $REL/tech-debt.md, $skipped skipped. Run /review-mr $iid again after the author pushes."
+  if [ "${#unreplied[@]}" -gt 0 ]; then
+    _run reviewer "Reply on the threads of the findings verified for $TASK: ${unreplied[*]}. Don't resolve them."; return
+  fi
+  local also=""; [ "$verified" -gt 0 ] && also=", $verified verified since posting"
+  _end "Review of !$iid done at $(_head --short): $posted posted, $debt parked in $REL/tech-debt.md, $skipped skipped$also. Run /review-mr $iid again after the author pushes."
 }
 
 # _review_files: the files the MR changes, from where it left its target branch
-# to its head, without the ones MR_REVIEW_SKIP_PATTERN matches.
+# to its head, without the ones MR_REVIEW_SKIP_PATTERN matches. On a re-review,
+# only the files changed since the reviewed head.
 _review_files() {
-  local base target
+  local base target reviewed
   target="$(state_target_branch "$TASK")"
-  base="$(git merge-base "refs/remotes/origin/${target:-$BASE_BRANCH}" "$(_head)" 2>/dev/null)" || return 0
+  reviewed="$(state_reviewed_sha "$TASK")"
+  if [ -n "$reviewed" ] && [ "$reviewed" != "$(_head)" ] && git merge-base --is-ancestor "$reviewed" "$(_head)" 2>/dev/null; then
+    base="$reviewed"
+  else
+    base="$(git merge-base "refs/remotes/origin/${target:-$BASE_BRANCH}" "$(_head)" 2>/dev/null)" || return 0
+  fi
   git -C "$HEAD_DIR" diff --name-only "$base" HEAD | grep -Ev "$MR_REVIEW_SKIP_PATTERN"
 }
 
-# _review_findings: "<CR-n>\037<decision>\037<thread>" for each finding in an MR
-# review's code-review.md. Placeholders (_pending_, (…)) read as empty.
+# _review_findings: "<CR-n>\037<decision>\037<thread>\037<status>\037<replied>" for
+# each finding in an MR review's code-review.md. Placeholders (_pending_, (…))
+# read as empty.
 _review_findings() {
   awk '
     function val(s, key,   i) { i = index(s, key); s = substr(s, i + length(key))
       sub(/·.*/, "", s); gsub(/[*_`]/, "", s); sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s)
       if (s ~ /^\(/ || s == "pending") s = ""; split(s, w, " "); return tolower(w[1]) }
-    function flush() { if (id != "") print id "\037" d "\037" th }
-    /^### CR-[0-9]+/ { flush(); id = $2; d = th = "" }
+    function flush() { if (id != "") print id "\037" d "\037" th "\037" st "\037" rp }
+    /^### CR-[0-9]+/ { flush(); id = $2; d = th = st = rp = "" }
     id != "" && /\*\*Decision:\*\*/ { d = val($0, "**Decision:**") }
     id != "" && /\*\*Thread:\*\*/ { th = val($0, "**Thread:**") }
+    id != "" && /\*\*Status:\*\*/ { st = val($0, "**Status:**") }
+    id != "" && /\*\*Replied:\*\*/ { rp = val($0, "**Replied:**") }
     END { flush() }' "$DIR/code-review.md"
 }
 

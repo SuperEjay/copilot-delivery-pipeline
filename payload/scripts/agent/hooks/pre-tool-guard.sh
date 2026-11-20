@@ -18,7 +18,8 @@
 #   deny  in an MR review (ADR 0003): changing the review worktree (.git/pipeline-reviews/),
 #         committing or pushing there, and any ClickUp write for an mr-<iid> task
 #   ask   anything that publishes: create-mr, push-branch, upload-evidence, ClickUp writes,
-#         post-review-thread (a finding posted on someone else's MR)
+#         post-review-thread (a finding posted on someone else's MR), and a reply on
+#         an MR review's thread (never --resolve)
 #
 # Every decision other than allow is logged to .work/hooks.log.
 # To switch the guard off for a session, start VS Code with PIPELINE_GUARD=off.
@@ -261,6 +262,11 @@ if $is_shell; then
   fi
   if has 'upload-evidence\.sh' && ! has 'upload-evidence\.sh[[:space:]]+[^[:space:]]+[[:space:]]+--check'; then
     decide ask "This uploads your approved evidence to ClickUp."
+  fi
+  has 'reply-thread\.sh[[:space:]]+mr-[0-9]+.*--resolve' &&
+    decide deny "An MR review never resolves a thread (ADR 0003): that stays with the author and the team. Reply without --resolve."
+  if has 'reply-thread\.sh[[:space:]]+mr-[0-9]+'; then
+    decide ask "This replies on a thread of someone else's MR, under your GitLab account."
   fi
   if has 'post-review-thread\.sh'; then
     decide ask "This posts a review finding as a thread on the MR, under your GitLab account. Approve only if you marked it post."
