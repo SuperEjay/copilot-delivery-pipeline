@@ -139,6 +139,10 @@ W="What's in here"
 check "guide: the skill is listed in What's in here" 'guide_sec "$W" "skills/review-mr/SKILL\.md"'
 check "guide: the guard table has the MR review rules" 'guide_sec "Hooks (enforced rules)" "pipeline-reviews" && guide_sec "Hooks (enforced rules)" "post-review-thread\.sh"'
 README="$ROOT/README.md"
+for f in "$ROOT"/tests/test-*.sh; do
+  check "README: the Development list names $(basename "$f")" 'grep -q "^tests/$(basename "$f") " "$README"'
+done
+check "guide: says which ClickUp writes the guard denies in an MR review" 'guide_sec "$G" "only for an .mr-<iid>. task id"'
 check "README: a Review a teammate's MR section with /review-mr" 'grep -qx "## Review a teammate.s MR" "$README" && grep -q "/review-mr <iid>" <<<"$(awk "/^## Review a teammate/ { on = 1; next } /^## / { on = 0 } on" "$README")"'
 check "rules for every agent: an MR review is read-only" 'grep -q "/review-mr" "$ROOT/payload/pipeline-instructions.md" && grep -q "read-only" "$ROOT/payload/pipeline-instructions.md"'
 

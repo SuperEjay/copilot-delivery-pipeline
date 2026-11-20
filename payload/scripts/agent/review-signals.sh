@@ -39,7 +39,9 @@ fi
 : "${REVIEW_MAX_PER_FLAG:=15}"
 
 FULL_BASE="$(git merge-base "origin/$TARGET" HEAD)"
-if [ "$MODE" != "--full" ] && [ -n "$REVIEWED_SHA" ] && git cat-file -e "$REVIEWED_SHA" 2>/dev/null; then
+# A delta only when the reviewed head is still in this history: after a
+# force-push or rebase it isn't, and the whole branch is reviewed again.
+if [ "$MODE" != "--full" ] && [ -n "$REVIEWED_SHA" ] && git merge-base --is-ancestor "$REVIEWED_SHA" HEAD 2>/dev/null; then
   BASE="$REVIEWED_SHA"; SCOPE="delta since last review ($(git rev-parse --short "$BASE"))"
 else
   BASE="$FULL_BASE"; SCOPE="full $WHAT vs origin/$TARGET"

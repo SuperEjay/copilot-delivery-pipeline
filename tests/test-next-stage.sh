@@ -482,6 +482,16 @@ check "review: every post has its thread: end, with the counts" '[ "$out" = "end
 mr_review_md "skip" "debt" "skip" "post 102"; next mr-7
 check "review: a changed decision brings the findings stop back" 'grep -q "^stop findings " "$T/out.txt"'
 
+# ---------- the target branch can't be read: a stop, not a silent pass ----------
+KEEP_REVIEWED="$(bash -c 'source scripts/agent/config.sh; state_reviewed_sha mr-7')"
+bash -c 'source scripts/agent/config.sh; state_set_target_branch mr-7 no-such-branch && state_set_reviewed_sha mr-7 ""'   # a first review: counted from the target
+mr_change src/target.ts; next mr-7
+check "review: the MR's target branch can't be read: a focus stop no approval passes" 'grep -q "^stop focus .*origin/no-such-branch" "$T/out.txt" && grep -q "/review-mr 7" "$T/out.txt"'
+next mr-7 approve
+check "review: ... and approve refuses it" '[ $rc -eq 1 ]'
+bash -c 'source scripts/agent/config.sh; state_set_target_branch mr-7 main && state_set_reviewed_sha mr-7 "$1"' _ "$KEEP_REVIEWED"
+git -C "$WT" reset -q --hard HEAD~1   # undo the extra commit, so the run below is as before
+
 # ---------- re-review: nothing new (#86) ----------
 mr_review_md "post 101" "debt" "skip" "post 102"; next mr-7   # back to the decisions approved
 check "re-review: no new commits since the review: end, nothing to do" '[ "${out%% *}" = end ] && grep -q "Review of !7 done at $(mrhead --short)" "$T/out.txt"'

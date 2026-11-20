@@ -119,6 +119,11 @@ check "--mark-reviewed records the MR head, not the user's HEAD" '[ $rc -eq 0 ] 
 echo "// TODO later" >> "$WT/src/c.ts"; git -C "$WT" commit -qam "author pushes again"
 sig mr-7
 check "a second run covers only the commits since the review" 'grep -q "delta since last review ($(git rev-parse --short "$HEAD"))" $R/review-signals.md && ! grep -q "src/a.ts" $R/review-signals.md && grep -q "TODO later" $R/review-signals.md'
+# the author rewrites history: the reviewed head is no longer an ancestor
+REVIEWED_NOW="$(git -C "$WT" rev-parse HEAD)"; bash -c 'source scripts/agent/config.sh; state_set_reviewed_sha mr-7 "$1"' _ "$REVIEWED_NOW"
+git -C "$WT" checkout -q --detach "$HEAD"; echo rebased > "$WT/src/d.ts"; git -C "$WT" add -A; git -C "$WT" commit -qm "rebased MR"
+sig mr-7
+check "after a force-push, the review covers the whole MR again, not a range off the old head" 'grep -q "full MR vs origin/main" $R/review-signals.md && grep -q "src/d.ts" $R/review-signals.md'
 sig mr-7 --full
 check "--full: the whole MR again" 'grep -q "full MR vs origin/main" $R/review-signals.md && grep -q "src/a.ts" $R/review-signals.md'
 

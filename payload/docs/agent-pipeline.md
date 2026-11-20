@@ -229,7 +229,7 @@ afterwards, the stop comes back.
 | `spec` | MR review: no ClickUp task found for the MR | Reply with a ClickUp task id or the acceptance criteria, or approve reviewing against the MR description alone (the report says the spec check was weak) |
 | `focus` | MR review: the MR changes more than `MR_REVIEW_MAX_FILES` files (lockfiles and generated files don't count) | Reply with what to review, or approve to review the files with the most churn |
 | `findings` | MR review: always, once the review is written | Mark each finding in code-review.md post, debt or skip, then approve. Each post asks for your confirmation |
-| `plan`, `review`, `duo`, `verify`, `evidence`, `spec` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:`, requirements.md's `Spec source:` in an MR review | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
+| `plan`, `review`, `duo`, `verify`, `evidence`, `spec`, `focus` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:`, requirements.md's `Spec source:` in an MR review. Or, for `focus`, the MR's target branch can't be read: run `/review-mr <iid>` again | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
 
 The run ends when the MR is open, and again each time a Duo round is answered: run `/fetch-review <id>` after Duo's next review. An MR review ends once its findings are posted.
 
@@ -406,7 +406,10 @@ It never resolves a thread: that stays with the author and the team.
 ### Read-only, enforced
 
 The guard denies any change to the review worktree, any commit or push there,
-and any ClickUp write for an `mr-<iid>` task. The only things that leave your
+and any ClickUp write for an `mr-<iid>` task. It denies ClickUp writes only for an `mr-<iid>` task id: the guard
+keeps no record of which run is going on, so `clickup.sh comment <the ClickUp id>`
+still only asks you to confirm, as it does in delivery. Decline it in an MR
+review. (`clickup.sh` itself refuses every write for an `mr-<iid>` task.) The only things that leave your
 machine are the findings and replies you confirmed. See "Hooks (enforced
 rules)".
 

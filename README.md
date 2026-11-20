@@ -338,6 +338,8 @@ tests/test-next-stage.sh  # checks the auto run's router: the next stage or stop
 tests/test-agents.sh      # checks the stage agents: subagent frontmatter, no handoffs, the "In an auto run" sections
 tests/test-orchestrator.sh  # checks the orchestrator (pipeline agent) against the router's verbs and stop ids
 tests/test-doctor.sh      # checks doctor.sh: each PASS, WARN and FAIL, with fake tools on PATH, and that it changes nothing
+tests/test-start-review.sh  # checks the start of an MR review: which MRs, the review worktree, dependencies, ClickUp, --done
+tests/test-post-review.sh   # checks posting an MR review's findings (diff or general threads), replies and review signals
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release

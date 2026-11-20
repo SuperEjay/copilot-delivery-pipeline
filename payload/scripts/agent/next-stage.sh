@@ -12,7 +12,7 @@
 #                                     findings stalled. A file missing a line it
 #                                     reads is a stop no approval passes, under
 #                                     the stage's id: plan review duo verify
-#                                     evidence spec
+#                                     evidence spec focus
 #       end <reason>                  the run is over until Duo reviews: the MR
 #                                     is open, or a Duo round is answered. In an
 #                                     MR review: the findings are posted
@@ -321,7 +321,15 @@ decide_review() {
   fi
 
   STAGE=focus   # moot once this head is reviewed
-  n=0; [ "$(state_reviewed_sha "$TASK")" = "$head" ] || n="$(_review_files | wc -l | tr -d ' ')"
+  n=0
+  if [ "$(state_reviewed_sha "$TASK")" != "$head" ]; then
+    local files
+    if ! files="$(_review_files)"; then
+      local target; target="$(state_target_branch "$TASK")"
+      _unreadable focus "Can't count the MR's files: origin/${target:-$BASE_BRANCH} (its target branch) can't be read here. Run /review-mr $iid again to fetch it."; return
+    fi
+    n="$(printf '%s' "$files" | grep -c . || true)"
+  fi
   if [ "$n" -gt "$MR_REVIEW_MAX_FILES" ]; then
     fp="$(_checksum @HEAD focus.md)"
     if ! _approved focus "$fp"; then
@@ -379,7 +387,8 @@ decide_review() {
 
 # _review_files: the files the MR changes, from where it left its target branch
 # to its head, without the ones MR_REVIEW_SKIP_PATTERN matches. On a re-review,
-# only the files changed since the reviewed head.
+# only the files changed since the reviewed head. Returns 1 when the target
+# branch can't be read.
 _review_files() {
   local base target reviewed
   target="$(state_target_branch "$TASK")"
@@ -387,9 +396,9 @@ _review_files() {
   if [ -n "$reviewed" ] && [ "$reviewed" != "$(_head)" ] && git merge-base --is-ancestor "$reviewed" "$(_head)" 2>/dev/null; then
     base="$reviewed"
   else
-    base="$(git merge-base "refs/remotes/origin/${target:-$BASE_BRANCH}" "$(_head)" 2>/dev/null)" || return 0
+    base="$(git merge-base "refs/remotes/origin/${target:-$BASE_BRANCH}" "$(_head)" 2>/dev/null)" || return 1
   fi
-  git -C "$HEAD_DIR" diff --name-only "$base" HEAD | grep -Ev "$MR_REVIEW_SKIP_PATTERN"
+  git -C "$HEAD_DIR" diff --name-only "$base" HEAD | grep -Ev "$MR_REVIEW_SKIP_PATTERN" || true
 }
 
 # _review_findings: "<CR-n>\037<decision>\037<thread>\037<status>\037<replied>" for
