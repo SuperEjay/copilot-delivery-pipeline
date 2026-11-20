@@ -10,15 +10,20 @@ Until now the pipeline has one route, **delivery**: `/start-task <clickup-id> <s
 
 ## Decisions
 
-- **How it starts:** `/review-mr <iid>` on the `pipeline` agent, as an auto run. `<iid>` is the MR's number within its project (the `!142` in GitLab). Any MR is accepted, open or draft, including fork MRs (fetched through `refs/merge-requests/<iid>/head`). Merged and closed MRs are refused.
+- **How it starts:** `/review-mr <iid> [clickup-id]` on the `pipeline` agent, as an auto run. `<iid>` is the MR's number within its project (the `!142` in GitLab); the optional ClickUp id is for when the MR doesn't name its task. Any MR is accepted, open or draft, including fork MRs (fetched through `refs/merge-requests/<iid>/head`). Merged and closed MRs are refused.
 - **Its own work folder and kind.** A review lives in `.work/mr-<iid>/`. Its task state records `KIND=MR_REVIEW`, the MR iid, the reviewed head commit and the ClickUp id when one is found. It has no branch and no Duo round. The router (`next-stage.sh mr-<iid>`) picks the route from the kind. A delivery task without a kind is a delivery task, so existing `.work/` folders keep working.
 - **A review worktree.** The MR head is checked out into a separate git worktree, so the user's branch and uncommitted work are never touched. Dependencies are symlinked from the main checkout unless the MR changes a lockfile; then a new `INSTALL_CMD` setting (default `npm ci`) installs them fresh. `run-checks.sh` takes a working directory.
 - **Checks are findings, not a gate.** Lint, type check and test failures on the MR head become high-severity findings, and the review goes on. (The delivery reviewer stops unless verification passed, because there the pipeline wrote the code and can fix it.)
-- **The spec comes from ClickUp first.** The requirements agent, in an MR-review mode, finds the ClickUp id in the MR's branch name or description. Failing that, it uses an id the user passes in, and failing that, the MR description alone. It raises no open-question stop: gaps in the spec become findings tagged `spec-gap`.
+- **The spec comes from ClickUp first.** The requirements agent, in an MR-review mode, looks for the ClickUp task in this order:
+  1. an id the user passed when starting (`/review-mr <iid> [clickup-id]`)
+  2. the MR's branch name, title and description
+  3. the MR's commit messages (`CU-<id>` or `#<id>`, the forms ClickUp's GitLab integration uses)
+
+  ClickUp's API offers no search for the task linked to an MR, so when none of these finds it, the pipeline doesn't guess. The spec stop asks the user to paste a ClickUp id or the acceptance criteria, or to approve reviewing against the MR description alone; in that case the report says the spec check was weak. The agent raises no open-question stop: gaps in the spec become findings tagged `spec-gap`.
 - **The same two agents, a new mode each.** The requirements and reviewer agents each get an "In an MR review" section, so reading ClickUp and the review checklist each stay in one place. The reviewer reads the MR's open discussion threads (people and Duo) first and doesn't repeat what is already raised. `fetch-duo-review.sh` learns to fetch every author's threads without counting a review round.
 - **Read-only, enforced by the guard.** In an MR review the guard blocks edits, commits and pushes in the review worktree, and any write to ClickUp. The only thing that leaves the machine is a posted finding.
 - **Stops:**
-  - **Spec stop**, only when the spec fell back to the MR description or no ClickUp task was found.
+  - **Spec stop**, only when no ClickUp task was found. The user gives an id or the ACs, or accepts the MR description as the spec.
   - **Focus stop**, only when the MR changes more than `MR_REVIEW_MAX_FILES` files (default 40, lockfiles and generated files not counted). The user picks what to review; the default is the files with the most churn.
   - **Findings stop**, always: for each finding the user picks **post**, **debt** (parked locally in `tech-debt.md`) or **skip**.
   - **Publish confirmation** for each posted finding, through the guard.

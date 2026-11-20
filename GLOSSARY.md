@@ -49,7 +49,7 @@ The router's record of an auto run in `.work/<id>/run.log`: one line for each de
 _Avoid_: history, audit log, trace
 
 **MR review**:
-The pipeline's second route: a read-only review of an existing merge request, usually a teammate's, against its spec, started with `/review-mr <iid>`. It finds bugs, technical debt and improvements, and posts only the findings the user picks. It never changes the MR's code.
+The pipeline's second route: a read-only review of an existing merge request, usually a teammate's, against its spec, started with `/review-mr <iid> [clickup-id]`. It finds bugs, technical debt and improvements, and posts only the findings the user picks. It never changes the MR's code.
 _Avoid_: verifier, MR verification, PR review
 
 **Review worktree**:
