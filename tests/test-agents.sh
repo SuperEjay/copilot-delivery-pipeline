@@ -76,5 +76,22 @@ check "review-responder: triage returns even with no FIX items" 'auto review-res
 check "review-responder: push and reply needs no further go-ahead" 'auto review-responder "\"Push and reply <task-id>\"" && auto review-responder "no further go-ahead"'
 check "evidence: no approval steps in an auto run; the pre-ship stop gives them" 'auto evidence "pre-ship stop"'
 
+# ---------- "In an MR review" sections (ADR 0003) ----------
+# The router's REVIEW_AGENTS lists the agents that have an MR review mode; it
+# refuses to run an MR review while one lacks its section.
+read -r -a REVIEW <<< "$(sed -n 's/^REVIEW_AGENTS="\(.*\)"$/\1/p' "$NS")"
+check "next-stage.sh sets REVIEW_AGENTS once" '[ "$(grep -c "^REVIEW_AGENTS=" "$NS")" -eq 1 ] && [ "${#REVIEW[@]}" -gt 0 ]'
+for a in "${REVIEW[@]}"; do
+  check "$a: has an In an MR review section, after In an auto run and before Next step" '[ "$(grep -E "^## (In an auto run|In an MR review|Next step)$" $A/$a.agent.md | tr "\n" "|")" = "## In an auto run|## In an MR review|## Next step|" ]'
+done
+mr() { section "$1" "In an MR review" | grep -qE -- "$2"; }
+check "verifier: in an MR review, the router's prompt starts it" 'mr verifier "Run the checks for mr-<iid> in its review worktree"'
+check "verifier: runs every check once through run-checks.sh" 'mr verifier "scripts/agent/run-checks.sh mr-<iid> all" && mr verifier "once"'
+check "verifier: Commit is the CHECKED sha, not your HEAD" 'mr verifier "CHECKED <sha>" && mr verifier "Commit:.*CHECKED"'
+check "verifier: each failing check with its failing lines, for the reviewer" 'mr verifier "failing lines" && mr verifier "high-severity finding"'
+check "verifier: read-only: no tests added, nothing changed or committed" 'mr verifier "[Nn]ever change, add or commit anything"'
+check "verifier: failures are findings, not fixes" 'mr verifier "finding, not a fix"'
+check "verifier: ACs are left to the reviewer" 'mr verifier "reviewer grades the acceptance criteria"'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

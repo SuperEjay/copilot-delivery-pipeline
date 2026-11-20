@@ -106,6 +106,9 @@ MAX_PLAN_SLICES=6
 # The stage agents, the one list of them. An auto run needs each one's
 # "## In an auto run" section; a new stage goes here too.
 STAGE_AGENTS="requirements planner implementer verifier reviewer evidence shipper review-responder"
+# The stage agents with an MR review mode (ADR 0003). An MR review needs each
+# one's "## In an MR review" section; an agent gets its mode, then goes here.
+REVIEW_AGENTS="verifier"
 
 TASK="${1:?usage: next-stage.sh <task-id> [approve]}"
 CMD="${2:-}"
@@ -145,6 +148,17 @@ for _agent in $STAGE_AGENTS; do
   echo "$_af $_what, so an auto run can't use it. $_fix Until then, run the stages yourself." >&2
   exit 1
 done
+
+# An MR review also needs the agents' MR review modes. Without one, the agent
+# would run its delivery steps on someone else's MR.
+if [ "$KIND" = MR_REVIEW ]; then
+  for _agent in $REVIEW_AGENTS; do
+    _af=".github/agents/$_agent.agent.md"
+    grep -qx '## In an MR review' "$REPO_ROOT/$_af" 2>/dev/null && continue
+    echo "$_af has no '## In an MR review' section, so an MR review can't use it. Run install.sh --update to get the new version (next to it, to merge, if you changed it), or --update --force to replace it." >&2
+    exit 1
+  done
+fi
 
 # ---------- Key: value lines, parsed, never sourced ----------
 # _last_value <file> <prefix> [section]: the rest of the last line that starts

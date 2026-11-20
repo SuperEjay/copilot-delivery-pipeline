@@ -407,6 +407,11 @@ mr_review_md() {
 }
 mr_change src/a.ts
 
+cp .github/agents/verifier.agent.md "$T/verifier.bak"
+awk '/^## In an MR review$/ { skip = 1; next } /^## / { skip = 0 } !skip' "$T/verifier.bak" > .github/agents/verifier.agent.md
+next mr-7
+check "review: an agent without its In an MR review section: exit 1, it says which" '[ $rc -eq 1 ] && grep -q "verifier.agent.md has no .## In an MR review. section" "$T/out.txt"'
+cp "$T/verifier.bak" .github/agents/verifier.agent.md
 next mr-9
 check "review: no task state points at /review-mr" '[ $rc -eq 1 ] && grep -q "/review-mr 9" "$T/out.txt"'
 
