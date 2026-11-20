@@ -190,5 +190,21 @@ check "it says which commit it checked" 'grep -q "^CHECKED $(git -C "$WT/mr-11" 
 $S/run-checks.sh T1 lint > "$T/out.txt" 2>&1
 check "a delivery task's checks still run in the main checkout" '[ "$(cat "$STUB/lint-dir")" = "$PWD" ]'
 
+# ---------- --done: the worktree goes, the text files stay (#87) ----------
+glab_calls_before="$(ls "$STUB" | wc -l)"
+review 11 --done
+check "--done removes the review worktree" '[ $rc -eq 0 ] && [ ! -e "$WT/mr-11" ] && ! git worktree list | grep -q "pipeline-reviews/mr-11"'
+check "--done keeps the work folder's text files" '[ -f .work/mr-11/state.env ] && [ -f .work/mr-11/mr.json ] && [ -f .work/mr-11/logs/install.log ]'
+check "--done forgets the install, which went with the worktree" '[ ! -e .work/mr-11/installed-lock ]'
+check "--done says what it removed and kept" 'grep -q "Removed the review worktree of !11" "$T/out.txt" && grep -q ".work/mr-11" "$T/out.txt"'
+review 7 --done
+check "--done never touches the main checkout's node_modules (the worktree linked to it)" '[ $rc -eq 0 ] && [ "$(cat node_modules/dep/index.js)" = main ]'
+review 11 --done
+check "--done again: nothing to remove, still exit 0" '[ $rc -eq 0 ] && grep -q "No review worktree for !11" "$T/out.txt"'
+mv "$STUB/glab" "$STUB/glab.off"; review 7 --done; mv "$STUB/glab.off" "$STUB/glab"
+check "--done works without glab (after the MR is merged, offline)" '[ $rc -eq 0 ]'
+review 7 --keep
+check "an unknown option is refused" '[ $rc -eq 1 ] && grep -q "usage" "$T/out.txt"'
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

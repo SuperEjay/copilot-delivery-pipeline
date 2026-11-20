@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Usage: start-review.sh <mr-iid> [clickup-task-id]
+#        start-review.sh <mr-iid> --done
 # Starts an MR review (ADR 0003): checks the MR is open (drafts too), creates
 # .work/mr-<iid>/ and checks the MR's head out into a review worktree. Run it
 # again to move the worktree to the MR's new head. The user's branch and
@@ -11,12 +12,16 @@
 # node_modules is a link to the main checkout's. When they differ (the MR
 # changes one), INSTALL_CMD installs them fresh in the worktree, once per
 # lockfile version; the log goes to .work/mr-<iid>/logs/install.log.
+#
+# --done removes the review worktree (and with it the dependencies installed
+# there) and keeps .work/mr-<iid>/'s text files. It needs no glab, so it works
+# after the MR is merged.
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"   # sha256
-require git glab jq
 
-IID="${1:?usage: start-review.sh <mr-iid> [clickup-task-id]}"
+USAGE="usage: start-review.sh <mr-iid> [clickup-task-id] | start-review.sh <mr-iid> --done"
+IID="${1:?$USAGE}"
 CLICKUP_ID="${2:-}"
 case "$IID" in
   ''|*[!0-9]*) echo "The MR iid must be a number, the 142 in !142. Got: $IID" >&2; exit 1 ;;
@@ -24,6 +29,19 @@ esac
 TASK="mr-$IID"
 DIR="$(task_dir "$TASK")"
 WT="$(review_worktree "$TASK")"
+
+case "$CLICKUP_ID" in
+  --done)
+    git worktree prune
+    if [ ! -e "$WT" ]; then echo "No review worktree for !$IID: nothing to remove."; exit 0; fi
+    [ -L "$WT/node_modules" ] && rm -f "$WT/node_modules"   # the link only, never the main checkout's
+    git worktree remove --force "$WT"
+    rm -f "$DIR/installed-lock"
+    echo "Removed the review worktree of !$IID. Kept ${DIR#"$REPO_ROOT"/} (the review's files)."
+    exit 0 ;;
+  -*) echo "$USAGE" >&2; exit 1 ;;
+esac
+require git glab jq
 
 if ! MR_JSON="$(glab api "projects/:id/merge_requests/$IID" 2>&1)"; then
   echo "Could not read MR !$IID with glab:" >&2
