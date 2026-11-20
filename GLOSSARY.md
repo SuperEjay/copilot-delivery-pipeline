@@ -41,7 +41,7 @@ A decision the pipeline made on the user's behalf during an auto run under a rul
 _Avoid_: default, implicit approval
 
 **Task state**:
-The scripts' record of a task in `.work/<id>/state.env`: its branch, merge request and Duo review round. Scripts read and write it only through `task-state.sh`; it is data, never run as code.
+The scripts' record of a task in `.work/<id>/state.env`: its kind (delivery or MR review), its branch, merge request and Duo review round, and for an MR review its ClickUp task and target branch instead of a branch and round. Scripts read and write it only through `task-state.sh`; it is data, never run as code.
 _Avoid_: state file, task env
 
 **Run log**:

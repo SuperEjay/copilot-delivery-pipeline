@@ -1,5 +1,5 @@
 ---
-status: accepted (2026-11-20, after the MR review grilling)
+status: accepted (2026-11-20, after the MR review grilling; amended the same day while building #79 and #81)
 ---
 
 # A second route: MR review
@@ -12,19 +12,19 @@ Until now the pipeline has one route, **delivery**: `/start-task <clickup-id> <s
 
 - **How it starts:** `/review-mr <iid> [clickup-id]` on the `pipeline` agent, as an auto run. `<iid>` is the MR's number within its project (the `!142` in GitLab); the optional ClickUp id is for when the MR doesn't name its task. Any MR is accepted, open or draft, including fork MRs (fetched through `refs/merge-requests/<iid>/head`). Merged and closed MRs are refused.
 - **Its own work folder and kind.** A review lives in `.work/mr-<iid>/`. Its task state records `KIND=MR_REVIEW`, the MR iid, the reviewed head commit and the ClickUp id when one is found. It has no branch and no Duo round. The router (`next-stage.sh mr-<iid>`) picks the route from the kind. A delivery task without a kind is a delivery task, so existing `.work/` folders keep working.
-- **A review worktree.** The MR head is checked out into a separate git worktree, so the user's branch and uncommitted work are never touched. Dependencies are symlinked from the main checkout unless the MR changes a lockfile; then a new `INSTALL_CMD` setting (default `npm ci`) installs them fresh. `run-checks.sh` takes a working directory.
+- **A review worktree.** The MR head is checked out into a separate git worktree, so the user's branch and uncommitted work are never touched. It lives in the git folder, at `.git/pipeline-reviews/mr-<iid>`, not in the work folder: test runners and linters that don't respect `.gitignore` (Jest by default, ESLint's flat config, `tsc` without `include`) would otherwise pick up the MR's files when a delivery task runs its checks in the same repository. Dependencies are symlinked from the main checkout unless the MR changes a lockfile; then a new `INSTALL_CMD` setting (default `npm ci`) installs them fresh. `run-checks.sh` takes a working directory.
 - **Checks are findings, not a gate.** Lint, type check and test failures on the MR head become high-severity findings, and the review goes on. (The delivery reviewer stops unless verification passed, because there the pipeline wrote the code and can fix it.)
 - **The spec comes from ClickUp first.** The requirements agent, in an MR-review mode, looks for the ClickUp task in this order:
   1. an id the user passed when starting (`/review-mr <iid> [clickup-id]`)
   2. the MR's branch name, title and description
   3. the MR's commit messages (`CU-<id>` or `#<id>`, the forms ClickUp's GitLab integration uses)
 
-  ClickUp's API offers no search for the task linked to an MR, so when none of these finds it, the pipeline doesn't guess. The spec stop asks the user to paste a ClickUp id or the acceptance criteria, or to approve reviewing against the MR description alone; in that case the report says the spec check was weak. The agent raises no open-question stop: gaps in the spec become findings tagged `spec-gap`.
-- **The same two agents, a new mode each.** The requirements and reviewer agents each get an "In an MR review" section, so reading ClickUp and the review checklist each stay in one place. The reviewer reads the MR's open discussion threads (people and Duo) first and doesn't repeat what is already raised. `fetch-duo-review.sh` learns to fetch every author's threads without counting a review round.
+  ClickUp's API offers no search for the task linked to an MR, so when none of these finds it, the pipeline doesn't guess. The spec stop asks the user to paste a ClickUp id or the acceptance criteria, or to approve reviewing against the MR description alone; in that case the report says the spec check was weak. An id given at the spec stop is stored by `set-review-spec.sh`, which the requirements agent runs: agents can't write the task state, and running `start-review.sh` again would move the worktree to a newer head in the middle of a review. The agent raises no open-question stop: gaps in the spec become findings tagged `spec-gap`.
+- **The same agents, a new mode each.** The requirements, verifier and reviewer agents each get an "In an MR review" section, so reading ClickUp, running the checks and the review checklist each stay in one place. The verifier runs the checks in the review worktree and writes `verification.md` as it does in delivery; the router moves on whether they pass or fail. (This was "the same two agents" until the router was built: the orchestrator runs no script but the router, and the router only decides, so an agent has to run the checks.) The reviewer reads the MR's open discussion threads (people and Duo) first and doesn't repeat what is already raised. `fetch-duo-review.sh` learns to fetch every author's threads without counting a review round.
 - **Read-only, enforced by the guard.** In an MR review the guard blocks edits, commits and pushes in the review worktree, and any write to ClickUp. The only thing that leaves the machine is a posted finding.
 - **Stops:**
   - **Spec stop**, only when no ClickUp task was found. The user gives an id or the ACs, or accepts the MR description as the spec.
-  - **Focus stop**, only when the MR changes more than `MR_REVIEW_MAX_FILES` files (default 40, lockfiles and generated files not counted). The user picks what to review; the default is the files with the most churn.
+  - **Focus stop**, only when the MR changes more than `MR_REVIEW_MAX_FILES` files (default 40), counted from where the MR left its target branch. Files matching `MR_REVIEW_SKIP_PATTERN` (lockfiles and generated files by default) aren't counted. The user picks what to review, which the reviewer writes to `focus.md`; the default is the files with the most churn.
   - **Findings stop**, always: for each finding the user picks **post**, **debt** (parked locally in `tech-debt.md`) or **skip**.
   - **Publish confirmation** for each posted finding, through the guard.
 - **Posting.** Each posted finding is its own MR discussion thread, on the diff line when its location is inside the diff and general otherwise, and starts with `**[pipeline review] CR-n · <severity> · <category>**` so the author can tell it is AI-assisted. There is no summary comment. Posting goes only through a new `post-review-thread.sh`.
@@ -37,6 +37,8 @@ Until now the pipeline has one route, **delivery**: `/start-task <clickup-id> <s
 - **Let the route fix the MR and push to its branch:** pushing to someone else's branch clashes with the ship gate and the verified commit, which assume the pipeline owns the branch. A fixing route can come later, as its own decision.
 - **Keep findings local only:** this matches the delivery reviewer, but a review of a teammate's MR is only useful if the author sees it. Posting by choice, with a confirmation each, keeps the user in charge.
 - **One new `mr-reviewer` agent:** simpler to wire, but it would copy the ClickUp reading and the review checklist, which would then drift apart.
+- **Put the review worktree in `.work/mr-<iid>/`:** easiest to find, but the delivery route's checks could then run the MR's tests and lint its files.
+- **Let the reviewer run the checks, or the router:** the reviewer would merge two stages the router reports separately; the router running them would make it slow and no longer a pure decision step.
 - **Check the MR out in place, or read the diff only through `glab`:** in place needs a clean tree and disturbs the user's work; diff-only can't read surrounding code or run checks.
 - **Call it "verifier":** Verifier is already the stage that runs the project's checks.
 
