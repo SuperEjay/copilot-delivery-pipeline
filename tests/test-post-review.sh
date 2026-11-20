@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests posting an MR review's findings (scripts/agent/post-review-thread.sh,
-# ADR 0003) in a scratch repo with a stub glab that keeps each request body:
+# ADR 0003), and the review signals for an MR review (review-signals.sh), in a scratch repo with a stub glab that keeps each request body:
 # a finding on a line inside the MR's diff becomes a diff thread there, any
 # other finding a general thread, and each thread id goes back into
 # code-review.md.
@@ -98,6 +98,20 @@ mr_json
 bash -c 'source scripts/agent/config.sh; state_init T1 feature/T1-x'
 post 1 CR-1
 check "a task that isn't an MR review is refused" '[ $rc -eq 1 ] && grep -q "No MR review of !1" "$T/out.txt"'
+
+# ---------- review signals for an MR review: the worktree, against the target ----------
+git commit -q --allow-empty -m "the user's own work"   # the main checkout moves on; it must not matter
+sig() { $S/review-signals.sh "$@" > "$T/out.txt" 2>&1; rc=$?; }
+sig mr-7
+check "signals for an MR review: the MR's diff against its target branch" '[ $rc -eq 0 ] && grep -q "full MR vs origin/main" $R/review-signals.md && grep -q "\`$(git rev-parse --short "$BASE")..$(git -C "$WT" rev-parse --short HEAD)\`" $R/review-signals.md'
+check "... listing the MR's files, read in the worktree" 'grep -q "\`src/a.ts\` | 1 | 1 | 10 |" $R/review-signals.md && grep -q "\`src/c.ts\`" $R/review-signals.md && ! grep -q "src/b.ts" $R/review-signals.md'
+sig mr-7 --mark-reviewed
+check "--mark-reviewed records the MR head, not the user's HEAD" '[ $rc -eq 0 ] && [ "$(bash -c "source scripts/agent/config.sh; state_reviewed_sha mr-7")" = "$HEAD" ]'
+echo "// TODO later" >> "$WT/src/c.ts"; git -C "$WT" commit -qam "author pushes again"
+sig mr-7
+check "a second run covers only the commits since the review" 'grep -q "delta since last review ($(git rev-parse --short "$HEAD"))" $R/review-signals.md && ! grep -q "src/a.ts" $R/review-signals.md && grep -q "TODO later" $R/review-signals.md'
+sig mr-7 --full
+check "--full: the whole MR again" 'grep -q "full MR vs origin/main" $R/review-signals.md && grep -q "src/a.ts" $R/review-signals.md'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

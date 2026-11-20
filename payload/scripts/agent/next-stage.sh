@@ -108,7 +108,7 @@ MAX_PLAN_SLICES=6
 STAGE_AGENTS="requirements planner implementer verifier reviewer evidence shipper review-responder"
 # The stage agents with an MR review mode (ADR 0003). An MR review needs each
 # one's "## In an MR review" section; an agent gets its mode, then goes here.
-REVIEW_AGENTS="requirements verifier"
+REVIEW_AGENTS="requirements verifier reviewer"
 
 TASK="${1:?usage: next-stage.sh <task-id> [approve]}"
 CMD="${2:-}"

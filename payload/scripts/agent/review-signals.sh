@@ -9,12 +9,23 @@
 # The first run covers the whole branch (merge-base with origin/BASE_BRANCH..HEAD).
 # After --mark-reviewed, later runs cover only commits since that review (a
 # "delta" review of the fixes). --full forces the whole branch again.
+#
+# For an MR review (task mr-<iid>, ADR 0003) it works in the review worktree:
+# the MR's head against its target branch (origin/<target>), then the commits
+# since the last review. --mark-reviewed records the MR's head.
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 
 TASK="${1:?usage: review-signals.sh <task-id> [--full|--mark-reviewed]}"
 MODE="${2:-}"
 REVIEWED_SHA="$(state_reviewed_sha "$TASK")" || exit 1
+OUT="$(task_dir "$TASK")/review-signals.md"   # absolute: it's written after the cd below
+TARGET="$BASE_BRANCH"; WHAT="branch"
+if [ "$(state_kind "$TASK")" = MR_REVIEW ]; then
+  WT="$(review_worktree "$TASK")"
+  cd "$WT" 2>/dev/null || { echo "No review worktree for $TASK. Run /review-mr ${TASK#mr-} first." >&2; exit 1; }
+  TARGET="$(state_target_branch "$TASK")"; TARGET="${TARGET:-$BASE_BRANCH}"; WHAT="MR"
+fi
 
 if [ "$MODE" = "--mark-reviewed" ]; then
   state_set_reviewed_sha "$TASK" "$(git rev-parse HEAD)" || exit 1
@@ -27,14 +38,13 @@ fi
 : "${REVIEW_LARGE_FILE_LINES:=400}"
 : "${REVIEW_MAX_PER_FLAG:=15}"
 
-FULL_BASE="$(git merge-base "origin/$BASE_BRANCH" HEAD)"
+FULL_BASE="$(git merge-base "origin/$TARGET" HEAD)"
 if [ "$MODE" != "--full" ] && [ -n "$REVIEWED_SHA" ] && git cat-file -e "$REVIEWED_SHA" 2>/dev/null; then
   BASE="$REVIEWED_SHA"; SCOPE="delta since last review ($(git rev-parse --short "$BASE"))"
 else
-  BASE="$FULL_BASE"; SCOPE="full branch vs origin/$BASE_BRANCH"
+  BASE="$FULL_BASE"; SCOPE="full $WHAT vs origin/$TARGET"
 fi
 
-OUT="$(task_dir "$TASK")/review-signals.md"
 RANGE="$BASE..HEAD"
 
 if [ -z "$(git diff --name-only "$RANGE")" ]; then

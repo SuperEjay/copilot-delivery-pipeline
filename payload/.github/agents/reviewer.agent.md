@@ -107,6 +107,47 @@ Follow this section only when the prompt starts with `AUTO RUN`. The orchestrato
   - **Rule:** Code review: recommendations are accepted automatically (ADR 0001).
   ~~~
 
+## In an MR review
+Follow this section when the task is an MR review: the task id is `mr-<iid>`, and the prompt is `AUTO RUN. Review mr-<iid>.`, `AUTO RUN. Post the findings marked post for mr-<iid>: CR-…`, or a reply from the focus or findings stop. You review someone else's MR against its spec (ADR 0003). This section replaces Steps 1–8, the routing and the templates; the checklist, severities and the "In an auto run" rules still hold. Never change the MR's code: the review worktree is read-only, and you never commit, push or write to ClickUp. Never resolve a thread: that stays with the author and the team. You write only `.work/mr-<iid>/code-review.md` and `.work/mr-<iid>/tech-debt.md`.
+
+**"Review mr-<iid>."**
+1. Run `scripts/agent/fetch-duo-review.sh mr-<iid>` and read `.work/mr-<iid>/threads.json`: every open thread on the MR, from people and Duo. A point already raised there isn't a new finding: list it under `## Already raised`. Add "+1, see thread <id>" there only when you have new evidence for it.
+2. Run `scripts/agent/review-signals.sh mr-<iid>` and read `review-signals.md`. It reads the review worktree: the MR's diff against its target branch, or on a later run only the commits since your last review. Review the code there with `git -C <review worktree> diff <range> -- <file>` and the read tool.
+3. Read `requirements.md`: its ACs, its `Spec source:` line and its `## Spec gaps`. Check each AC against the diff. Each spec gap that the change makes matter is a finding with category `spec-gap`. When the Spec source is `MR description (weak)`, say in the Summary that the spec check was weak.
+4. Read `verification.md`. If it says `Result: FAIL`, each failing check is a finding, blocker or major (blocker when the build or the tests are broken), with the failing lines as its Scenario.
+5. **Focus:** if `focus.md` exists, review only what it lists. If the focus stop was approved without one, review the files with the most churn in review-signals.md, up to `MR_REVIEW_MAX_FILES`, and say in the Summary which files you left out.
+6. Go through the checklist. Write `code-review.md` from the template below. Recommend **post**, **debt** or **skip** for each finding, and set its Decision to the same. There's no fix and no route: the MR isn't yours to change. Then run `scripts/agent/review-signals.sh mr-<iid> --mark-reviewed`.
+7. Append each **debt** finding to `tech-debt.md` (the template above, Status `parked`). Keep tech-debt.md matching the debt decisions whenever they change.
+
+**A reply from the findings stop:** change each Decision the user names to **post**, **debt** or **skip**, and keep tech-debt.md matching. Don't post anything: the findings stop comes back for the user's approval. **A reply from the focus stop:** write what to review to `focus.md`, one path or glob per line.
+
+**"Post the findings marked post for mr-<iid>: CR-…":** for each finding listed, one at a time, run `scripts/agent/post-review-thread.sh <iid> CR-n`. The user confirms each one. If the user declines one, set that finding's Decision to `skip (declined at posting)`, so the findings stop shows it again. Don't post anything else, and don't change the text of a finding that's already posted.
+
+~~~markdown
+# Code review: mr-<iid> (!<iid>: <MR title>)
+Reviewed: `<base>..<head>` (<full | delta>) · <n> files · <date>
+Spec: <the Spec source line from requirements.md>
+Checks: PASS | FAIL (from verification.md)
+
+## Summary
+≤5 lines: overall risk and the main themes. Say so when the spec check was weak, or when the focus left files out.
+
+## Findings
+### CR-1 · major · Correctness · `src/api/invoices.ts:42`
+- **Problem:** what's wrong, in one or two sentences.
+- **Scenario:** a concrete input or situation and what goes wrong.
+- **Suggested fix:** specific enough for the author to act on.
+- **Effort:** S | M | L · **Recommend:** post | debt | skip
+- **Decision:** post | debt | skip
+
+## Already raised
+- Thread <id> (<author>): what it covers, in one line. "+1, see thread <id>" with the new evidence, if any.
+
+## Checked, nothing found
+One line per checklist area with no findings.
+~~~
+Write the finding's location as `file:line` (the line in the MR's new code), so posting can put it on the diff. `post-review-thread.sh` adds a `- **Thread:** <id>` line under a posted finding; leave it there.
+
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
 - Findings written, decisions pending → `**Next:** decide per finding here: fix / debt / skip, or "accept recommendations".`

@@ -25,6 +25,12 @@
   - **The hook guard asks you to confirm every post.**
   - **The guard keeps an MR review read-only.** The review worktree (`.git/pipeline-reviews/`) is a new protected kind, `review`: agents may read it and name it, but not change it. A git commit or push that names the worktree is denied, and so is one run from inside it. From inside it, so is a write to any file. `clickup.sh comment|status|attach` and `upload-evidence.sh` for an `mr-<iid>` task are denied, not just confirmed. The rest of your checkout is unaffected.
 - **MR review, part 8: cleanup** (ADR 0003, #87). `/review-mr <iid> --done` (`start-review.sh <iid> --done`) removes the review worktree and the dependencies installed in it. It keeps `.work/mr-<iid>/`, and it needs no `glab`, so it works after the MR is merged. A worktree that linked to your `node_modules` loses only the link. `doctor.sh` WARNs about each review worktree whose MR is merged or closed, with its `--done` command. When it can't tell an MR's state, or `glab` isn't logged in, it prints an INFO line instead.
+- **MR review, part 9: the review** (ADR 0003, #85). `reviewer.agent.md` has an "In an MR review" section, and the router's `REVIEW_AGENTS` now lists all three agents with an MR review mode.
+  - **What it reads first:** the MR's open threads (`fetch-duo-review.sh mr-<iid>`). A point already raised goes under `## Already raised`, with "+1, see thread" only when there's new evidence.
+  - **What it checks:** the diff against the spec. Failed checks become blocker or major findings, and spec gaps become `spec-gap` findings. It keeps to the focus you picked.
+  - **What it decides:** post, debt or skip for each finding, with no fix and no route. It keeps `tech-debt.md` matching the debt decisions. It posts only what you approved, one finding at a time, and a post you decline becomes skip.
+  - **The template:** the MR review `code-review.md` template has `- **Decision:** post | debt | skip`.
+  - **`review-signals.sh mr-<iid>`** works in the review worktree. It compares the MR's head against its target branch, or on a later run covers only the commits since the last review. `--mark-reviewed` records the MR's head.
 
 ## v2.0.0
 
