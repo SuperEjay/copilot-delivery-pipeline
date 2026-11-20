@@ -28,6 +28,13 @@ fi
 
 task_dir() { echo "$WORK_DIR/$1"; }
 
+# review_worktree <task>: the MR review's worktree (ADR 0003). It lives in the
+# git folder, where test runners and linters run in the checkout can't see it.
+review_worktree() {
+  local gitdir; gitdir="$(cd "$REPO_ROOT" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+  echo "$gitdir/pipeline-reviews/$1"
+}
+
 require() {
   for bin in "$@"; do
     command -v "$bin" >/dev/null 2>&1 || { echo "Missing dependency: $bin" >&2; exit 1; }

@@ -86,6 +86,7 @@ check "retry or continue: next-stage.sh again, nothing sent to a stage" 'sec Fee
 # ---------- starting and resuming ----------
 check "start: /start-task hands over, then the loop" 'sec "Starting a run" "/start-task <task-id> <slug>"'
 check "resume: /fetch-review, or Run/Continue <task-id>" 'sec "Starting a run" "/fetch-review <task-id>" && sec "Starting a run" "\`Run <task-id>\` or \`Continue <task-id>\`"'
+check "start: /review-mr starts an MR review, the loop runs on mr-<iid>" 'sec "Starting a run" "/review-mr <iid> \[clickup-id\]" && sec "Starting a run" "mr-<iid>"'
 check "warning: Auto in the model picker cancels pinned models, once per run" 'sec "Starting a run" "\*\*Auto\*\*" && sec "Starting a run" "Copilot Free" && sec "Starting a run" "once"'
 check "warning: it doesn't block the run" 'sec "Starting a run" "don.t stop"'
 
@@ -112,6 +113,10 @@ check "/fetch-review: passes --force on only when the user typed it" 'grep -q "f
 check "/fetch-review: the round limit isn't an auto-run stop: no decision block, no router" 'grep "round limit" "$SK/fetch-review/SKILL.md" | grep "isn.t an auto-run stop" | grep "DECISION NEEDED" | grep -q "don.t run \`next-stage.sh\`"'
 check "/fetch-review: at the round limit, the exact --force command, task id first" 'grep "round limit" "$SK/fetch-review/SKILL.md" | grep -q "\`/fetch-review <task-id> --force\` (the task id first)"'
 check "/fetch-review: a failure doesn't go on to step 2" 'grep -q "end your turn here, without step 2" "$SK/fetch-review/SKILL.md"'
+check "/review-mr: the pipeline agent starts the auto run on mr-<iid>" 'grep -q "If you are the \*\*pipeline\*\* agent, start the auto run for \`mr-<iid>\`" "$SK/review-mr/SKILL.md"'
+check "/review-mr: the script failing stops before the hand-over" 'stops_before review-mr 1'
+check "/review-mr: takes an iid and an optional ClickUp id" 'grep -qx "argument-hint: \"<mr-iid> \[clickup-task-id\]\"" "$SK/review-mr/SKILL.md"'
+check "/review-mr: its description names the auto run" 'grep "^description:" "$SK/review-mr/SKILL.md" | grep -q "pipeline agent, start the auto run"'
 check "/start-task: its description names the auto run" 'grep "^description:" "$SK/start-task/SKILL.md" | grep -q "pipeline agent, start the auto run"'
 check "/fetch-review: its description names the auto run" 'grep "^description:" "$SK/fetch-review/SKILL.md" | grep -q "pipeline agent, resume the auto run"'
 

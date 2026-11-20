@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **MR review, part 1: starting a review** (ADR 0003, #79). `/review-mr <iid> [clickup-id]` on the pipeline agent runs the new `scripts/agent/start-review.sh`. It checks the MR with `glab` and refuses merged and closed MRs; drafts are fine. It fetches `refs/merge-requests/<iid>/head`, so fork MRs work too, and checks that commit out into a **review worktree** at `.git/pipeline-reviews/mr-<iid>`. Test runners and linters run in your checkout can't see it there. The work folder is `.work/mr-<iid>/`. Your branch and uncommitted work are never touched, so a dirty checkout doesn't block a review. Run it again to move the worktree to the MR's new head. The router's MR review route comes in a later change (#81).
+- The task state has a kind: `state_kind` prints `DELIVERY` or `MR_REVIEW`. A `state.env` without `KIND`, from any earlier version, reads as delivery. An MR review's file has no branch (`state_branch` says so) and no Duo round. New: `state_init_review`, plus `state_clickup_id` and `state_set_clickup_id` for the ClickUp id given at the start. That id is kept across runs, and a new one replaces it.
+- The hook guard protects `.github/skills/review-mr/` like the other pipeline skills. New `tests/test-start-review.sh`.
+
 ## v2.0.0
 
 The auto run is the main path, with manual mode as the fallback (ADR 0002), ahead of VS Code removing the Local harness in February 2027. Tried first as the pre-releases v2.0.0-rc.1 and v2.0.0-rc.2.

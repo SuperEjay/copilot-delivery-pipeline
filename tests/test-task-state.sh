@@ -94,6 +94,31 @@ for w in "state_set_mr_iid T9 1" "state_set_review T9 1 2" "state_set_reviewed_s
   check "${w%% *}: no task state is an error" '[ $? -eq 1 ] && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first." && [ ! -e .work/T9/state.env ]'
 done
 
+# ---------- task kind: delivery or MR review (ADR 0003) ----------
+state TASK=T1 BRANCH=feature/T1-gate REVIEW_ROUND=0   # a delivery file, written before kinds existed
+st state_kind T1;         check "no KIND reads as a delivery task" '[ $? -eq 0 ] && out DELIVERY'
+st state_kind T9;         check "state_kind: no task state is an error" '[ $? -eq 1 ] && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first."'
+
+st state_init_review mr-7 7
+check "state_init_review writes the kind and the MR, no branch, no Duo round" '[ $? -eq 0 ] && [ "$(cat .work/mr-7/state.env)" = "$(printf "TASK=mr-7\nKIND=MR_REVIEW\nMR_IID=7")" ]'
+st state_kind mr-7;       check "reads KIND=MR_REVIEW"        '[ $? -eq 0 ] && out MR_REVIEW'
+st state_mr_iid mr-7;     check "an MR review reads its MR"   '[ $? -eq 0 ] && out 7'
+st state_branch mr-7
+check "an MR review has no branch: one message, status 1" '[ $? -eq 1 ] && out "" && err "mr-7 is an MR review: it has no branch."'
+st state_init_review mr-7 8
+check "state_init_review leaves an existing file alone" '[ $? -eq 0 ] && grep -qx MR_IID=7 .work/mr-7/state.env'
+st state_init_review mr-8 $'8\nKIND=x'
+check "state_init_review refuses an iid with a newline" '[ $? -eq 1 ] && [ ! -e .work/mr-8/state.env ]'
+
+st state_clickup_id mr-7; check "CLICKUP_ID defaults to empty" '[ $? -eq 0 ] && out ""'
+st state_set_clickup_id mr-7 86abc; st state_set_clickup_id mr-7 86def; st state_clickup_id mr-7
+check "state_set_clickup_id replaces the value, one line per key" 'out 86def && [ "$(grep -c "^CLICKUP_ID=" .work/mr-7/state.env)" -eq 1 ]'
+st state_kind mr-7;       check "setting the ClickUp id keeps the kind" 'out MR_REVIEW'
+st state_set_clickup_id mr-7 $'1\nKIND=DELIVERY'
+check "state_set_clickup_id refuses a newline" '[ $? -eq 1 ] && grep -q "Not writing CLICKUP_ID" "$T/err.txt" && grep -qx CLICKUP_ID=86def .work/mr-7/state.env'
+st state_set_clickup_id T9 1
+check "state_set_clickup_id: no task state is an error" '[ $? -eq 1 ] && [ ! -e .work/T9/state.env ]'
+
 # ---------- load_state and set_state are gone (ADR 0002) ----------
 # A script you changed (which --update keeps) that still calls them must stop
 # at the call with a message saying what to use, never run on with empty

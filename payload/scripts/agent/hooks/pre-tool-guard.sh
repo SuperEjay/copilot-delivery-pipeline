@@ -48,6 +48,7 @@ config  .github/hooks/
 config  .github/prompts/
 config  .github/skills/start-task/
 config  .github/skills/fetch-review/
+config  .github/skills/review-mr/
 config  .github/copilot-instructions.md
 config  scripts/agent/
 config  .agent.env
@@ -57,7 +58,7 @@ state   .work/*/run.log
 '
 REASON_secret="That file holds credentials or a saved login session. Agents never need to read or change it."
 REASON_record="verified-head and evidence/APPROVED|UPLOADED are written only by the pipeline's scripts: run-checks.sh records the verified commit, and the user approves evidence with approve-evidence.sh. Run scripts/agent/run-checks.sh <task-id> all to re-verify."
-REASON_state="state.env (the task's state), .work/<id>/status.md (the auto run's record, including stop approvals) and .work/<id>/run.log (the run log) are written only by the pipeline's scripts: start-task.sh, create-mr.sh, fetch-duo-review.sh and review-signals.sh --mark-reviewed write state.env, next-stage.sh writes status.md and run.log. Read them if you need to; don't change them. Only the user approves a stop."
+REASON_state="state.env (the task's state), .work/<id>/status.md (the auto run's record, including stop approvals) and .work/<id>/run.log (the run log) are written only by the pipeline's scripts: start-task.sh, start-review.sh, create-mr.sh, fetch-duo-review.sh and review-signals.sh --mark-reviewed write state.env, next-stage.sh writes status.md and run.log. Read them if you need to; don't change them. Only the user approves a stop."
 REASON_config="Pipeline config (agents and their models, hooks, prompts, instructions, scripts, .agent.env) is user-owned, from the shell too. Tell the user what you'd change and why."
 
 if [ "${1:-}" = "--list-protected" ]; then

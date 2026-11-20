@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
 # Task state: the scripts' record of a task in .work/<task-id>/state.env, its
-# branch, merge request and Duo review round. config.sh sources this; don't run.
+# kind, branch, merge request and Duo review round. config.sh sources this;
+# don't run. A task is a delivery task (start-task.sh) or an MR review
+# (start-review.sh, ADR 0003), which has a ClickUp id instead of a branch and
+# no Duo round.
 #
 # The file is data, never run as code. Readers parse its KEY=value lines, take
 # the last line when a key repeats, and ignore keys they don't know, so a line
 # like BASE_BRANCH=x can't override a setting and a value like $(cmd) is just text.
 #
-#   state_branch <task>         the task's branch                 required
+#   state_kind <task>           DELIVERY or MR_REVIEW             default DELIVERY
+#   state_branch <task>         the task's branch                 required (none in an MR review)
 #   state_mr_iid <task>         the merge request's iid           required
+#   state_clickup_id <task>     an MR review's ClickUp task       default empty
 #   state_review_round <task>   Duo review rounds counted so far  default 0
 #   state_review_ids <task>     checksum of the last thread ids   default empty
 #   state_reviewed_sha <task>   commit the reviewer last reviewed default empty
 #
 #   state_init <task> <branch>             create the file (no-op if it exists)
+#   state_init_review <task> <iid>         the same, for an MR review
+#   state_set_clickup_id <task> <id>
 #   state_set_mr_iid <task> <iid>
 #   state_set_review <task> <round> <ids>  both review keys, always together
 #   state_set_reviewed_sha <task> <sha>
@@ -57,7 +64,9 @@ _state_optional() {
   printf '%s\n' "${v:-$3}"
 }
 
+state_kind() { _state_optional "$1" KIND DELIVERY; }
 state_branch() {
+  [ "$(state_kind "$1" 2>/dev/null)" = MR_REVIEW ] && { echo "$1 is an MR review: it has no branch." >&2; return 1; }
   _state_required "$1" BRANCH "No BRANCH in $(_state_name "$1"). start-task.sh writes it, so the file was changed by hand or is damaged."
 }
 state_mr_iid() {
@@ -66,6 +75,7 @@ state_mr_iid() {
 state_review_round() { _state_optional "$1" REVIEW_ROUND 0; }
 state_review_ids()   { _state_optional "$1" REVIEW_IDS ""; }
 state_reviewed_sha() { _state_optional "$1" REVIEWED_SHA ""; }
+state_clickup_id()   { _state_optional "$1" CLICKUP_ID ""; }
 
 # _state_check <task> <KEY> <value>: refuse a value that would break the format.
 _state_check() {
@@ -88,6 +98,17 @@ state_init() {
   _state_check "$1" TASK "$1" && _state_check "$1" BRANCH "$2" || return 1
   mkdir -p "$(dirname "$file")"
   printf 'TASK=%s\nBRANCH=%s\nREVIEW_ROUND=0\n' "$1" "$2" > "$file"
+}
+state_init_review() {
+  local file; file="$(_state_file "$1")"
+  [ -f "$file" ] && return 0
+  _state_check "$1" TASK "$1" && _state_check "$1" MR_IID "$2" || return 1
+  mkdir -p "$(dirname "$file")"
+  printf 'TASK=%s\nKIND=MR_REVIEW\nMR_IID=%s\n' "$1" "$2" > "$file"
+}
+state_set_clickup_id() {
+  _state_require_file "$1" && _state_check "$1" CLICKUP_ID "$2" || return 1
+  _state_put "$1" CLICKUP_ID "$2"
 }
 state_set_mr_iid() {
   _state_require_file "$1" && _state_check "$1" MR_IID "$2" || return 1

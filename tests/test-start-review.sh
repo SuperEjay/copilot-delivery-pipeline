@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Tests the start of an MR review (scripts/agent/start-review.sh, ADR 0003) in
+# a scratch repo with a local bare remote and a stub glab: which MRs it accepts,
+# the review worktree at the MR's head (fork MRs too, through
+# refs/merge-requests/<iid>/head), and that the user's own checkout is never
+# touched.
+# Usage: tests/test-start-review.sh     (exit 0 = all passed)
+set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+pass=0; fail=0
+check() { if eval "$2"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $1"; sed 's/^/      /' "$T/out.txt" 2>/dev/null; fi; }
+S=scripts/agent
+
+# ---------- stub glab: the MR's state comes from $STUB/mr-<iid>.json ----------
+export STUB="$T/stub"; mkdir -p "$STUB"
+cat > "$STUB/glab" <<'EOF'
+#!/usr/bin/env bash
+case "$*" in
+  "api projects/:id/merge_requests/"*)
+    f="$STUB/mr-${2##*/}.json"
+    if [ -f "$f" ]; then cat "$f"; else echo '{"message":"404 Not found"}'; echo "glab: 404 Not Found" >&2; exit 1; fi ;;
+  *) echo "stub glab: unexpected $*" >&2; exit 1 ;;
+esac
+EOF
+chmod +x "$STUB/glab"; export PATH="$STUB:$PATH"
+mr() { printf '{"iid":%s,"state":"%s","draft":%s}\n' "$1" "$2" "${3:-false}" > "$STUB/mr-$1.json"; }
+
+# ---------- scratch repo: the MR's commits live only under refs/merge-requests/ ----------
+git init -q --bare -b main "$T/remote.git"
+git init -q -b main "$T/proj"; cd "$T/proj"
+git config user.email t@t; git config user.name t
+git remote add origin "$T/remote.git"
+mkdir -p scripts; cp -r "$ROOT/payload/scripts/agent" scripts/
+printf '.work/\n.agent.env\n' > .gitignore
+echo one > a.txt; git add -A; git commit -qm init; git push -q origin main
+# mr_push <iid> <text>: a commit on top of main, published only as the MR's head
+# (as GitLab does for a fork MR); prints nothing, leaves the checkout on main.
+mr_push() {
+  git -C "$T/proj" worktree add -q --detach "$T/fork" "${3:-main}" 2>/dev/null
+  echo "$2" > "$T/fork/a.txt"; git -C "$T/fork" commit -qam "$2"
+  git -C "$T/fork" push -q origin "HEAD:refs/merge-requests/$1/head" --force
+  git -C "$T/fork" rev-parse HEAD > "$T/head-$1"
+  git -C "$T/proj" worktree remove --force "$T/fork"
+}
+st() { bash -c 'source scripts/agent/config.sh; "$@"' _ "$@" 2>&1; }
+WT="$(git rev-parse --absolute-git-dir)/pipeline-reviews"
+review() { $S/start-review.sh "$@" > "$T/out.txt" 2>&1; rc=$?; }
+
+mr_push 7 seven
+
+# ---------- refused: merged, closed, unknown, bad arguments ----------
+mr 7 merged; review 7
+check "a merged MR is refused, nothing created" '[ $rc -eq 1 ] && grep -q "MR !7 is merged" "$T/out.txt" && [ ! -e .work/mr-7 ] && [ ! -e "$WT/mr-7" ]'
+mr 7 closed; review 7
+check "a closed MR is refused, nothing created" '[ $rc -eq 1 ] && grep -q "MR !7 is closed" "$T/out.txt" && [ ! -e .work/mr-7 ] && [ ! -e "$WT/mr-7" ]'
+review 99
+check "an MR glab can't find is refused, with glab's message" '[ $rc -eq 1 ] && grep -q "Could not read MR !99" "$T/out.txt" && grep -q "404" "$T/out.txt" && [ ! -e .work/mr-99 ]'
+review
+check "no iid: usage, status 1" '[ $rc -ne 0 ] && grep -q "usage: start-review.sh <mr-iid> \[clickup-task-id\]" "$T/out.txt"'
+review '!7'
+check "an iid that isn't a number is refused" '[ $rc -eq 1 ] && grep -q "MR iid must be a number" "$T/out.txt" && [ ! -e ".work/mr-!7" ]'
+
+# ---------- a draft, with a dirty checkout on the user's own branch ----------
+git switch -q -c feature/mine
+echo mine > a.txt; echo new > untracked.txt                # uncommitted work
+mr 7 opened true; review 7 86abc
+check "a draft MR is accepted" '[ $rc -eq 0 ]'
+check "the review worktree is at the MR head (a fork MR, fetched by its ref)" '[ "$(git -C "$WT/mr-7" rev-parse HEAD)" = "$(cat "$T/head-7")" ]'
+check "git knows the worktree" 'git worktree list | grep -q "pipeline-reviews/mr-7"'
+check "a dirty checkout doesn't block it, and is left as it was" '[ "$(cat a.txt)" = mine ] && [ -f untracked.txt ]'
+check "the user stays on their branch at their commit" '[ "$(git branch --show-current)" = feature/mine ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse main)" ]'
+check "the task state is an MR review of !7" '[ "$(st state_kind mr-7)" = MR_REVIEW ] && [ "$(st state_mr_iid mr-7)" = 7 ]'
+check "the ClickUp id passed at the start is stored" '[ "$(st state_clickup_id mr-7)" = 86abc ]'
+check "it says where the worktree and work folder are" 'grep -q "$WT/mr-7" "$T/out.txt" && grep -q "Work folder: .work/mr-7" "$T/out.txt"'
+
+# ---------- a second run: the author pushed again ----------
+mr_push 7 seven-again "$(cat "$T/head-7")"
+review 7
+check "a second run moves the worktree to the new head" '[ $rc -eq 0 ] && [ "$(git -C "$WT/mr-7" rev-parse HEAD)" = "$(cat "$T/head-7")" ]'
+check "a second run without an id keeps the stored one" '[ "$(st state_clickup_id mr-7)" = 86abc ]'
+check "a second run leaves the user's checkout alone" '[ "$(git branch --show-current)" = feature/mine ] && [ "$(cat a.txt)" = mine ]'
+review 7 86xyz
+check "an id passed on a later run replaces the stored one" '[ $rc -eq 0 ] && [ "$(st state_clickup_id mr-7)" = 86xyz ]'
+check "the worktree is still the only one for !7" '[ "$(git worktree list | grep -c "pipeline-reviews/mr-7")" -eq 1 ]'
+
+# ---------- a worktree folder removed by hand ----------
+rm -rf "$WT/mr-7"
+review 7
+check "a worktree deleted by hand is made again" '[ $rc -eq 0 ] && [ "$(git -C "$WT/mr-7" rev-parse HEAD)" = "$(cat "$T/head-7")" ]'
+rm -rf "$WT/mr-7"; mkdir -p "$WT/mr-7"
+review 7
+check "an empty folder left in its place is made a worktree again" '[ $rc -eq 0 ] && [ -f "$WT/mr-7/.git" ] && [ "$(git -C "$WT/mr-7" rev-parse HEAD)" = "$(cat "$T/head-7")" ]'
+
+# ---------- a delivery task is not an MR review ----------
+git stash -q -u; git switch -q main
+printf 'LINT_CMD=\nTYPECHECK_CMD=\nUNIT_CMD=\nINTEGRATION_CMD=\nE2E_CMD=\n' > .agent.env
+$S/start-task.sh T1 gate > "$T/out.txt" 2>&1
+check "a task started with start-task.sh still reads as delivery" '[ "$(st state_kind T1)" = DELIVERY ]'
+
+echo "passed=$pass failed=$fail"
+[ "$fail" -eq 0 ]
