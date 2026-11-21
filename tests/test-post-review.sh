@@ -82,6 +82,15 @@ check "a line outside every hunk: a general thread, naming its location" '[ $rc 
 post 7 CR-5
 check "a new file's line: anchored" '[ $rc -eq 0 ] && [ "$(body 5 ".position.new_path")" = src/c.ts ]'
 
+# ---------- what the reviewer agent may leave in the file ----------
+{ finding 7 'post | debt | skip' 'src/a.ts:3'
+  finding 8 post 'src/c.ts:1' | sed 's/^- \*\*Decision:\*\* post$/&\n- **Thread:** _pending_/'
+} >> $R/code-review.md
+post 7 CR-7
+check "the template's choice list is undecided: refused" '[ $rc -eq 1 ] && grep -q "CR-7 is marked nothing, not post" "$T/out.txt"'
+post 7 CR-8
+check "a _pending_ Thread isn't a thread: CR-8 is posted, and its Thread line replaced" '[ $rc -eq 0 ] && grep -q "Posted CR-8" "$T/out.txt" && [ "$(awk "/^### CR-8 /{on=1;next} /^#/{on=0} on" $R/code-review.md | grep -c "Thread:")" -eq 1 ]'
+
 # ---------- refused ----------
 n_before=$(ls "$STUB"/post-*.json | wc -l)
 post 7 CR-4

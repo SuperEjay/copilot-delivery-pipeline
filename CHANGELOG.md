@@ -41,6 +41,10 @@
   - **The focus stop no longer passes silently.** When the MR's target branch can't be read, the router stops at `focus` (no approval passes it) and says to run `/review-mr <iid>` again, instead of counting 0 files.
   - **The guide says which ClickUp writes the guard denies** in an MR review: only for an `mr-<iid>` task id. A write naming the ClickUp id itself still only asks you to confirm.
   - **The README's Development list names the two new test files.**
+- **One reader for findings.** The new `scripts/agent/findings-lib.sh` is the only code that reads or changes the findings in `code-review.md`. The router's two routes and `post-review-thread.sh` each had their own parser, with different rules; they use it now. New `tests/test-findings.sh` checks it against the reviewer agent's own templates.
+  - **A choice list is undecided.** A finding left with the template's `post | debt | skip` (or `fix | debt | skip`) stops for you as undecided. Before, it read as post (or fix).
+  - **`_pending_` is empty everywhere.** `post-review-thread.sh` refused a finding whose Thread line was `_pending_` as "already posted", while the router sent the reviewer to post it. Posting now replaces that line with the thread id.
+  - **A finding ends at the next heading.** A `**Status:**` line in a later section, such as "Already raised", no longer counts as the last finding's. A field counts only at the start of a `- ` line or after ` · `, not quoted mid-sentence.
 - **Docs: the MR review route** (ADR 0003, #88).
   - **README:** a "Review a teammate's MR" section.
   - **Guide:** `docs/agent-pipeline.md` has a new section, "MR review (a teammate's MR)": how it starts, the stages and their three stops, posting, re-review, read-only enforcement, `--done`, and the settings `INSTALL_CMD`, `MR_REVIEW_MAX_FILES` and `MR_REVIEW_SKIP_PATTERN`. Its file list and its hooks table include the review skill, scripts and guard rules.

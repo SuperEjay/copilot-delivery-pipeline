@@ -14,6 +14,7 @@
 # The hook guard asks you to confirm every call.
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
+source "$(dirname "$0")/findings-lib.sh"
 require git glab jq
 
 IID="${1:?usage: post-review-thread.sh <mr-iid> <CR-n>}"
@@ -29,22 +30,12 @@ if [ ! -f "$DIR/state.env" ] || [ "$(state_kind "$TASK")" != MR_REVIEW ]; then
 fi
 case "$CR" in CR-[0-9]*) ;; *) echo "Not a finding id: $CR (use CR-<n>)." >&2; exit 1 ;; esac
 
-# _block: the finding's lines, from its "### CR-n " heading to the next heading.
-_block() { awk -v id="$CR" '/^#{2,3} / { on = ($1 == "###" && $2 == id) } on' "$REVIEW"; }
-_value() { _block | sed -n "s/^- \*\*$1:\*\*[[:space:]]*//p" | tail -n1 | sed -E 's/[*_`]//g; s/[[:space:]]+$//'; }
-
-BLOCK="$( [ -f "$REVIEW" ] && _block || true)"
-[ -n "$BLOCK" ] || { echo "No $CR in $REL." >&2; exit 1; }
-DECISION="$(_value Decision | awk '{ print tolower($1) }')"
+# The finding, read through the findings module (findings-lib.sh).
+HEADING="$(finding_heading "$REVIEW" "$CR")" || { echo "No $CR in $REL." >&2; exit 1; }
+IFS=$'\037' read -r SEVERITY CATEGORY LOCATION <<<"$HEADING"
+IFS=$'\037' read -r _ DECISION _ THREAD _ _ < <(findings_list "$REVIEW" | awk -F'\037' -v id="$CR" '$1 == id')
 [ "$DECISION" = post ] || { echo "$CR is marked ${DECISION:-nothing}, not post. Only findings marked post are posted." >&2; exit 1; }
-THREAD="$(_value Thread)"
 [ -z "$THREAD" ] || { echo "$CR is already posted (thread $THREAD)." >&2; exit 1; }
-
-# Heading: "### CR-n · <severity> · <category> · `file:line`"
-HEADING="$(head -n1 <<<"$BLOCK")"
-SEVERITY="$(awk -F' · ' '{ print $2 }' <<<"$HEADING")"
-CATEGORY="$(awk -F' · ' '{ print $3 }' <<<"$HEADING")"
-LOCATION="$(grep -oE '`[^`]+`' <<<"$HEADING" | head -n1 | tr -d '`' || true)"
 FILE=""; LINE=""
 if [[ $LOCATION =~ ^([^:]+):([0-9]+) ]]; then FILE="${BASH_REMATCH[1]}"; LINE="${BASH_REMATCH[2]}"; fi
 
@@ -74,7 +65,7 @@ fi
 # The thread's text: the header, then the finding without its bookkeeping lines.
 BODY="**[pipeline review] $CR · $SEVERITY · $CATEGORY**"
 [ -z "$SPOT" ] && [ -n "$LOCATION" ] && BODY="$BODY"$'\n'"Location: \`$LOCATION\`"
-BODY="$BODY"$'\n\n'"$(tail -n +2 <<<"$BLOCK" | grep -vE '^- \*\*(Decision|Thread|Status|Route):\*\*' | sed -e :a -e '/^[[:space:]]*$/{$d;N;ba' -e '}')"
+BODY="$BODY"$'\n\n'"$(finding_body "$REVIEW" "$CR")"
 
 TMP="$(mktemp)"; trap 'rm -f "$TMP"' EXIT
 read -r kind a b <<<"${SPOT:-none}"
@@ -90,11 +81,7 @@ DID="$(glab api -X POST "projects/:id/merge_requests/$IID/discussions" -H "Conte
 [ -n "$DID" ] || { echo "GitLab gave no thread id for $CR; check the MR before posting again." >&2; exit 1; }
 
 # Record the thread under the finding, after its Decision line.
-awk -v id="$CR" -v did="$DID" '
-  /^#{2,3} / { on = ($1 == "###" && $2 == id) }
-  { print }
-  on && /^- \*\*Decision:\*\*/ { print "- **Thread:** " did; on = 0 }' "$REVIEW" > "$REVIEW.tmp"
-mv "$REVIEW.tmp" "$REVIEW"
+finding_set_thread "$REVIEW" "$CR" "$DID" || { echo "Posted $CR (thread $DID), but couldn't record it in $REL: add \"- **Thread:** $DID\" under its Decision line." >&2; exit 1; }
 
 where="a general thread"; [ -n "$SPOT" ] && where="$FILE:$LINE"
 echo "Posted $CR on $where (thread $DID)."

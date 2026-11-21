@@ -105,6 +105,7 @@
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
+source "$(dirname "$0")/findings-lib.sh"
 
 # A plan with more S slices than this stops for the user (ADR 0001).
 MAX_PLAN_SLICES=6
@@ -182,16 +183,16 @@ _status_value() { _last_value "$STATUS" "$1: "; }
 # _checksum <file|@HEAD|@unticked:file|@nothreads:file>...: one checksum over
 # these inputs (a missing file counts too). @unticked:<file> reads every "- [x]"
 # as "- [ ]", so ticking a slice in plan.md or an item in evidence.md isn't a
-# change to what was approved. @nothreads:<file> leaves out "- **Thread:**" and
-# "- **Replied:**" lines, so posting a finding or replying on its thread isn't
-# a change to the decisions approved.
+# change to what was approved. @nothreads:<file> leaves out the lines added
+# after approval (findings_without_added: Thread and Replied), so posting a
+# finding or replying on its thread isn't a change to the decisions approved.
 _checksum() {
   local f
   for f in "$@"; do
     echo "== $f"
     if [ "$f" = @HEAD ]; then _head
     elif [ "${f#@nothreads:}" != "$f" ] && [ -f "$DIR/${f#@nothreads:}" ]; then
-      grep -vE '^- \*\*(Thread|Replied):\*\*' "$DIR/${f#@nothreads:}"
+      findings_without_added "$DIR/${f#@nothreads:}"
     elif [ "${f#@unticked:}" != "$f" ] && [ -f "$DIR/${f#@unticked:}" ]; then
       sed -E 's/^([[:space:]]*- )\[[xX]\]/\1[ ]/' "$DIR/${f#@unticked:}"
     elif [ -f "$DIR/$f" ]; then cat "$DIR/$f"
@@ -356,8 +357,8 @@ decide_review() {
   fi
 
   STAGE=findings
-  local id d th st rp pending=() unposted=() unreplied=() posted=0 debt=0 skipped=0 verified=0
-  while IFS=$'\037' read -r id d th st rp; do
+  local id d r th st rp pending=() unposted=() unreplied=() posted=0 debt=0 skipped=0 verified=0
+  while IFS=$'\037' read -r id d r th st rp; do
     case "$d" in
       post) if [ -z "$th" ]; then unposted+=("$id"); continue; fi
             posted=$((posted + 1))
@@ -366,7 +367,7 @@ decide_review() {
       skip) skipped=$((skipped + 1)) ;;
       *) pending+=("$id") ;;
     esac
-  done < <(_review_findings)
+  done < <(findings_list "$DIR/code-review.md")
   fp="$(_checksum @nothreads:code-review.md)"
   if ! _approved findings "$fp"; then
     [ "${#pending[@]}" -gt 0 ] && APPROVE_BLOCK="Decide ${pending[*]} first (post, debt or skip); approval can't decide for you."
@@ -399,23 +400,6 @@ _review_files() {
     base="$(git merge-base "refs/remotes/origin/${target:-$BASE_BRANCH}" "$(_head)" 2>/dev/null)" || return 1
   fi
   git -C "$HEAD_DIR" diff --name-only "$base" HEAD | grep -Ev "$MR_REVIEW_SKIP_PATTERN" || true
-}
-
-# _review_findings: "<CR-n>\037<decision>\037<thread>\037<status>\037<replied>" for
-# each finding in an MR review's code-review.md. Placeholders (_pending_, (…))
-# read as empty.
-_review_findings() {
-  awk '
-    function val(s, key,   i) { i = index(s, key); s = substr(s, i + length(key))
-      sub(/·.*/, "", s); gsub(/[*_`]/, "", s); sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s)
-      if (s ~ /^\(/ || s == "pending") s = ""; split(s, w, " "); return tolower(w[1]) }
-    function flush() { if (id != "") print id "\037" d "\037" th "\037" st "\037" rp }
-    /^### CR-[0-9]+/ { flush(); id = $2; d = th = st = rp = "" }
-    id != "" && /\*\*Decision:\*\*/ { d = val($0, "**Decision:**") }
-    id != "" && /\*\*Thread:\*\*/ { th = val($0, "**Thread:**") }
-    id != "" && /\*\*Status:\*\*/ { st = val($0, "**Status:**") }
-    id != "" && /\*\*Replied:\*\*/ { rp = val($0, "**Replied:**") }
-    END { flush() }' "$DIR/code-review.md"
 }
 
 # check_duo: the MR is open. /fetch-review moves the Duo round on; each round
@@ -482,40 +466,25 @@ check_verified() {
   _run verifier "$verb $TASK."; return 1
 }
 
-# _findings: "<CR-n>\t<decision>\t<route>\t<status>" for each finding in
-# code-review.md, from its "- **Decision:** x · **Route:** y" and
-# "- **Status:** z" lines. _pending_ and _(set if fix…)_ placeholders read as empty.
-_findings() {
-  awk '
-    function val(s, key,   i) { i = index(s, key); if (!i) return ""; s = substr(s, i + length(key))
-      sub(/·.*/, "", s); gsub(/[*_]/, "", s); sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s)
-      if (s ~ /^\(/ || s == "pending") s = ""; split(s, w, " "); return tolower(w[1]) }
-    function flush() { if (id != "") print id "\037" d "\037" r "\037" st }
-    /^### CR-[0-9]+/ { flush(); id = $2; d = r = st = "" }
-    id != "" && /\*\*Decision:\*\*/ { d = val($0, "**Decision:**"); r = val($0, "**Route:**") }
-    id != "" && /\*\*Status:\*\*/ { st = val($0, "**Status:**") }
-    END { flush() }' "$DIR/code-review.md"
-}
-
 # check_review: the review at HEAD is settled, or set a run/stop and return 1.
 # Open quick fixes go back to the implementer; a finding with no decision, or
 # a fix routed to requirements or re-plan, stops for the user. Approving that
 # stop sends the run to the furthest-back route.
 check_review() {
-  local head id d r st pending=() req=() replan=() quick=() fp
+  local head id d r th st rp pending=() req=() replan=() quick=() fp
   head="$(git rev-parse HEAD)"
   if [ "$(state_reviewed_sha "$TASK")" != "$head" ]; then _run reviewer "Review $TASK."; return 1; fi
   if [ ! -f "$DIR/code-review.md" ]; then
     _unreadable review "HEAD was reviewed, but there's no $REL/code-review.md. Run the reviewer again by hand."; return 1
   fi
-  while IFS=$'\037' read -r id d r st; do
+  while IFS=$'\037' read -r id d r th st rp; do
     case "$d" in
       fix) [ "$st" = open ] || continue
            case "$r" in quick) quick+=("$id") ;; requirements) req+=("$id") ;; re-plan) replan+=("$id") ;; *) pending+=("$id") ;; esac ;;
       debt|skip) ;;
       *) pending+=("$id") ;;
     esac
-  done < <(_findings)
+  done < <(findings_list "$DIR/code-review.md")
 
   if [ $(( ${#pending[@]} + ${#req[@]} + ${#replan[@]} )) -gt 0 ]; then
     fp="$(_checksum code-review.md)"

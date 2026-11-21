@@ -340,6 +340,7 @@ tests/test-orchestrator.sh  # checks the orchestrator (pipeline agent) against t
 tests/test-doctor.sh      # checks doctor.sh: each PASS, WARN and FAIL, with fake tools on PATH, and that it changes nothing
 tests/test-start-review.sh  # checks the start of an MR review: which MRs, the review worktree, dependencies, ClickUp, --done
 tests/test-post-review.sh   # checks posting an MR review's findings (diff or general threads), replies and review signals
+tests/test-findings.sh      # checks reading and changing code-review.md findings, against the reviewer agent's own templates
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release
