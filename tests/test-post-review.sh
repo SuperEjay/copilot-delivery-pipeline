@@ -97,6 +97,8 @@ post 7 CR-4
 check "a finding not marked post is refused" '[ $rc -eq 1 ] && grep -q "CR-4 is marked skip, not post" "$T/out.txt"'
 post 7 CR-1
 check "a finding already posted isn't posted twice" '[ $rc -eq 1 ] && grep -q "CR-1 is already posted (thread disc1)" "$T/out.txt"'
+post 7 CR-1x
+check "an id that isn't CR-<digits> is refused, with a message" '[ $rc -eq 1 ] && grep -q "Not a finding id: CR-1x" "$T/out.txt"'
 post 7 CR-9
 check "an unknown finding is refused" '[ $rc -eq 1 ] && grep -q "No CR-9 in .work/mr-7/code-review.md" "$T/out.txt"'
 mr_json 0123456789abcdef0123456789abcdef01234567

@@ -370,7 +370,11 @@ for layout in plain separate; do
   sh_in "$wt" deny  'echo x > src/a.ts'
   sh_in "$wt" deny  'git commit -am fix'
   sh_in "$wt" allow 'git log --oneline -5'
+  sh_in "${wt%/*}" deny 'echo x > mr-142/src/a.ts'   # from the folder that holds the review worktrees
 done
+# A project's own folder named pipeline-reviews isn't a review worktree.
+ed allow editFiles 'docs/pipeline-reviews/notes.md'
+sh allow 'echo x > docs/pipeline-reviews/notes.md'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

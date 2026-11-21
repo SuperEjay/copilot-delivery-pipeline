@@ -73,6 +73,13 @@ check "finding_set_thread: a placeholder Thread line is replaced, not kept below
 findings_without_added "$F" > "$T/out.txt"
 check "findings_without_added: no Thread or Replied lines, everything else kept" '! grep -qE "^- \*\*(Thread|Replied):" "$T/out.txt" && [ "$(wc -l < "$T/out.txt")" -eq $(( $(wc -l < "$F") - 4 )) ]'
 
+# ---------- a "# " line, such as a shell comment in a code block, isn't a heading ----------
+H="$T/hash.md"
+printf '%s\n' '## Findings' '### CR-1 · major · Correctness · `a.sh:3`' '- **Problem:** the install step is wrong:' '```bash' '# install deps' 'npm i' '```' '- **Decision:** post' > "$H"
+check "a # line inside a finding doesn't end it: the Decision below still reads" '[ "$(rec "$H" CR-1)" = "CR-1|post||||" ]'
+check "... and finding_body keeps the whole code block" '[ "$(finding_body "$H" CR-1 | tail -n1)" = "\`\`\`" ]'
+check "... and finding_set_thread finds its Decision" 'finding_set_thread "$H" CR-1 d9 && [ "$(rec "$H" CR-1 | cut -d"|" -f4)" = d9 ]'
+
 # ---------- the reviewer agent's own templates ----------
 template "## Template" > "$T/delivery.md"
 check "delivery template: CR-1 is undecided, with no route, and open" '[ "$(rec "$T/delivery.md" CR-1)" = "CR-1||||open|" ]'

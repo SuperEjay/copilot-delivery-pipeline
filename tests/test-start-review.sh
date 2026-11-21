@@ -72,7 +72,8 @@ echo mine > a.txt; echo new > untracked.txt                # uncommitted work
 mr 7 opened true; review 7 86abc
 check "a draft MR is accepted" '[ $rc -eq 0 ]'
 check "the review worktree is at the MR head (a fork MR, fetched by its ref)" '[ "$(git -C "$WT/mr-7" rev-parse HEAD)" = "$(cat "$T/head-7")" ]'
-check "git knows the worktree" 'git worktree list | grep -q "$WTS/mr-7"'
+wts="$(git worktree list)"
+check "git knows the worktree" 'grep -q "$WTS/mr-7" <<<"$wts"'
 check "a dirty checkout doesn't block it, and is left as it was" '[ "$(cat a.txt)" = mine ] && [ -f untracked.txt ]'
 check "the user stays on their branch at their commit" '[ "$(git branch --show-current)" = feature/mine ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse main)" ]'
 check "the task state is an MR review of !7" '[ "$(st state_kind mr-7)" = MR_REVIEW ] && [ "$(st state_mr_iid mr-7)" = 7 ]'
@@ -194,7 +195,8 @@ check "a delivery task's checks still run in the main checkout" '[ "$(cat "$STUB
 # ---------- --done: the worktree goes, the text files stay (#87) ----------
 glab_calls_before="$(ls "$STUB" | wc -l)"
 review 11 --done
-check "--done removes the review worktree" '[ $rc -eq 0 ] && [ ! -e "$WT/mr-11" ] && ! git worktree list | grep -q "$WTS/mr-11"'
+wts="$(git worktree list)"
+check "--done removes the review worktree" '[ $rc -eq 0 ] && [ ! -e "$WT/mr-11" ] && ! grep -q "$WTS/mr-11" <<<"$wts"'
 check "--done keeps the work folder's text files" '[ -f .work/mr-11/state.env ] && [ -f .work/mr-11/mr.json ] && [ -f .work/mr-11/logs/install.log ]'
 check "--done forgets the install, which went with the worktree" '[ ! -e .work/mr-11/installed-lock ]'
 check "--done says what it removed and kept" 'grep -q "Removed the review worktree of !11" "$T/out.txt" && grep -q ".work/mr-11" "$T/out.txt"'

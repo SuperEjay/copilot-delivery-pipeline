@@ -9,7 +9,8 @@
 #   - **Decision:** fix · **Route:** quick       (fields: see below)
 #   - **Thread:** <id>                            (added once posted)
 #
-# A finding runs from its "### CR-<n>" heading to the next #, ## or ### heading.
+# A finding runs from its "### CR-<n>" heading to the next ## or ### heading (a
+# "# " line inside it, such as a shell comment in a code block, isn't one).
 # A field is "**Key:**" at the start of a "- " line, or after " · " on one. Its
 # value is the first word up to the next " · ", lower case, without markdown
 # marks or trailing punctuation. A placeholder reads as empty: "pending", a
@@ -25,6 +26,8 @@
 # Each returns 1, quietly, when the file or the finding isn't there; the caller
 # says why.
 
+# The headings that end a finding (an awk regex, used with $0 ~ FINDINGS_HEADING).
+FINDINGS_HEADING='^###? '
 # Lines that are the pipeline's bookkeeping, not part of what was found.
 FINDINGS_BOOKKEEPING="Decision Route Thread Status Replied"
 # Lines added after the user approved the findings: they don't change what was approved.
@@ -36,7 +39,7 @@ _findings_keys_re() { printf '^- \\*\\*(%s):\\*\\*' "$(tr ' ' '|' <<<"$1")"; }
 # _finding_block <file> <CR-n>: the finding's lines, heading first.
 _finding_block() {
   [ -f "$1" ] || return 1
-  awk -v id="$2" '/^##?#? / { on = ($1 == "###" && $2 == id) } on' "$1"
+  awk -v h="$FINDINGS_HEADING" -v id="$2" '$0 ~ h { on = ($1 == "###" && $2 == id) } on' "$1"
 }
 
 findings_list() {
@@ -45,8 +48,8 @@ findings_list() {
     function val(s, key,   i, k, w) {
       if (s !~ /^- /) return "\001"
       k = "**" key ":**"
-      if (index(s, "- " k) == 1) i = 3 + length(k)
-      else if ((i = index(s, "· " k))) i += 2 + length(k)
+      if (index(s, "- " k) == 1) i = 1 + length("- " k)
+      else if ((i = index(s, "· " k))) i += length("· " k)   # in bytes or characters alike
       else return "\001"
       s = substr(s, i); sub(/·.*/, "", s); gsub(/[*_`]/, "", s)
       sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s)
@@ -55,9 +58,9 @@ findings_list() {
     }
     function set(name,   v) { v = val($0, name); if (v != "\001") f[name] = v }
     function flush() { if (id != "") print id "\037" f["Decision"] "\037" f["Route"] "\037" f["Thread"] "\037" f["Status"] "\037" f["Replied"]; id = "" }
-    /^##?#? / { flush(); if ($1 == "###" && $2 ~ /^CR-[0-9]+$/) { id = $2; split("", f) }; next }
+    $0 ~ h { flush(); if ($1 == "###" && $2 ~ /^CR-[0-9]+$/) { id = $2; split("", f) }; next }
     id != "" { set("Decision"); set("Route"); set("Thread"); set("Status"); set("Replied") }
-    END { flush() }' "$1"
+    END { flush() }' h="$FINDINGS_HEADING" "$1"
 }
 
 finding_heading() {
@@ -76,8 +79,8 @@ finding_body() {
 finding_set_thread() {
   [ -f "$1" ] || return 1
   local tmp="$1.tmp"
-  awk -v id="$2" -v did="$3" '
-    /^##?#? / { on = ($1 == "###" && $2 == id) }
+  awk -v h="$FINDINGS_HEADING" -v id="$2" -v did="$3" '
+    $0 ~ h { on = ($1 == "###" && $2 == id) }
     on && /^- \*\*Thread:\*\*/ { next }   # a placeholder; posting refuses a real one
     { print }
     on && !done && /^- \*\*Decision:\*\*/ { print "- **Thread:** " did; done = 1 }

@@ -28,7 +28,7 @@ WT="$(review_worktree "$TASK")"
 if ! state_is_review "$TASK"; then
   echo "No MR review of !$IID yet. Run /review-mr $IID first." >&2; exit 1
 fi
-case "$CR" in CR-[0-9]*) ;; *) echo "Not a finding id: $CR (use CR-<n>)." >&2; exit 1 ;; esac
+[[ $CR =~ ^CR-[0-9]+$ ]] || { echo "Not a finding id: $CR (use CR-<n>)." >&2; exit 1; }
 
 # The finding, read through the findings module (findings-lib.sh).
 HEADING="$(finding_heading "$REVIEW" "$CR")" || { echo "No $CR in $REL." >&2; exit 1; }
