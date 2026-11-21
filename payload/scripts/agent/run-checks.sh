@@ -23,7 +23,7 @@ if [ $# -eq 0 ]; then set -- fast; fi
 LOGS="$(task_dir "$TASK")/logs"
 mkdir -p "$LOGS"
 CHECK_DIR="$REPO_ROOT"; REVIEW=false
-if [ "$(state_kind "$TASK" 2>/dev/null)" = MR_REVIEW ]; then CHECK_DIR="$(review_worktree "$TASK")"; REVIEW=true; fi
+if state_is_review "$TASK"; then CHECK_DIR="$(review_worktree "$TASK")"; REVIEW=true; fi
 
 expand() {
   case "$1" in

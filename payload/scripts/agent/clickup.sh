@@ -28,7 +28,7 @@ fi
 CMD="${1:?usage: clickup.sh fetch|comment|status <task-id> ...}"
 TASK="${2:?task id}"
 WORK="$TASK"   # the work folder's task id; for an MR review, not the ClickUp id
-if [ -f "$(task_dir "$TASK")/state.env" ] && [ "$(state_kind "$TASK")" = MR_REVIEW ]; then
+if state_is_review "$TASK"; then
   if [ "$CMD" != fetch ]; then
     echo "An MR review never writes to ClickUp (ADR 0003): clickup.sh $CMD $TASK refused." >&2; exit 1
   fi

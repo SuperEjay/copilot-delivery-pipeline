@@ -21,7 +21,7 @@ MODE="${2:-}"
 REVIEWED_SHA="$(state_reviewed_sha "$TASK")" || exit 1
 OUT="$(task_dir "$TASK")/review-signals.md"   # absolute: it's written after the cd below
 TARGET="$BASE_BRANCH"; WHAT="branch"
-if [ "$(state_kind "$TASK")" = MR_REVIEW ]; then
+if state_is_review "$TASK"; then
   WT="$(review_worktree "$TASK")"
   cd "$WT" 2>/dev/null || { echo "No review worktree for $TASK. Run /review-mr ${TASK#mr-} first." >&2; exit 1; }
   TARGET="$(state_target_branch "$TASK")"; TARGET="${TARGET:-$BASE_BRANCH}"; WHAT="MR"

@@ -103,6 +103,9 @@ st state_init_review mr-7 7
 check "state_init_review writes the kind and the MR, no branch, no Duo round" '[ $? -eq 0 ] && [ "$(cat .work/mr-7/state.env)" = "$(printf "TASK=mr-7\nKIND=MR_REVIEW\nMR_IID=7")" ]'
 st state_kind mr-7;       check "reads KIND=MR_REVIEW"        '[ $? -eq 0 ] && out MR_REVIEW'
 st state_mr_iid mr-7;     check "an MR review reads its MR"   '[ $? -eq 0 ] && out 7'
+st state_is_review mr-7;  check "state_is_review: an MR review is one, silently" '[ $? -eq 0 ] && out "" && err ""'
+st state_is_review T1;    check "state_is_review: a delivery task isn't one, silently" '[ $? -eq 1 ] && out "" && err ""'
+st state_is_review T9;    check "state_is_review: no task state isn't one, silently" '[ $? -eq 1 ] && out "" && err ""'
 st state_branch mr-7
 check "an MR review has no branch: one message, status 1" '[ $? -eq 1 ] && out "" && err "mr-7 is an MR review: it has no branch."'
 st state_init_review mr-7 8

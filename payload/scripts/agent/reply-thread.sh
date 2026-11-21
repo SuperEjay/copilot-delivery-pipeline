@@ -12,7 +12,7 @@ DID="${2:?discussion id}"
 MSG="${3:?message file}"
 RESOLVE="${4:-}"
 MR_IID="$(state_mr_iid "$TASK")" || exit 1
-if [ "$RESOLVE" = "--resolve" ] && [ "$(state_kind "$TASK")" = MR_REVIEW ]; then
+if [ "$RESOLVE" = "--resolve" ] && state_is_review "$TASK"; then
   echo "An MR review never resolves a thread (ADR 0003): that stays with the author and the team. Reply without --resolve." >&2
   exit 1
 fi

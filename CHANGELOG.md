@@ -45,6 +45,7 @@
   - **A choice list is undecided.** A finding left with the template's `post | debt | skip` (or `fix | debt | skip`) stops for you as undecided. Before, it read as post (or fix).
   - **`_pending_` is empty everywhere.** `post-review-thread.sh` refused a finding whose Thread line was `_pending_` as "already posted", while the router sent the reviewer to post it. Posting now replaces that line with the thread id.
   - **A finding ends at the next heading.** A `**Status:**` line in a later section, such as "Already raised", no longer counts as the last finding's. A field counts only at the start of a `- ` line or after ` · `, not quoted mid-sentence.
+- **New `state_is_review <task>`** in `task-state.sh`: it succeeds, silently, only for an MR review, and a missing `state.env` counts as not one. The seven scripts that pick their MR review behaviour from the task kind use it, in place of three different checks. `set-review-spec.sh` gives one message for a missing review and for a delivery task: "No MR review of !<iid> yet".
 - **Docs: the MR review route** (ADR 0003, #88).
   - **README:** a "Review a teammate's MR" section.
   - **Guide:** `docs/agent-pipeline.md` has a new section, "MR review (a teammate's MR)": how it starts, the stages and their three stops, posting, re-review, read-only enforcement, `--done`, and the settings `INSTALL_CMD`, `MR_REVIEW_MAX_FILES` and `MR_REVIEW_SKIP_PATTERN`. Its file list and its hooks table include the review skill, scripts and guard rules.

@@ -136,7 +136,7 @@ $S/start-task.sh T1 gate > "$T/out.txt" 2>&1
 check "a task started with start-task.sh still reads as delivery" '[ "$(st state_kind T1)" = DELIVERY ]'
 mkdir -p .work/mr-5; cp .work/T1/state.env .work/mr-5/state.env
 spec 5 86abc
-check "set-review-spec.sh refuses a delivery task" '[ $rc -eq 1 ] && grep -q "isn.t an MR review" "$T/out.txt" && ! grep -q CLICKUP_ID .work/mr-5/state.env'
+check "set-review-spec.sh refuses a delivery task" '[ $rc -eq 1 ] && grep -q "No MR review of !5 yet" "$T/out.txt" && ! grep -q CLICKUP_ID .work/mr-5/state.env'
 
 # ---------- dependencies in the review worktree (#80) ----------
 # The user's checkout has installed dependencies for its lockfile. INSTALL_CMD

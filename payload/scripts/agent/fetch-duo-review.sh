@@ -30,7 +30,7 @@ TRIM='{
     replies: [ .notes[1:][] | {author: .author.username, body: (.body | .[0:400])} ]
   }'
 
-if [ "$(state_kind "$TASK")" = MR_REVIEW ]; then
+if state_is_review "$TASK"; then
   OUT="$DIR/threads.json"
   TMP="$OUT.tmp"; trap 'rm -f "$TMP"' EXIT
   glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=100" \

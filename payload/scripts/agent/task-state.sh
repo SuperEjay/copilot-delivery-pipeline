@@ -10,6 +10,9 @@
 # like BASE_BRANCH=x can't override a setting and a value like $(cmd) is just text.
 #
 #   state_kind <task>           DELIVERY or MR_REVIEW             default DELIVERY
+#   state_is_review <task>      status 0 for an MR review, 1 otherwise (also with no
+#                               file); prints nothing. Use it, not state_kind, to pick
+#                               a script's MR review behaviour.
 #   state_branch <task>         the task's branch                 required (none in an MR review)
 #   state_mr_iid <task>         the merge request's iid           required
 #   state_clickup_id <task>     an MR review's ClickUp task       default empty
@@ -67,8 +70,9 @@ _state_optional() {
 }
 
 state_kind() { _state_optional "$1" KIND DELIVERY; }
+state_is_review() { [ "$(state_kind "$1" 2>/dev/null)" = MR_REVIEW ]; }
 state_branch() {
-  [ "$(state_kind "$1" 2>/dev/null)" = MR_REVIEW ] && { echo "$1 is an MR review: it has no branch." >&2; return 1; }
+  state_is_review "$1" && { echo "$1 is an MR review: it has no branch." >&2; return 1; }
   _state_required "$1" BRANCH "No BRANCH in $(_state_name "$1"). start-task.sh writes it, so the file was changed by hand or is damaged."
 }
 state_mr_iid() {

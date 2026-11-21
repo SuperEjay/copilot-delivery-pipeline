@@ -25,7 +25,7 @@ REVIEW="$DIR/code-review.md"
 REL="${REVIEW#"$REPO_ROOT"/}"
 WT="$(review_worktree "$TASK")"
 
-if [ ! -f "$DIR/state.env" ] || [ "$(state_kind "$TASK")" != MR_REVIEW ]; then
+if ! state_is_review "$TASK"; then
   echo "No MR review of !$IID yet. Run /review-mr $IID first." >&2; exit 1
 fi
 case "$CR" in CR-[0-9]*) ;; *) echo "Not a finding id: $CR (use CR-<n>)." >&2; exit 1 ;; esac
