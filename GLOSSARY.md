@@ -41,12 +41,24 @@ A decision the pipeline made on the user's behalf during an auto run under a rul
 _Avoid_: default, implicit approval
 
 **Task state**:
-The scripts' record of a task in `.work/<id>/state.env`: its branch, merge request and Duo review round. Scripts read and write it only through `task-state.sh`; it is data, never run as code.
+The scripts' record of a task in `.work/<id>/state.env`: its kind (delivery or MR review), its branch, merge request and Duo review round, and for an MR review its ClickUp task and target branch instead of a branch and round. Scripts read and write it only through `task-state.sh`; it is data, never run as code.
 _Avoid_: state file, task env
 
 **Run log**:
 The router's record of an auto run in `.work/<id>/run.log`: one line for each decision it prints and each approval it records, only ever appended. Only the router writes it; it is not one of the inputs that tell a stalled stage.
 _Avoid_: history, audit log, trace
+
+**MR review**:
+The pipeline's second route: a read-only review of an existing merge request, usually a teammate's, against its spec, started with `/review-mr <iid> [clickup-id]`. It finds bugs, technical debt and improvements, and posts only the findings the user picks. It never changes the MR's code.
+_Avoid_: verifier, MR verification, PR review
+
+**Review worktree**:
+The separate git worktree an MR review checks the MR's head out into, so the user's own branch and uncommitted work are never touched. Agents may read it but not change it.
+_Avoid_: review checkout, sandbox
+
+**Finding**:
+One numbered item (`CR-<n>`) in a task's `code-review.md`: a problem the reviewer found, with the user's Decision on it and the pipeline's bookkeeping lines (Route, Thread, Status, Replied). Both routes have them; only `findings-lib.sh` reads or changes them.
+_Avoid_: comment, issue, note
 
 **Manual mode**:
 Running a task by picking each stage agent yourself and following its **Next:** line, instead of an auto run. It is the fallback when an auto run can't be used.
