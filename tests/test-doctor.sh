@@ -115,7 +115,9 @@ EOF
 chmod +x "$T/fake/glab"
 doc
 check "no review worktrees: no line about them" '! grep -q "review worktree" "$T/out.txt"'
-for i in 5 6 8; do git worktree add -q --detach "$(git rev-parse --absolute-git-dir)/pipeline-reviews/mr-$i" HEAD; done
+# review_wt <task>: where config.sh puts the review worktree, so doctor is checked against it.
+review_wt() { bash -c 'source scripts/agent/config.sh; review_worktree "$1"' _ "$1"; }
+for i in 5 6 8; do git worktree add -q --detach "$(review_wt mr-$i)" HEAD; done
 echo '{"state":"merged"}' > "$T/mr-5"; echo '{"state":"closed"}' > "$T/mr-6"; echo '{"state":"opened"}' > "$T/mr-8"
 doc
 check "a merged MR's review worktree: WARN with the --done command" '[ $rc -eq 0 ] && line WARN "review worktree of MR !5 is still here, and the MR is merged" && grep -q "/review-mr 5 --done" "$T/out.txt"'
@@ -126,7 +128,7 @@ check "an MR glab can't read: INFO, not a guess" 'line INFO "can.t tell whether 
 fake glab 1; doc
 check "glab not logged in: no MR states asked for, an INFO" 'line INFO "review worktrees: 3" && ! grep -q "is merged" "$T/out.txt"'
 fake glab 0 "Logged in to gitlab.com"
-for i in 5 6 8; do git worktree remove --force "$(git rev-parse --absolute-git-dir)/pipeline-reviews/mr-$i"; done
+for i in 5 6 8; do git worktree remove --force "$(review_wt mr-$i)"; done
 
 # ---------- it's a pipeline script ----------
 check "installed as a pipeline file, executable in git" '[ "$(git -C "$ROOT" ls-files -s payload/scripts/agent/doctor.sh | cut -d" " -f1)" = 100755 ]'

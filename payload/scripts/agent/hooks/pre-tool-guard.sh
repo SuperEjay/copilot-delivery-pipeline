@@ -15,7 +15,8 @@
 #   deny  raw test commands (run-checks.sh / capture-evidence.sh must be used)
 #   deny  agent edits to pipeline config (agents, hooks, prompts, instructions, scripts, .agent.env),
 #         through edit tools or the shell
-#   deny  in an MR review (ADR 0003): changing the review worktree (.git/pipeline-reviews/),
+#   deny  in an MR review (ADR 0003): changing the review worktree (pipeline-reviews/ in the
+#         git folder: .git/pipeline-reviews/, or <name>.git/pipeline-reviews/ with a separate one),
 #         committing or pushing there, and any ClickUp write for an mr-<iid> task
 #   ask   anything that publishes: create-mr, push-branch, upload-evidence, ClickUp writes,
 #         post-review-thread (a finding posted on someone else's MR), and a reply on
@@ -60,7 +61,7 @@ config  .agent.env
 state   state.env
 state   .work/*/status.md
 state   .work/*/run.log
-review  .git/pipeline-reviews/
+review  pipeline-reviews/
 '
 REASON_secret="That file holds credentials or a saved login session. Agents never need to read or change it."
 REASON_record="verified-head and evidence/APPROVED|UPLOADED are written only by the pipeline's scripts: run-checks.sh records the verified commit, and the user approves evidence with approve-evidence.sh. Run scripts/agent/run-checks.sh <task-id> all to re-verify."
@@ -223,7 +224,7 @@ if $is_shell; then
   # An MR review's worktree: no commit or push that names it, and nothing
   # changed from inside it (a relative path there names no protected segment).
   in_review=false
-  [[ $cwd =~ $PATH_START$PATHS_review || $cwd =~ /\.git/pipeline-reviews$ ]] && in_review=true
+  [[ $cwd =~ $PATH_START$PATHS_review ]] && in_review=true
   vcs_write='git[[:space:]].*(commit|push|merge|rebase|cherry-pick|revert|am|tag|reset|switch)([[:space:]]|$)'
   if $in_review || [[ $path_cmd =~ $SHELL_START$PATHS_review ]]; then
     has "$vcs_write" && decide deny "$REASON_review"

@@ -357,5 +357,20 @@ sh deny  'scripts/agent/reply-thread.sh mr-142 disc1 .work/mr-142/replies/CR-1.m
 sh allow 'scripts/agent/reply-thread.sh T-1 disc1 .work/T-1/reply.md --resolve'   # delivery: the duo stop confirmed it
 sh ask   'bash scripts/agent/post-review-thread.sh 142 CR-1'
 
+# ---------- the review worktree where config.sh's review_worktree puts it ----------
+# In a plain repo, and in one whose git folder isn't named .git (--separate-git-dir).
+for layout in plain separate; do
+  d="$T/layout-$layout"
+  if [ $layout = plain ]; then git init -q "$d/proj"; else git init -q --separate-git-dir "$d/repo.git" "$d/proj"; fi
+  mkdir -p "$d/proj/scripts"; cp -r "$ROOT/payload/scripts/agent" "$d/proj/scripts/"
+  wt="$(cd "$d/proj" && bash -c 'source scripts/agent/config.sh; review_worktree mr-142')"
+  mkdir -p "$wt/src"
+  ed deny  editFiles "$wt/src/a.ts"
+  sh deny  "echo x > $wt/src/a.ts"
+  sh_in "$wt" deny  'echo x > src/a.ts'
+  sh_in "$wt" deny  'git commit -am fix'
+  sh_in "$wt" allow 'git log --oneline -5'
+done
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

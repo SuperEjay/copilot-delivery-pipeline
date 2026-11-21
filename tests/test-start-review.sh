@@ -48,7 +48,8 @@ mr_push() {
   git -C "$T/proj" worktree remove --force "$T/fork"
 }
 st() { bash -c 'source scripts/agent/config.sh; "$@"' _ "$@" 2>&1; }
-WT="$(git rev-parse --absolute-git-dir)/pipeline-reviews"
+WT="$(dirname "$(st review_worktree mr-7)")"   # the folder config.sh puts review worktrees in
+WTS="${WT##*/}"
 review() { $S/start-review.sh "$@" > "$T/out.txt" 2>&1; rc=$?; }
 
 mr_push 7 seven
@@ -71,7 +72,7 @@ echo mine > a.txt; echo new > untracked.txt                # uncommitted work
 mr 7 opened true; review 7 86abc
 check "a draft MR is accepted" '[ $rc -eq 0 ]'
 check "the review worktree is at the MR head (a fork MR, fetched by its ref)" '[ "$(git -C "$WT/mr-7" rev-parse HEAD)" = "$(cat "$T/head-7")" ]'
-check "git knows the worktree" 'git worktree list | grep -q "pipeline-reviews/mr-7"'
+check "git knows the worktree" 'git worktree list | grep -q "$WTS/mr-7"'
 check "a dirty checkout doesn't block it, and is left as it was" '[ "$(cat a.txt)" = mine ] && [ -f untracked.txt ]'
 check "the user stays on their branch at their commit" '[ "$(git branch --show-current)" = feature/mine ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse main)" ]'
 check "the task state is an MR review of !7" '[ "$(st state_kind mr-7)" = MR_REVIEW ] && [ "$(st state_mr_iid mr-7)" = 7 ]'
@@ -88,7 +89,7 @@ check "a second run without an id keeps the stored one" '[ "$(st state_clickup_i
 check "a second run leaves the user's checkout alone" '[ "$(git branch --show-current)" = feature/mine ] && [ "$(cat a.txt)" = mine ]'
 review 7 86xyz
 check "an id passed on a later run replaces the stored one" '[ $rc -eq 0 ] && [ "$(st state_clickup_id mr-7)" = 86xyz ]'
-check "the worktree is still the only one for !7" '[ "$(git worktree list | grep -c "pipeline-reviews/mr-7")" -eq 1 ]'
+check "the worktree is still the only one for !7" '[ "$(git worktree list | grep -c "$WTS/mr-7")" -eq 1 ]'
 
 # ---------- a worktree folder removed by hand ----------
 rm -rf "$WT/mr-7"
@@ -193,7 +194,7 @@ check "a delivery task's checks still run in the main checkout" '[ "$(cat "$STUB
 # ---------- --done: the worktree goes, the text files stay (#87) ----------
 glab_calls_before="$(ls "$STUB" | wc -l)"
 review 11 --done
-check "--done removes the review worktree" '[ $rc -eq 0 ] && [ ! -e "$WT/mr-11" ] && ! git worktree list | grep -q "pipeline-reviews/mr-11"'
+check "--done removes the review worktree" '[ $rc -eq 0 ] && [ ! -e "$WT/mr-11" ] && ! git worktree list | grep -q "$WTS/mr-11"'
 check "--done keeps the work folder's text files" '[ -f .work/mr-11/state.env ] && [ -f .work/mr-11/mr.json ] && [ -f .work/mr-11/logs/install.log ]'
 check "--done forgets the install, which went with the worktree" '[ ! -e .work/mr-11/installed-lock ]'
 check "--done says what it removed and kept" 'grep -q "Removed the review worktree of !11" "$T/out.txt" && grep -q ".work/mr-11" "$T/out.txt"'
