@@ -86,6 +86,7 @@ check "retry or continue: next-stage.sh again, nothing sent to a stage" 'sec Fee
 # ---------- starting and resuming ----------
 check "start: /start-task hands over, then the loop" 'sec "Starting a run" "/start-task <task-id> <slug>"'
 check "resume: /fetch-review, or Run/Continue <task-id>" 'sec "Starting a run" "/fetch-review <task-id>" && sec "Starting a run" "\`Run <task-id>\` or \`Continue <task-id>\`"'
+check "start: /review-mr starts an MR review, the loop runs on mr-<iid>" 'sec "Starting a run" "/review-mr <iid> \[clickup-id\]" && sec "Starting a run" "mr-<iid>"'
 check "warning: Auto in the model picker cancels pinned models, once per run" 'sec "Starting a run" "\*\*Auto\*\*" && sec "Starting a run" "Copilot Free" && sec "Starting a run" "once"'
 check "warning: it doesn't block the run" 'sec "Starting a run" "don.t stop"'
 
@@ -112,8 +113,38 @@ check "/fetch-review: passes --force on only when the user typed it" 'grep -q "f
 check "/fetch-review: the round limit isn't an auto-run stop: no decision block, no router" 'grep "round limit" "$SK/fetch-review/SKILL.md" | grep "isn.t an auto-run stop" | grep "DECISION NEEDED" | grep -q "don.t run \`next-stage.sh\`"'
 check "/fetch-review: at the round limit, the exact --force command, task id first" 'grep "round limit" "$SK/fetch-review/SKILL.md" | grep -q "\`/fetch-review <task-id> --force\` (the task id first)"'
 check "/fetch-review: a failure doesn't go on to step 2" 'grep -q "end your turn here, without step 2" "$SK/fetch-review/SKILL.md"'
+check "/review-mr: the pipeline agent starts the auto run on mr-<iid>" 'grep -q "If you are the \*\*pipeline\*\* agent, start the auto run for \`mr-<iid>\`" "$SK/review-mr/SKILL.md"'
+check "/review-mr: the script failing stops before the hand-over" 'stops_before review-mr 1'
+check "/review-mr: takes an iid and an optional ClickUp id, or --done" 'grep -qx "argument-hint: \"<mr-iid> \[clickup-task-id | --done\]\"" "$SK/review-mr/SKILL.md"'
+check "/review-mr --done: runs start-review.sh --done and ends, no auto run" 'grep -q "start-review.sh <iid> --done" "$SK/review-mr/SKILL.md" && grep "\-\-done" "$SK/review-mr/SKILL.md" | grep -q "don.t start the auto run"'
+check "/review-mr: its description names the auto run" 'grep "^description:" "$SK/review-mr/SKILL.md" | grep -q "pipeline agent, start the auto run"'
 check "/start-task: its description names the auto run" 'grep "^description:" "$SK/start-task/SKILL.md" | grep -q "pipeline agent, start the auto run"'
 check "/fetch-review: its description names the auto run" 'grep "^description:" "$SK/fetch-review/SKILL.md" | grep -q "pipeline agent, resume the auto run"'
+
+# ---------- the MR review route is documented (ADR 0003, #88) ----------
+# guide_sec <heading> <ERE>: the guide's "## <heading>" section matches.
+# (The section is read into a variable first: grep -q stopping early would
+# break awk's pipe, which pipefail turns into a random failure.)
+guide_sec() { local t; t="$(awk -v h="## $1" '/^```/ { f = !f } !f && /^## / { on = ($0 == h); next } on' "$DOC")"; grep -qE -- "$2" <<<"$t"; }
+G="MR review (a teammate's MR)"
+check "guide: an MR review section" 'grep -qx "## $G" "$DOC"'
+check "guide: how it starts, the iid explained" 'guide_sec "$G" "/review-mr <iid> \[clickup-id\]" && guide_sec "$G" "!142"'
+check "guide: the stages and its three stops" 'guide_sec "$G" "\`spec\`" && guide_sec "$G" "\`focus\`" && guide_sec "$G" "\`findings\`"'
+check "guide: read-only, in a review worktree" 'guide_sec "$G" "read-only" && guide_sec "$G" "\.git/pipeline-reviews/mr-<iid>"'
+check "guide: posting, each confirmed, with the header" 'guide_sec "$G" "post-review-thread\.sh" && guide_sec "$G" "\[pipeline review\]"'
+check "guide: re-review, never resolving a thread" 'guide_sec "$G" "[Rr]e-review" && guide_sec "$G" "never resolves"'
+check "guide: --done and the doctor warning" 'guide_sec "$G" "/review-mr <iid> --done" && guide_sec "$G" "doctor\.sh"'
+check "guide: the new settings" 'guide_sec "$G" "INSTALL_CMD" && guide_sec "$G" "MR_REVIEW_MAX_FILES" && guide_sec "$G" "MR_REVIEW_SKIP_PATTERN"'
+W="What's in here"
+check "guide: the skill is listed in What's in here" 'guide_sec "$W" "skills/review-mr/SKILL\.md"'
+check "guide: the guard table has the MR review rules" 'guide_sec "Hooks (enforced rules)" "pipeline-reviews" && guide_sec "Hooks (enforced rules)" "post-review-thread\.sh"'
+README="$ROOT/README.md"
+for f in "$ROOT"/tests/test-*.sh; do
+  check "README: the Development list names $(basename "$f")" 'grep -q "^tests/$(basename "$f") " "$README"'
+done
+check "guide: says which ClickUp writes the guard denies in an MR review" 'guide_sec "$G" "only for an .mr-<iid>. task id"'
+check "README: a Review a teammate's MR section with /review-mr" 'grep -qx "## Review a teammate.s MR" "$README" && grep -q "/review-mr <iid>" <<<"$(awk "/^## Review a teammate/ { on = 1; next } /^## / { on = 0 } on" "$README")"'
+check "rules for every agent: an MR review is read-only" 'grep -q "/review-mr" "$ROOT/payload/pipeline-instructions.md" && grep -q "read-only" "$ROOT/payload/pipeline-instructions.md"'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

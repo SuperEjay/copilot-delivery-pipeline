@@ -26,10 +26,13 @@ for a in "${AGENTS[@]}"; do
   check "$a: no handoffs (ADR 0002)" '! frontmatter $a | grep -q "^handoffs:"'
 done
 
-# section <agent> <heading>: the lines under "## <heading>", up to the next "## ".
-section() { awk -v h="## $2" '/^## / { on = ($0 == h); next } on' "$A/$1.agent.md"; }
+# section <agent> <heading>: the lines under "## <heading>", up to the next "## "
+# outside a ~~~ fence (a template in the section may have its own headings).
+section() { awk -v h="## $2" '/^~~~/ { fence = !fence } !fence && /^## / { on = ($0 == h); next } on' "$A/$1.agent.md"; }
 # auto <agent> <ERE>: the agent's "In an auto run" section matches the pattern.
-auto() { section "$1" "In an auto run" | grep -qE -- "$2"; }
+# (Read into a variable first: grep -q stopping early would break awk's pipe,
+# which pipefail turns into a random failure.)
+auto() { local t; t="$(section "$1" "In an auto run")"; grep -qE -- "$2" <<<"$t"; }
 
 # ---------- the shared "In an auto run" rules ----------
 # The one copy of the rules every stage agent's "## In an auto run" section
@@ -75,6 +78,52 @@ check "review-responder: ASK threads are left for the duo stop" 'auto review-res
 check "review-responder: triage returns even with no FIX items" 'auto review-responder "even with no FIX items"'
 check "review-responder: push and reply needs no further go-ahead" 'auto review-responder "\"Push and reply <task-id>\"" && auto review-responder "no further go-ahead"'
 check "evidence: no approval steps in an auto run; the pre-ship stop gives them" 'auto evidence "pre-ship stop"'
+
+# ---------- "In an MR review" sections (ADR 0003) ----------
+# The router's REVIEW_AGENTS lists the agents that have an MR review mode; it
+# refuses to run an MR review while one lacks its section.
+read -r -a REVIEW <<< "$(sed -n 's/^REVIEW_AGENTS="\(.*\)"$/\1/p' "$NS")"
+check "next-stage.sh sets REVIEW_AGENTS once" '[ "$(grep -c "^REVIEW_AGENTS=" "$NS")" -eq 1 ] && [ "${#REVIEW[@]}" -gt 0 ]'
+for a in "${REVIEW[@]}"; do
+  check "$a: has an In an MR review section, after In an auto run and before Next step" '[ "$(grep -E "^## (In an auto run|In an MR review|Next step)$" $A/$a.agent.md | tr "\n" "|")" = "## In an auto run|## In an MR review|## Next step|" ]'
+done
+mr() { local t; t="$(section "$1" "In an MR review")"; grep -qE -- "$2" <<<"$t"; }
+check "REVIEW_AGENTS has the requirements agent" 'printf "%s\n" "${REVIEW[@]}" | grep -qx requirements'
+check "requirements: the router's spec prompts start it" 'mr requirements "Find the spec for mr-<iid>" && mr requirements "approved the MR description as the spec"'
+check "requirements: looks in order: stored id, branch/title/description, commits" 'mr requirements "^1\. .*state_clickup_id|^1\. .*task state" && mr requirements "^2\. .*branch.*title.*description" && mr requirements "^3\. .*commit messages.*CU-<id>.*#<id>"'
+check "requirements: reads the MR from mr.json" 'mr requirements "mr.json"'
+check "requirements: never guesses" 'mr requirements "[Nn]ever guess"'
+check "requirements: nothing found: Spec source: none, and return" 'mr requirements "Spec source: none"'
+check "requirements: stores a found id, then fetches it" 'mr requirements "set-review-spec.sh <iid> <id>" && mr requirements "clickup.sh fetch mr-<iid>"'
+check "requirements: the weak spec from the MR description" 'mr requirements "Spec source: MR description \(weak\)"'
+check "requirements: a reply at the spec stop: an id or the ACs" 'mr requirements "spec stop" && mr requirements "Spec source: ACs from the user"'
+check "requirements: always a Spec source line" 'mr requirements "always has a .Spec source:. line"'
+check "requirements: no open questions; gaps become spec-gap findings" 'mr requirements "## Spec gaps" && mr requirements "spec-gap" && mr requirements "[Nn]o .## Open questions."'
+check "requirements: never writes to ClickUp" 'mr requirements "[Nn]ever write to ClickUp"'
+check "REVIEW_AGENTS has the reviewer" 'printf "%s\n" "${REVIEW[@]}" | grep -qx reviewer'
+check "reviewer: the router's prompts start it" 'mr reviewer "\"Review mr-<iid>.\"" && mr reviewer "Post the findings marked post for mr-<iid>"'
+check "reviewer: the MR's open threads first, through fetch-duo-review.sh" 'mr reviewer "fetch-duo-review.sh mr-<iid>" && mr reviewer "threads.json"'
+check "reviewer: doesn't repeat a raised point; +1 only with new evidence" 'mr reviewer "already raised" && mr reviewer "\+1, see thread" && mr reviewer "new evidence"'
+check "reviewer: signals from the worktree, against the target branch" 'mr reviewer "review-signals.sh mr-<iid>" && mr reviewer "review worktree"'
+check "reviewer: failed checks are high-severity findings" 'mr reviewer "verification.md" && mr reviewer "Result: FAIL" && mr reviewer "blocker or major"'
+check "reviewer: spec gaps are spec-gap findings, and a weak spec is said" 'mr reviewer "spec-gap" && mr reviewer "Spec gaps" && mr reviewer "weak"'
+check "reviewer: respects the focus" 'mr reviewer "focus.md" && mr reviewer "most churn"'
+check "reviewer: post, debt or skip, no fix and no route" 'mr reviewer "\*\*post\*\*, \*\*debt\*\* or \*\*skip\*\*" && mr reviewer "no fix"'
+check "reviewer: the template has Decision: post | debt | skip" 'mr reviewer "^- \*\*Decision:\*\* post \| debt \| skip$"'
+check "reviewer: debt goes to tech-debt.md" 'mr reviewer "tech-debt.md"'
+check "reviewer: posts one at a time through post-review-thread.sh" 'mr reviewer "post-review-thread.sh <iid> CR-n" && mr reviewer "one at a time"'
+check "reviewer: a declined post becomes skip" 'mr reviewer "declines" && mr reviewer "Decision.*skip"'
+check "reviewer: never resolves threads, never changes the MR" 'mr reviewer "[Nn]ever resolve" && mr reviewer "[Nn]ever change"'
+check "reviewer: re-review: each posted finding verified or still open" 'mr reviewer "[Rr]e-review" && mr reviewer "Status:\*\* verified" && mr reviewer "Status:\*\* open"'
+check "reviewer: re-review: new code gets new CR numbers, decisions aren't reopened" 'mr reviewer "new CR numbers" && mr reviewer "[Dd]on.t reopen"'
+check "reviewer: the reply prompt: reply-thread.sh, never --resolve, record Replied" 'mr reviewer "Reply on the threads of the findings verified for mr-<iid>" && mr reviewer "reply-thread.sh mr-<iid> <thread-id>" && mr reviewer "never with .--resolve." && mr reviewer "Replied:\*\* yes" && mr reviewer "Replied:\*\* declined"'
+check "verifier: in an MR review, the router's prompt starts it" 'mr verifier "Run the checks for mr-<iid> in its review worktree"'
+check "verifier: runs every check once through run-checks.sh" 'mr verifier "scripts/agent/run-checks.sh mr-<iid> all" && mr verifier "once"'
+check "verifier: Commit is the CHECKED sha, not your HEAD" 'mr verifier "CHECKED <sha>" && mr verifier "Commit:.*CHECKED"'
+check "verifier: each failing check with its failing lines, for the reviewer" 'mr verifier "failing lines" && mr verifier "high-severity finding"'
+check "verifier: read-only: no tests added, nothing changed or committed" 'mr verifier "[Nn]ever change, add or commit anything"'
+check "verifier: failures are findings, not fixes" 'mr verifier "finding, not a fix"'
+check "verifier: ACs are left to the reviewer" 'mr verifier "reviewer grades the acceptance criteria"'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

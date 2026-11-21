@@ -8,17 +8,19 @@
 #                                     this prompt (it starts with "AUTO RUN.")
 #       stop <stop-id> <reason>       wait for the user's decision; stop ids:
 #                                     requirements plan review fix-limit stalled
-#                                     pre-ship duo. A file missing a line it
+#                                     pre-ship duo; in an MR review, spec focus
+#                                     findings stalled. A file missing a line it
 #                                     reads is a stop no approval passes, under
 #                                     the stage's id: plan review duo verify
-#                                     evidence
+#                                     evidence spec focus
 #       end <reason>                  the run is over until Duo reviews: the MR
-#                                     is open, or a Duo round is answered
+#                                     is open, or a Duo round is answered. In an
+#                                     MR review: the findings are posted
 #   next-stage.sh <task-id> approve   the user explicitly approved the stop last
 #                                     printed: record it, so the run moves on
 #
 # Exit 0 for any decision. Exit 1 with the reason on stderr when it can't
-# decide (no task state yet: run /start-task first; a stage agent has no
+# decide (no task state yet: run /start-task or /review-mr first; a stage agent has no
 # "## In an auto run" section), or when approve refuses:
 # no stop is pending, the stop changed since it was shown, a file needs fixing,
 # a review finding has no decision, or the evidence isn't approved at HEAD.
@@ -50,6 +52,23 @@
 #                     origin/<branch>: the duo stop. Then run review-responder
 #                     (push and reply).
 #
+# An MR review (KIND=MR_REVIEW in the task state, ADR 0003) takes its own route,
+# read from the review worktree's head instead of HEAD (see decide_review):
+#   requirements.md   missing: run requirements. "Spec source: none": the spec
+#                     stop; approved, run requirements to use the MR description.
+#   focus             more changed files than MR_REVIEW_MAX_FILES (not counting
+#                     MR_REVIEW_SKIP_PATTERN): the focus stop, tied to the head
+#                     and focus.md.
+#   checks            verification.md "Commit:" = the MR head, or run verifier.
+#                     PASS or FAIL both go on: failures are findings, not fixes.
+#   reviewed          REVIEWED_SHA = the MR head, or run reviewer.
+#   findings          always a stop; approve needs post, debt or skip on each.
+#   post              a "post" finding without a "Thread:" line: run reviewer
+#                     to post it. A posted finding "Status: verified" without a
+#                     "Replied:" line: run reviewer to reply on its thread. End.
+#   A re-review (the MR's head moved since REVIEWED_SHA) counts only the files
+#   changed since then for the focus stop.
+#
 # Lines it reads, which the agents' templates write (anything missing or
 # unreadable is a stop no approval can pass):
 #   plan.md                "## Stop flags" with "- Requirement gaps: yes|no",
@@ -59,6 +78,12 @@
 #                          "- **Status:** …"
 #   evidence/evidence.md   "Commit: <HEAD it shows>"
 #   review-triage.md       "Round: <n>", "Replied: yes", an "ASK" table cell
+#   In an MR review:
+#   requirements.md        "Spec source: <ClickUp id | MR description (weak) | none>"
+#   code-review.md         "### CR-n …", "- **Decision:** post|debt|skip",
+#                          "- **Thread:** <discussion id>" once posted,
+#                          "- **Status:** verified|open" and "- **Replied:** …"
+#                          on a re-review
 #
 # Approvals are tied to a checksum of what the stop is about (requirements.md;
 # plan.md and requirements.md; code-review.md; HEAD, mr.md, the evidence and
@@ -80,21 +105,32 @@
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
+source "$(dirname "$0")/findings-lib.sh"
 
 # A plan with more S slices than this stops for the user (ADR 0001).
 MAX_PLAN_SLICES=6
 # The stage agents, the one list of them. An auto run needs each one's
 # "## In an auto run" section; a new stage goes here too.
 STAGE_AGENTS="requirements planner implementer verifier reviewer evidence shipper review-responder"
+# The stage agents with an MR review mode (ADR 0003). An MR review needs each
+# one's "## In an MR review" section; an agent gets its mode, then goes here.
+REVIEW_AGENTS="requirements verifier reviewer"
 
 TASK="${1:?usage: next-stage.sh <task-id> [approve]}"
 CMD="${2:-}"
 case "$CMD" in ""|approve) ;; *) echo "usage: next-stage.sh <task-id> [approve]" >&2; exit 1 ;; esac
 
-state_branch "$TASK" > /dev/null 2>&1 || {
-  echo "No task state for $TASK. Run /start-task $TASK <slug> first." >&2
+KIND="$(state_kind "$TASK" 2>/dev/null)" || {
+  case "$TASK" in
+    mr-*) echo "No task state for $TASK. Run /review-mr ${TASK#mr-} first." >&2 ;;
+    *) echo "No task state for $TASK. Run /start-task $TASK <slug> first." >&2 ;;
+  esac
   exit 1
 }
+# The commit the run is about: HEAD, or in an MR review the review worktree's.
+HEAD_DIR="$REPO_ROOT"
+[ "$KIND" = MR_REVIEW ] && HEAD_DIR="$(review_worktree "$TASK")"
+_head() { git -C "$HEAD_DIR" rev-parse "$@" HEAD; }
 
 DIR="$(task_dir "$TASK")"
 STATUS="$DIR/status.md"
@@ -119,6 +155,17 @@ for _agent in $STAGE_AGENTS; do
   exit 1
 done
 
+# An MR review also needs the agents' MR review modes. Without one, the agent
+# would run its delivery steps on someone else's MR.
+if [ "$KIND" = MR_REVIEW ]; then
+  for _agent in $REVIEW_AGENTS; do
+    _af=".github/agents/$_agent.agent.md"
+    grep -qx '## In an MR review' "$REPO_ROOT/$_af" 2>/dev/null && continue
+    echo "$_af has no '## In an MR review' section, so an MR review can't use it. Run install.sh --update to get the new version (next to it, to merge, if you changed it), or --update --force to replace it." >&2
+    exit 1
+  done
+fi
+
 # ---------- Key: value lines, parsed, never sourced ----------
 # _last_value <file> <prefix> [section]: the rest of the last line that starts
 # with <prefix> (only under "## <section>", if given), or empty. A missing file
@@ -133,15 +180,19 @@ _last_value() {
 # empty.
 _status_value() { _last_value "$STATUS" "$1: "; }
 
-# _checksum <file|@HEAD|@unticked:file>...: one checksum over these inputs (a
-# missing file counts too). @unticked:<file> reads every "- [x]" as "- [ ]", so
-# ticking a slice in plan.md or an item in evidence.md isn't a change to what
-# was approved.
+# _checksum <file|@HEAD|@unticked:file|@nothreads:file>...: one checksum over
+# these inputs (a missing file counts too). @unticked:<file> reads every "- [x]"
+# as "- [ ]", so ticking a slice in plan.md or an item in evidence.md isn't a
+# change to what was approved. @nothreads:<file> leaves out the lines added
+# after approval (findings_without_added: Thread and Replied), so posting a
+# finding or replying on its thread isn't a change to the decisions approved.
 _checksum() {
   local f
   for f in "$@"; do
     echo "== $f"
-    if [ "$f" = @HEAD ]; then git rev-parse HEAD
+    if [ "$f" = @HEAD ]; then _head
+    elif [ "${f#@nothreads:}" != "$f" ] && [ -f "$DIR/${f#@nothreads:}" ]; then
+      findings_without_added "$DIR/${f#@nothreads:}"
     elif [ "${f#@unticked:}" != "$f" ] && [ -f "$DIR/${f#@unticked:}" ]; then
       sed -E 's/^([[:space:]]*- )\[[xX]\]/\1[ ]/' "$DIR/${f#@unticked:}"
     elif [ -f "$DIR/$f" ]; then cat "$DIR/$f"
@@ -247,6 +298,110 @@ decide() {
   _run shipper "Ship $TASK. The user confirmed the push at the pre-ship stop."
 }
 
+# ---------- the MR review route (ADR 0003) ----------
+# decide_review: like decide, for an MR review. There's no branch, plan, fix
+# round or Duo round: the review reads the MR head in the review worktree,
+# and its checks and findings never send work back to the implementer.
+decide_review() {
+  local iid="${TASK#mr-}" head src fp n
+  head="$(_head)"
+
+  STAGE=spec
+  if [ ! -f "$DIR/requirements.md" ]; then _run requirements "Find the spec for $TASK, an MR review of !$iid."; return; fi
+  src="$(_last_value "$DIR/requirements.md" "Spec source:" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+  if [ -z "$src" ]; then
+    _unreadable spec "$REL/requirements.md has no 'Spec source:' line. The requirements agent must write where the spec came from."; return
+  fi
+  if [ "$(tr '[:upper:]' '[:lower:]' <<<"$src")" = none ]; then
+    fp="$(_checksum requirements.md)"
+    if _approved spec "$fp"; then
+      _run requirements "The user approved the MR description as the spec for $TASK. Write the ACs from it, with Spec source: MR description (weak)."; return
+    fi
+    _stop spec "$fp" "No ClickUp task found for !$iid (see $REL/requirements.md). Reply with a ClickUp task id or the acceptance criteria, or approve reviewing against the MR description alone (a weak spec check)."
+    return
+  fi
+
+  STAGE=focus   # moot once this head is reviewed
+  n=0
+  if [ "$(state_reviewed_sha "$TASK")" != "$head" ]; then
+    local files
+    if ! files="$(_review_files)"; then
+      local target; target="$(state_target_branch "$TASK")"
+      _unreadable focus "Can't count the MR's files: origin/${target:-$BASE_BRANCH} (its target branch) can't be read here. Run /review-mr $iid again to fetch it."; return
+    fi
+    n="$(printf '%s' "$files" | grep -c . || true)"
+  fi
+  if [ "$n" -gt "$MR_REVIEW_MAX_FILES" ]; then
+    fp="$(_checksum @HEAD focus.md)"
+    if ! _approved focus "$fp"; then
+      local what="approve to review the $MR_REVIEW_MAX_FILES files with the most churn"
+      [ -f "$DIR/focus.md" ] && what="approve to review what $REL/focus.md lists"
+      _stop focus "$fp" "!$iid changes $n files (more than MR_REVIEW_MAX_FILES=$MR_REVIEW_MAX_FILES, not counting lockfiles and generated files). Reply with what to review, or $what."
+      return
+    fi
+  fi
+
+  STAGE=checks
+  if [ "$(_field verification.md Commit)" != "$head" ]; then
+    _run verifier "Run the checks for $TASK in its review worktree. Failures are findings, not fixes."; return
+  fi
+  case "$(_field verification.md Result)" in
+    PASS|FAIL) ;;
+    *) _unreadable verify "$REL/verification.md has no 'Result: PASS|FAIL' line."; return ;;
+  esac
+
+  STAGE=review
+  if [ "$(state_reviewed_sha "$TASK")" != "$head" ]; then _run reviewer "Review $TASK."; return; fi
+  if [ ! -f "$DIR/code-review.md" ]; then
+    _unreadable review "The MR head was reviewed, but there's no $REL/code-review.md. Run the reviewer again by hand."; return
+  fi
+
+  STAGE=findings
+  local id d r th st rp pending=() unposted=() unreplied=() posted=0 debt=0 skipped=0 verified=0
+  while IFS=$'\037' read -r id d r th st rp; do
+    case "$d" in
+      post) if [ -z "$th" ]; then unposted+=("$id"); continue; fi
+            posted=$((posted + 1))
+            if [ "$st" = verified ]; then verified=$((verified + 1)); [ -n "$rp" ] || unreplied+=("$id"); fi ;;
+      debt) debt=$((debt + 1)) ;;
+      skip) skipped=$((skipped + 1)) ;;
+      *) pending+=("$id") ;;
+    esac
+  done < <(findings_list "$DIR/code-review.md")
+  fp="$(_checksum @nothreads:code-review.md)"
+  if ! _approved findings "$fp"; then
+    [ "${#pending[@]}" -gt 0 ] && APPROVE_BLOCK="Decide ${pending[*]} first (post, debt or skip); approval can't decide for you."
+    _stop findings "$fp" "Review $REL/code-review.md: mark each finding post, debt (kept in $REL/tech-debt.md) or skip. Approving posts the ones marked post, each with your confirmation."
+    return
+  fi
+
+  STAGE=post
+  if [ "${#unposted[@]}" -gt 0 ]; then
+    _run reviewer "Post the findings marked post for $TASK: ${unposted[*]}."; return
+  fi
+  if [ "${#unreplied[@]}" -gt 0 ]; then
+    _run reviewer "Reply on the threads of the findings verified for $TASK: ${unreplied[*]}. Don't resolve them."; return
+  fi
+  local also=""; [ "$verified" -gt 0 ] && also=", $verified verified since posting"
+  _end "Review of !$iid done at $(_head --short): $posted posted, $debt parked in $REL/tech-debt.md, $skipped skipped$also. Run /review-mr $iid again after the author pushes."
+}
+
+# _review_files: the files the MR changes, from where it left its target branch
+# to its head, without the ones MR_REVIEW_SKIP_PATTERN matches. On a re-review,
+# only the files changed since the reviewed head. Returns 1 when the target
+# branch can't be read.
+_review_files() {
+  local base target reviewed
+  target="$(state_target_branch "$TASK")"
+  reviewed="$(state_reviewed_sha "$TASK")"
+  if [ -n "$reviewed" ] && [ "$reviewed" != "$(_head)" ] && git merge-base --is-ancestor "$reviewed" "$(_head)" 2>/dev/null; then
+    base="$reviewed"
+  else
+    base="$(git merge-base "refs/remotes/origin/${target:-$BASE_BRANCH}" "$(_head)" 2>/dev/null)" || return 1
+  fi
+  git -C "$HEAD_DIR" diff --name-only "$base" HEAD | grep -Ev "$MR_REVIEW_SKIP_PATTERN" || true
+}
+
 # check_duo: the MR is open. /fetch-review moves the Duo round on; each round
 # is triaged, re-verified, and pushed and replied to, with one stop before the
 # push when there are ASK threads or commits to push.
@@ -311,40 +466,25 @@ check_verified() {
   _run verifier "$verb $TASK."; return 1
 }
 
-# _findings: "<CR-n>\t<decision>\t<route>\t<status>" for each finding in
-# code-review.md, from its "- **Decision:** x · **Route:** y" and
-# "- **Status:** z" lines. _pending_ and _(set if fix…)_ placeholders read as empty.
-_findings() {
-  awk '
-    function val(s, key,   i) { i = index(s, key); if (!i) return ""; s = substr(s, i + length(key))
-      sub(/·.*/, "", s); gsub(/[*_]/, "", s); sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s)
-      if (s ~ /^\(/ || s == "pending") s = ""; split(s, w, " "); return tolower(w[1]) }
-    function flush() { if (id != "") print id "\037" d "\037" r "\037" st }
-    /^### CR-[0-9]+/ { flush(); id = $2; d = r = st = "" }
-    id != "" && /\*\*Decision:\*\*/ { d = val($0, "**Decision:**"); r = val($0, "**Route:**") }
-    id != "" && /\*\*Status:\*\*/ { st = val($0, "**Status:**") }
-    END { flush() }' "$DIR/code-review.md"
-}
-
 # check_review: the review at HEAD is settled, or set a run/stop and return 1.
 # Open quick fixes go back to the implementer; a finding with no decision, or
 # a fix routed to requirements or re-plan, stops for the user. Approving that
 # stop sends the run to the furthest-back route.
 check_review() {
-  local head id d r st pending=() req=() replan=() quick=() fp
+  local head id d r th st rp pending=() req=() replan=() quick=() fp
   head="$(git rev-parse HEAD)"
   if [ "$(state_reviewed_sha "$TASK")" != "$head" ]; then _run reviewer "Review $TASK."; return 1; fi
   if [ ! -f "$DIR/code-review.md" ]; then
     _unreadable review "HEAD was reviewed, but there's no $REL/code-review.md. Run the reviewer again by hand."; return 1
   fi
-  while IFS=$'\037' read -r id d r st; do
+  while IFS=$'\037' read -r id d r th st rp; do
     case "$d" in
       fix) [ "$st" = open ] || continue
            case "$r" in quick) quick+=("$id") ;; requirements) req+=("$id") ;; re-plan) replan+=("$id") ;; *) pending+=("$id") ;; esac ;;
       debt|skip) ;;
       *) pending+=("$id") ;;
     esac
-  done < <(_findings)
+  done < <(findings_list "$DIR/code-review.md")
 
   if [ $(( ${#pending[@]} + ${#req[@]} + ${#replan[@]} )) -gt 0 ]; then
     fp="$(_checksum code-review.md)"
@@ -389,6 +529,7 @@ apply_fix_round() {
 # that stop lets the stage run once more.
 INPUTS=(@HEAD requirements.md plan.md verification.md code-review.md evidence/evidence.md
         evidence/APPROVED mr.md auto-decisions.md review-triage.md state.env verified-head)
+[ "$KIND" = MR_REVIEW ] && INPUTS=(@HEAD requirements.md focus.md verification.md code-review.md tech-debt.md state.env)
 check_stall() {
   [ "$VERB" = run ] || return 0
   INPUTS_FP="$(_checksum "${INPUTS[@]}")"
@@ -447,7 +588,7 @@ write_status() {
 # never hides a stalled stage.
 log_run() {
   printf '%s %s %s round=%s/%s head=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "${2:--}" \
-    "$NEW_ROUND" "$MAX_AUTO_FIX_ROUNDS" "$(git rev-parse --short HEAD 2>/dev/null || echo none)" >> "$DIR/run.log"
+    "$NEW_ROUND" "$MAX_AUTO_FIX_ROUNDS" "$(_head --short 2>/dev/null || echo none)" >> "$DIR/run.log"
 }
 
 # Approvals: one fingerprint per stop id.
@@ -458,7 +599,7 @@ _drop_approval() { APPROVALS="$(grep -v "^$1: " <<<"$APPROVALS")"; }
 _set_approval() { _drop_approval "$1"; APPROVALS="${APPROVALS:+$APPROVALS$'\n'}$1: $2"; }
 
 PLAN_ACCEPTED=""; AUTO_PLAN=""; FIX_KEY=""; LAST_RUN=""; LAST_RUN_FP=""; RESET_ROUNDS=""; APPROVE_BLOCK=""
-decide
+if [ "$KIND" = MR_REVIEW ]; then decide_review; else decide; fi
 apply_fix_round
 check_stall
 

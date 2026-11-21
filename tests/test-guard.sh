@@ -123,9 +123,10 @@ declare -A want=(
   [record]='deny deny deny allow'
   [config]='deny allow deny allow'
   [state]='deny allow deny allow'
+  [review]='deny allow deny allow'
 )
 list="$(bash "$GUARD" --list-protected)"
-for kind in secret record config state; do
+for kind in secret record config state review; do
   if grep -q "^$kind	" <<<"$list"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: --list-protected has no $kind entries"; fi
 done
 while IFS=$'\t' read -r kind entry; do
@@ -153,6 +154,11 @@ done <<<"$list"
 sh allow 'ls .work/T-1/state.env'
 sh allow 'grep MR_IID .work/T-1/state.env'
 sh allow 'scripts/agent/start-task.sh T-1 login-form'
+sh allow 'scripts/agent/start-review.sh 142 86abc'
+sh allow 'scripts/agent/set-review-spec.sh 142 86abc'
+sh deny  'echo CLICKUP_ID=1 >> .work/mr-142/state.env'
+sh deny  'echo x > .github/skills/review-mr/SKILL.md'
+ed deny  editFiles '.github/skills/review-mr/SKILL.md'
 ed allow read_file '.work/T-1/state.env'
 sh deny  'echo REVIEW_ROUND=0 >> .work/T-1/state.env'
 sh deny  'sed -i s/REVIEW_ROUND=3/REVIEW_ROUND=0/ .work/T-1/state.env'
@@ -313,6 +319,62 @@ sh allow 'rm -rf .work/T-1/tmp 2>&1 && cat scripts/agent/config.sh 2>&1'
 # ---------- switch ----------
 got="$(jq -n '{toolName: "bash", toolArgs: {command: "git push"}}' | PIPELINE_GUARD=off bash "$GUARD")"
 if [ "$got" = "{}" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: PIPELINE_GUARD=off should allow"; fi
+
+# ---------- an MR review is read-only (ADR 0003) ----------
+WTP=.git/pipeline-reviews/mr-142
+# sh_in <dir> <decision> <command>: the command run with <dir> as the working folder.
+sh_in() {
+  local got; got="$(jq -n --arg c "$3" --arg cwd "$1" '{toolName: "bash", toolArgs: {command: $c}, cwd: $cwd}' |
+    PIPELINE_GUARD=on bash "$GUARD" | jq -r '.permissionDecision // "allow"')"
+  if [ "$got" = "$2" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: expected $2, got $got in $1: $3"; fi
+}
+mkdir -p "$T/$WTP/src"
+ed deny  editFiles "$WTP/src/a.ts"
+ed deny  editFiles "/home/u/proj/$WTP/src/a.ts"
+ed allow read_file "$WTP/src/a.ts"
+sh allow "git -C $WTP diff origin/main...HEAD"
+sh allow "cat $WTP/src/a.ts"
+sh deny  "echo x > $WTP/src/a.ts"
+sh deny  "sed -i s/a/b/ $WTP/src/a.ts"
+sh deny  "git -C $WTP commit -am fix"
+sh deny  "cd $WTP && git commit -am fix"
+sh deny  "git -C $WTP push origin HEAD:refs/heads/fix"
+sh_in "$T/$WTP" deny  'git commit -am fix'
+sh_in "$T/$WTP" deny  'echo x > src/a.ts'
+sh_in "$T/$WTP" deny  'sed -i s/a/b/ src/a.ts'
+sh_in "$T/$WTP" allow 'git log --oneline -5'
+sh_in "$T/$WTP" allow 'grep -rn TODO src'
+sh_in "$T" allow 'git commit -am "feat: mine"'          # the user's own checkout is unaffected
+sh deny  'scripts/agent/clickup.sh comment mr-142 note.md'
+sh deny  'scripts/agent/clickup.sh status mr-142 done'
+sh deny  'scripts/agent/clickup.sh attach mr-142 x.png'
+sh deny  'scripts/agent/upload-evidence.sh mr-142'
+sh allow 'scripts/agent/clickup.sh fetch mr-142'
+sh ask   'scripts/agent/clickup.sh comment T-1 note.md'    # delivery: still a confirmation
+sh ask   'scripts/agent/post-review-thread.sh 142 CR-3'
+sh ask   'scripts/agent/reply-thread.sh mr-142 disc1 .work/mr-142/replies/CR-1.md'
+sh deny  'scripts/agent/reply-thread.sh mr-142 disc1 .work/mr-142/replies/CR-1.md --resolve'
+sh allow 'scripts/agent/reply-thread.sh T-1 disc1 .work/T-1/reply.md --resolve'   # delivery: the duo stop confirmed it
+sh ask   'bash scripts/agent/post-review-thread.sh 142 CR-1'
+
+# ---------- the review worktree where config.sh's review_worktree puts it ----------
+# In a plain repo, and in one whose git folder isn't named .git (--separate-git-dir).
+for layout in plain separate; do
+  d="$T/layout-$layout"
+  if [ $layout = plain ]; then git init -q "$d/proj"; else git init -q --separate-git-dir "$d/repo.git" "$d/proj"; fi
+  mkdir -p "$d/proj/scripts"; cp -r "$ROOT/payload/scripts/agent" "$d/proj/scripts/"
+  wt="$(cd "$d/proj" && bash -c 'source scripts/agent/config.sh; review_worktree mr-142')"
+  mkdir -p "$wt/src"
+  ed deny  editFiles "$wt/src/a.ts"
+  sh deny  "echo x > $wt/src/a.ts"
+  sh_in "$wt" deny  'echo x > src/a.ts'
+  sh_in "$wt" deny  'git commit -am fix'
+  sh_in "$wt" allow 'git log --oneline -5'
+  sh_in "${wt%/*}" deny 'echo x > mr-142/src/a.ts'   # from the folder that holds the review worktrees
+done
+# A project's own folder named pipeline-reviews isn't a review worktree.
+ed allow editFiles 'docs/pipeline-reviews/notes.md'
+sh allow 'echo x > docs/pipeline-reviews/notes.md'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

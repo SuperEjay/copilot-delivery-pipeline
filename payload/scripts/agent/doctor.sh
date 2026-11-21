@@ -107,6 +107,25 @@ else
   result WARN "can't tell the VS Code version (no code on PATH): it needs $MIN_CODE or later"
 fi
 
+# ---------- review worktrees of finished MRs (ADR 0003) ----------
+# A review worktree is kept for re-reviews; once its MR is merged or closed,
+# /review-mr <iid> --done removes it. Only asks GitLab when glab is logged in.
+reviews="$(git worktree list --porcelain 2>/dev/null | sed -n 's#^worktree .*/pipeline-reviews/mr-\([0-9][0-9]*\)$#\1#p')"
+if [ -n "$reviews" ]; then
+  if has glab && glab auth status >/dev/null 2>&1; then
+    for iid in $reviews; do
+      st="$(glab api "projects/:id/merge_requests/$iid" 2>/dev/null | jq -r '.state // empty' 2>/dev/null)"
+      case "$st" in
+        merged|closed) result WARN "review worktree of MR !$iid is still here, and the MR is $st: run /review-mr $iid --done to remove it" ;;
+        opened|locked) ;;
+        *) result INFO "can't tell whether MR !$iid is still open: if it's merged or closed, run /review-mr $iid --done" ;;
+      esac
+    done
+  else
+    result INFO "review worktrees: $(printf '%s\n' $reviews | wc -l | tr -d ' ') (MRs $(printf '!%s ' $reviews | sed 's/ $//')). Without glab logged in, it can't tell which MRs are finished; remove one with /review-mr <iid> --done"
+  fi
+fi
+
 # ---------- to check by hand ----------
 result INFO "pinned models: a script can't check them. In an auto run, pick a model other than Auto, then check each stage's model in the chat's subagent details (see Pinned models in docs/agent-pipeline.md)"
 

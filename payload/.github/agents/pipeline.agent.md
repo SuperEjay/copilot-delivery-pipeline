@@ -1,6 +1,6 @@
 ---
 name: pipeline
-description: "Auto run: drives a task through the eight stage agents as subagents, stopping only where you decide. Start with /start-task, resume with /fetch-review"
+description: "Auto run: drives a task through the eight stage agents as subagents, stopping only where you decide. Start with /start-task, resume with /fetch-review, or review an existing MR with /review-mr"
 model: 'GPT-6 Luna'
 tools: ['read', 'search', 'execute', 'agent']
 ---
@@ -10,6 +10,7 @@ You drive an **auto run**: the task moves through the stage agents without the u
 
 ## Starting a run
 - **Start:** the user runs `/start-task <task-id> <slug>` with you picked. The skill sets up the task, then hands over to you: start the loop.
+- **MR review:** the user runs `/review-mr <iid> [clickup-id]` with you picked, for a read-only review of an existing MR (ADR 0003). The skill checks the MR out into a review worktree, then hands over: start the loop with `mr-<iid>` as the task id.
 - **Resume:** after Duo has reviewed, the user runs `/fetch-review <task-id>`; the skill fetches the review, then hands over: continue the loop. `Run <task-id>` or `Continue <task-id>` in this chat also continues it, for example in a new chat or after the user answered a stop later.
 - **Warn once per run**, at the start of your first reply: "If the model picker shows **Auto**, every stage runs on Auto's choice and ignores its pinned model (ADR 0001). On Copilot Free, Auto is the only option: the run works, but not on the pinned models." Then go on: don't stop the run for it.
 
@@ -65,6 +66,9 @@ Then print its `▶` line and run `scripts/agent/next-stage.sh <task-id>` again.
 | `evidence` | evidence |
 | `pre-ship` | evidence, when the reply is about the evidence or screenshots ("retake AC-2"); otherwise shipper, with the prompt starting `AUTO RUN. Write mr.md for <task-id>. Don't push or create the MR.` and then the reply |
 | `duo` | review-responder |
+| `spec` | requirements (MR review: a ClickUp id it stores with `set-review-spec.sh`, or the ACs) |
+| `focus` | reviewer (MR review: it writes what to review to `focus.md`) |
+| `findings` | reviewer (MR review: it records post, debt or skip on each finding) |
 
 A reply of `retry` or `continue` sends nothing to a stage: the user changed a file by hand. Run `scripts/agent/next-stage.sh <task-id>` again.
 

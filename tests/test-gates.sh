@@ -133,6 +133,29 @@ $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
 check "round 3 refused at MAX_REVIEW_ROUNDS=2, even with MAX_REVIEW_ROUNDS=99 in state.env" '[ $? -eq 3 ] && jq -e "map(.id) == [\"d2\",\"d3\"]" $W/review.json >/dev/null'
 $S/fetch-duo-review.sh T1 --force > "$T/out.txt" 2>&1
 check "--force goes past the limit" 'grep -q "^Round 3: 1 " "$T/out.txt"'
+# ---------- an MR review's threads: every author, no round (ADR 0003) ----------
+# Discussions from Duo, a person, a resolved one, a system note and a plain
+# (unresolvable) comment.
+jq -n '[
+  {id: "t1", notes: [{resolvable: true, resolved: false, author: {username: "duo"}, body: "duo says", position: {new_path: "a.txt", new_line: 1}},
+                     {author: {username: "ann"}, body: "agreed"}]},
+  {id: "t2", notes: [{resolvable: true, resolved: false, author: {username: "ann"}, body: "ann asks"}]},
+  {id: "t3", notes: [{resolvable: true, resolved: true, author: {username: "bob"}, body: "done"}]},
+  {id: "t4", notes: [{system: true, resolvable: false, author: {username: "ann"}, body: "added 1 commit"}]},
+  {id: "t5", notes: [{resolvable: false, author: {username: "bob"}, body: "looks fine overall"}]}
+]' > "$STUB/discussions.json"
+bash -c 'source scripts/agent/config.sh; state_init_review mr-7 7'
+cp $W/state.env "$T/delivery-state"
+$S/fetch-duo-review.sh mr-7 > "$T/out.txt" 2>&1
+check "MR review: every author's open threads go to threads.json, Duo's too" '[ $? -eq 0 ] && jq -e "map(.id) == [\"t1\",\"t2\",\"t5\"]" .work/mr-7/threads.json >/dev/null'
+check "MR review: DUO_USERNAMES doesn't filter them" 'jq -e "map(.author) | index(\"ann\")" .work/mr-7/threads.json >/dev/null'
+check "MR review: replies and the position are kept" 'jq -e ".[0].replies[0].author == \"ann\" and .[0].file == \"a.txt\" and .[0].line == 1" .work/mr-7/threads.json >/dev/null'
+check "MR review: no review round counted, no review.json" '! grep -q "^REVIEW_" .work/mr-7/state.env && [ ! -e .work/mr-7/review.json ]'
+check "MR review: it says how many and where, with no round" 'grep -q "^3 open thread(s) from every author in .work/mr-7/threads.json" "$T/out.txt" && ! grep -q "Round" "$T/out.txt"'
+$S/fetch-duo-review.sh mr-7 > "$T/out.txt" 2>&1
+check "MR review: fetching again still counts nothing" '[ $? -eq 0 ] && ! grep -q "^REVIEW_" .work/mr-7/state.env'
+check "MR review: the delivery task's round is untouched" 'cmp -s $W/state.env "$T/delivery-state"'
+
 $S/review-signals.sh T1 --mark-reviewed > "$T/out.txt" 2>&1
 check "review-signals --mark-reviewed records HEAD" '[ $? -eq 0 ] && grep -qx "REVIEWED_SHA=$(git rev-parse HEAD)" $W/state.env'
 

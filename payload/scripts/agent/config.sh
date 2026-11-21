@@ -25,8 +25,18 @@ fi
 : "${EVIDENCE_START_CMD=}"
 : "${EVIDENCE_STORAGE_STATE:=}"
 : "${EVIDENCE_VIEWPORT:=1440x900}"
+: "${INSTALL_CMD=npm ci}"
+: "${MR_REVIEW_MAX_FILES:=40}"
+: "${MR_REVIEW_SKIP_PATTERN:=(^|/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|Gemfile\.lock|poetry\.lock|Cargo\.lock|composer\.lock|go\.sum)$|\.min\.(js|css)$|\.map$|\.snap$|(^|/)(dist|build|__generated__)/}"
 
 task_dir() { echo "$WORK_DIR/$1"; }
+
+# review_worktree <task>: the MR review's worktree (ADR 0003). It lives in the
+# git folder, where test runners and linters run in the checkout can't see it.
+review_worktree() {
+  local gitdir; gitdir="$(cd "$REPO_ROOT" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+  echo "$gitdir/pipeline-reviews/$1"
+}
 
 require() {
   for bin in "$@"; do

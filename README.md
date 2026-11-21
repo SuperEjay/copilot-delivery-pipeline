@@ -31,6 +31,20 @@ manual mode: pick each stage agent yourself, following the **Next:** line at
 the end of its reply. Everything runs in your VS Code, using your
 Copilot plan and your own ClickUp and GitLab accounts. There's no server to host.
 
+## Review a teammate's MR
+
+The pipeline can also review an MR that already exists. Pick the **pipeline**
+agent and run `/review-mr <iid>`, where `<iid>` is the MR's number: the `142` in
+`!142`. Add the ClickUp task id after it if the MR doesn't name its task. It
+checks the MR out into a separate worktree (your branch and uncommitted work
+are never touched), finds its spec in ClickUp, runs your checks, and reviews the
+diff against the spec. You decide per finding: post it on the MR, park it as
+tech debt, or skip it. You confirm each post, and the review never changes the
+MR's code. After the author pushes, run `/review-mr <iid>` again to review only
+what's new. When you're done, `/review-mr <iid> --done` removes the worktree.
+See
+[MR review (a teammate's MR)](payload/docs/agent-pipeline.md#mr-review-a-teammates-mr).
+
 ## Why use it
 
 - **Auto run:** the `pipeline` agent runs the stages for you as subagents,
@@ -324,6 +338,9 @@ tests/test-next-stage.sh  # checks the auto run's router: the next stage or stop
 tests/test-agents.sh      # checks the stage agents: subagent frontmatter, no handoffs, the "In an auto run" sections
 tests/test-orchestrator.sh  # checks the orchestrator (pipeline agent) against the router's verbs and stop ids
 tests/test-doctor.sh      # checks doctor.sh: each PASS, WARN and FAIL, with fake tools on PATH, and that it changes nothing
+tests/test-start-review.sh  # checks the start of an MR review: which MRs, the review worktree, dependencies, ClickUp, --done
+tests/test-post-review.sh   # checks posting an MR review's findings (diff or general threads), replies and review signals
+tests/test-findings.sh      # checks reading and changing code-review.md findings, against the reviewer agent's own templates
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release

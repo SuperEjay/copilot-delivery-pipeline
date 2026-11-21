@@ -378,6 +378,144 @@ no_unclear_names() {
 }
 check "no unclear names: _fp, _st, v and tr are renamed" 'no_unclear_names > "$T/out.txt"'
 
+# ---------- the MR review route (ADR 0003) ----------
+# A review task as start-review.sh leaves it, without glab: the state, and a
+# review worktree whose commits stand for the MR's head. HEAD of the user's own
+# checkout plays no part.
+cd "$T/proj"
+R=.work/mr-7
+WT="$(bash -c 'source scripts/agent/config.sh; review_worktree mr-7')"
+git worktree add -q --detach "$WT" origin/main
+bash -c 'source scripts/agent/config.sh; state_init_review mr-7 7 && state_set_target_branch mr-7 main'
+printf 'MR_REVIEW_MAX_FILES=3\n' > .agent.env
+mrhead() { git -C "$WT" rev-parse "$@" HEAD; }
+# mr_change <file>...: the author's commit on the MR, changing these files.
+mr_change() { local f; for f in "$@"; do mkdir -p "$WT/$(dirname "$f")"; echo "$RANDOM" >> "$WT/$f"; done; git -C "$WT" add -A; git -C "$WT" commit -qm change; }
+spec_md() { printf '# Requirements: mr-7\n%s\n## Acceptance criteria\n- AC-1: x\n' "$1" > $R/requirements.md; }
+checks_md() { printf '# Verification: mr-7\nResult: %s\nCommit: %s\n' "$1" "${2:-$(mrhead)}" > $R/verification.md; }
+mr_reviewed() { bash -c 'source scripts/agent/config.sh; state_set_reviewed_sha mr-7 "$1"' _ "$(mrhead)"; }
+# mr_review_md "<decision> [thread|-] [status|-] [replied]"...: an MR review's
+# code-review.md, one finding per argument.
+mr_review_md() {
+  local i=0 f d th st rp
+  { echo "# Code review: mr-7"; echo "## Findings"
+    for f in "$@"; do
+      i=$((i + 1)); read -r d th st rp <<< "$f"
+      echo "### CR-$i · major · Correctness · \`a.txt:$i\`"; echo "- **Problem:** p"
+      echo "- **Decision:** $d"; [ -n "$th" ] && [ "$th" != - ] && echo "- **Thread:** $th"
+      [ -n "$st" ] && [ "$st" != - ] && echo "- **Status:** $st"; [ -n "$rp" ] && echo "- **Replied:** $rp"
+    done
+  } > $R/code-review.md
+}
+mr_change src/a.ts
+
+cp .github/agents/verifier.agent.md "$T/verifier.bak"
+awk '/^## In an MR review$/ { skip = 1; next } /^## / { skip = 0 } !skip' "$T/verifier.bak" > .github/agents/verifier.agent.md
+next mr-7
+check "review: an agent without its In an MR review section: exit 1, it says which" '[ $rc -eq 1 ] && grep -q "verifier.agent.md has no .## In an MR review. section" "$T/out.txt"'
+cp "$T/verifier.bak" .github/agents/verifier.agent.md
+next mr-9
+check "review: no task state points at /review-mr" '[ $rc -eq 1 ] && grep -q "/review-mr 9" "$T/out.txt"'
+
+# ---------- spec ----------
+next mr-7
+check "review: no requirements.md: the requirements agent finds the spec" '[ $rc -eq 0 ] && [ "$out" = "run requirements AUTO RUN. Find the spec for mr-7, an MR review of !7." ]'
+spec_md "No source line"; next mr-7
+check "review: no Spec source line: a spec stop no approval passes" '[ "${out%% *}" = stop ] && grep -q "^stop spec .*no .Spec source:. line" "$T/out.txt"'
+next mr-7 approve
+check "review: ... and approve refuses it" '[ $rc -eq 1 ]'
+spec_md "Spec source: none"; next mr-7
+check "review: Spec source none: the spec stop asks for an id, the ACs, or the MR description" '[ $rc -eq 0 ] && grep -q "^stop spec No ClickUp task found for !7" "$T/out.txt" && grep -q "ClickUp task id" "$T/out.txt" && grep -q "MR description" "$T/out.txt"'
+next mr-7 approve
+check "review: the spec stop can be approved" '[ $rc -eq 0 ] && grep -q "^Approved spec: " $R/status.md'
+next mr-7
+check "review: approved: the requirements agent writes the ACs from the MR description" '[ "$out" = "run requirements AUTO RUN. The user approved the MR description as the spec for mr-7. Write the ACs from it, with Spec source: MR description (weak)." ]'
+spec_md "Spec source: MR description (weak)"; next mr-7
+check "review: a weak spec goes on to the checks" '[ "$out" = "run verifier AUTO RUN. Run the checks for mr-7 in its review worktree. Failures are findings, not fixes." ]'
+spec_md "Spec source: ClickUp 86abc"; next mr-7
+check "review: a ClickUp spec goes on with no stop" '[ "${out%% *}" = run ] && [ "$(echo "$out" | cut -d" " -f2)" = verifier ]'
+
+# ---------- focus ----------
+mr_change src/b.ts src/c.ts package-lock.json dist/app.js src/__generated__/x.ts
+next mr-7
+check "review: lockfiles and generated files don't count toward MR_REVIEW_MAX_FILES" '[ "$(echo "$out" | cut -d" " -f2)" = verifier ]'
+mr_change src/d.ts; next mr-7
+check "review: more files than MR_REVIEW_MAX_FILES: the focus stop" '[ $rc -eq 0 ] && grep -q "^stop focus !7 changes 4 files (more than MR_REVIEW_MAX_FILES=3" "$T/out.txt"'
+next mr-7 approve; next mr-7
+check "review: focus approved: on to the checks" '[ "$(echo "$out" | cut -d" " -f2)" = verifier ]'
+printf 'src/a.ts\n' > $R/focus.md; next mr-7
+check "review: a focus.md written after approval brings the focus stop back" 'grep -q "^stop focus " "$T/out.txt" && grep -q "focus.md" "$T/out.txt"'
+next mr-7 approve
+
+# ---------- checks: failures are findings, not a stop ----------
+checks_md FAIL "$(git rev-parse origin/main)"; next mr-7
+check "review: checks at an older head run again" '[ "$(echo "$out" | cut -d" " -f2)" = verifier ]'
+printf '# Verification: mr-7\nCommit: %s\n' "$(mrhead)" > $R/verification.md; next mr-7
+check "review: verification.md with no Result: a stop no approval passes" 'grep -q "^stop verify " "$T/out.txt"'
+checks_md FAIL; next mr-7
+check "review: failed checks go on to the reviewer, no fix round" '[ "$out" = "run reviewer AUTO RUN. Review mr-7." ] && grep -q "^Fix round: 0/" $R/status.md'
+checks_md PASS; next mr-7
+check "review: passed checks go on to the reviewer" '[ "$out" = "run reviewer AUTO RUN. Review mr-7." ]'
+check "review: the run log shows the MR head, not the user's HEAD" '[ "$(tail -n1 $R/run.log | sed "s/.*head=//")" = "$(mrhead --short)" ]'
+
+# ---------- the stalled stop ----------
+next mr-7
+check "review: the same run with nothing changed is the stalled stop" 'grep -q "^stop stalled reviewer ran but changed nothing" "$T/out.txt"'
+
+# ---------- findings ----------
+mr_reviewed; next mr-7
+check "review: reviewed with no code-review.md: a stop no approval passes" 'grep -q "^stop review " "$T/out.txt"'
+mr_review_md "post" "_pending_" "fix"; next mr-7
+check "review: the findings stop, always" 'grep -q "^stop findings Review .work/mr-7/code-review.md" "$T/out.txt"'
+next mr-7 approve
+check "review: approve refuses a finding with no post, debt or skip" '[ $rc -eq 1 ] && grep -q "Decide CR-2 CR-3 first (post, debt or skip)" "$T/out.txt"'
+mr_review_md "post" "debt" "skip" "post"; next mr-7
+check "review: all decided: still the findings stop" 'grep -q "^stop findings " "$T/out.txt"'
+next mr-7 approve
+check "review: the findings stop can be approved" '[ $rc -eq 0 ]'
+next mr-7
+check "review: approved: the reviewer posts only the findings marked post" '[ "$out" = "run reviewer AUTO RUN. Post the findings marked post for mr-7: CR-1 CR-4." ]'
+mr_review_md "post 101" "debt" "skip" "post"; next mr-7
+check "review: a recorded thread doesn't bring the findings stop back" '[ "$out" = "run reviewer AUTO RUN. Post the findings marked post for mr-7: CR-4." ]'
+mr_review_md "post 101" "debt" "skip" "post 102"; next mr-7
+check "review: every post has its thread: end, with the counts" '[ "$out" = "end Review of !7 done at $(mrhead --short): 2 posted, 1 parked in .work/mr-7/tech-debt.md, 1 skipped. Run /review-mr 7 again after the author pushes." ]'
+mr_review_md "skip" "debt" "skip" "post 102"; next mr-7
+check "review: a changed decision brings the findings stop back" 'grep -q "^stop findings " "$T/out.txt"'
+
+# ---------- the target branch can't be read: a stop, not a silent pass ----------
+KEEP_REVIEWED="$(bash -c 'source scripts/agent/config.sh; state_reviewed_sha mr-7')"
+bash -c 'source scripts/agent/config.sh; state_set_target_branch mr-7 no-such-branch && state_set_reviewed_sha mr-7 ""'   # a first review: counted from the target
+mr_change src/target.ts; next mr-7
+check "review: the MR's target branch can't be read: a focus stop no approval passes" 'grep -q "^stop focus .*origin/no-such-branch" "$T/out.txt" && grep -q "/review-mr 7" "$T/out.txt"'
+next mr-7 approve
+check "review: ... and approve refuses it" '[ $rc -eq 1 ]'
+bash -c 'source scripts/agent/config.sh; state_set_target_branch mr-7 main && state_set_reviewed_sha mr-7 "$1"' _ "$KEEP_REVIEWED"
+git -C "$WT" reset -q --hard HEAD~1   # undo the extra commit, so the run below is as before
+
+# ---------- re-review: nothing new (#86) ----------
+mr_review_md "post 101" "debt" "skip" "post 102"; next mr-7   # back to the decisions approved
+check "re-review: no new commits since the review: end, nothing to do" '[ "${out%% *}" = end ] && grep -q "Review of !7 done at $(mrhead --short)" "$T/out.txt"'
+
+# ---------- re-review: the author pushes again (#86) ----------
+OLD_HEAD="$(mrhead)"
+mr_change src/a.ts; next mr-7
+check "re-review: only the files since the review count: no focus stop for one file" '[ "$(echo "$out" | cut -d" " -f2)" = verifier ]'
+checks_md PASS; next mr-7
+check "re-review: the reviewer runs on the new head" '[ "$out" = "run reviewer AUTO RUN. Review mr-7." ]'
+mr_reviewed
+mr_review_md "post 101 verified" "debt" "skip" "post 102 open" "post"; next mr-7
+check "re-review: new findings and statuses bring the findings stop back" 'grep -q "^stop findings " "$T/out.txt"'
+next mr-7 approve; next mr-7
+check "re-review: the new finding is posted first" '[ "$out" = "run reviewer AUTO RUN. Post the findings marked post for mr-7: CR-5." ]'
+mr_review_md "post 101 verified" "debt" "skip" "post 102 open" "post 103"; next mr-7
+check "re-review: then a reply on each verified finding's thread" '[ "$out" = "run reviewer AUTO RUN. Reply on the threads of the findings verified for mr-7: CR-1. Don'"'"'t resolve them." ]'
+mr_review_md "post 101 verified yes" "debt" "skip" "post 102 open" "post 103"; next mr-7
+check "re-review: replied: end, with the verified count, and no findings stop again" '[ "$out" = "end Review of !7 done at $(mrhead --short): 3 posted, 1 parked in .work/mr-7/tech-debt.md, 1 skipped, 1 verified since posting. Run /review-mr 7 again after the author pushes." ]'
+mr_review_md "post 101 verified declined" "debt" "skip" "post 102 open" "post 103"; next mr-7
+check "re-review: a declined reply counts as answered" '[ "${out%% *}" = end ]'
+for i in 1 2 3 4 5; do mr_change "src/many$i.ts"; done; next mr-7
+check "re-review: more new files than the limit: the focus stop" 'grep -q "^stop focus !7 changes 5 files" "$T/out.txt"'
+
 # ---------- a task started on v1.2.2 carries on (ADR 0002) ----------
 # v1.2.2's own scripts start the task, stop it at requirements and record the
 # approval; the current scripts then take over, as after install.sh --update.

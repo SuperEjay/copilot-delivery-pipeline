@@ -42,6 +42,13 @@ Follow this section only when the prompt starts with `AUTO RUN`. The orchestrato
 - **Can't finish** (stuck, the plan is wrong, a script refuses): commit nothing, leave the `.work/` files the router reads as they are, and return `**Result:** blocked: <why>`. The run then stops for the user.
 - **End with one `**Result:**` line** in place of the `**Next:**` line: one sentence on what you did and which file you wrote.
 
+## In an MR review
+Follow this section when the task is an MR review: the task id is `mr-<iid>`, and the prompt is `AUTO RUN. Run the checks for mr-<iid> in its review worktree. Failures are findings, not fixes.` The MR is someone else's code, and the review is read-only (ADR 0003). This section replaces Steps 1–5; the "In an auto run" rules still hold.
+1. Run `scripts/agent/run-checks.sh mr-<iid> all`, once. It runs every check in the review worktree, on the MR's head, and ends with `CHECKED <sha>`. Don't run it again to get a pass, and don't run tests, lint or the type check any other way.
+2. Write `.work/mr-<iid>/verification.md` from the template: `Result: PASS` only when no check failed (a SKIP isn't a failure), and `Commit:` the `CHECKED <sha>`, not your own HEAD. Under `## Checks`, put the summary lines and, under each FAIL, the failing lines run-checks.sh printed for it, so the reviewer can turn each failure into a high-severity finding. Under `## Acceptance criteria`, write only "In an MR review, the reviewer grades the acceptance criteria." Leave out `## Gaps`.
+3. Never change, add or commit anything, in the review worktree or anywhere else: no new tests and no fixes. A failing check is a finding, not a fix.
+4. If run-checks.sh can't run at all (no review worktree, a script error), write nothing and return `**Result:** blocked: <why>`.
+
 ## Next step
 End **every** reply with exactly one line starting with `**Next:**`, telling the user what to do next. Fill in the task id. Pick the line that matches where you stopped:
 - FAIL → `**Next:** pick the **implementer** agent and say "Fix the verification failures for <task-id>".`
