@@ -156,6 +156,8 @@ done <<<"$list"
 sh allow 'ls .work/T-1/state.env'
 sh allow 'grep MR_IID .work/T-1/state.env'
 sh allow 'scripts/agent/start-task.sh T-1 login-form'
+sh allow 'scripts/agent/start-task.sh T-1 --mr 142'        # adopting your own MR (ADR 0004)
+sh allow 'scripts/agent/start-task.sh T-1 --branch feat/x'
 sh allow 'scripts/agent/start-review.sh 142 86abc'
 sh allow 'scripts/agent/set-review-spec.sh 142 86abc'
 sh deny  'echo CLICKUP_ID=1 >> .work/mr-142/state.env'

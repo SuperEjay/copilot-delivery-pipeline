@@ -246,7 +246,8 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    go stage by stage instead, pick **requirements** first: see
    [Manual mode](payload/docs/agent-pipeline.md#manual-mode-fallback). To review
    a teammate's MR, pick **pipeline** and run `/review-mr <iid>`: see
-   [Review a teammate's MR](#review-a-teammates-mr).
+   [Review a teammate's MR](#review-a-teammates-mr). To have the pipeline fix
+   your own hand-made MR, run `/start-task <clickup-id> --mr <iid>` (ADR 0004).
 
 ## Updating an existing install
 
@@ -386,6 +387,7 @@ tests/test-start-review.sh  # checks the start of an MR review: which MRs, the r
 tests/test-post-review.sh   # checks posting an MR review's findings (diff or general threads), replies and review signals
 tests/test-findings.sh      # checks reading and changing code-review.md findings, against the reviewer agent's own templates
 tests/test-apply-suggestion.sh  # checks applying a review thread's suggestion block: moved lines, stale lines, refusals
+tests/test-start-task.sh    # checks starting a task, and adopting your own branch or MR (--branch, --mr)
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release

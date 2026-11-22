@@ -89,7 +89,7 @@ its reply with a **Next:** line naming the agent to pick and what to say, e.g.
 | Path | What it is |
 |---|---|
 | `.github/agents/*.agent.md` | The eight stage agents (requirements, planner, implementer, verifier, reviewer, evidence, shipper, review-responder) and `pipeline`, the orchestrator of an auto run |
-| `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>`: branch, work folder, ClickUp fetch, then on to requirements, or starts the auto run when **pipeline** is picked |
+| `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>` (or `--mr <iid>` / `--branch <branch>` to adopt your own work): branch, work folder, ClickUp fetch, then on to requirements, or starts the auto run when **pipeline** is picked |
 | `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then on to review-responder, or resumes the auto run when **pipeline** is picked |
 | `.github/skills/review-mr/SKILL.md` | `/review-mr <iid> [clickup-id]`: check out an existing MR for a read-only review and start its auto run when **pipeline** is picked; `/review-mr <iid> --done` cleans up (see "MR review (a teammate's MR)") |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
@@ -203,6 +203,13 @@ run, then goes on.
    what runs next and where to stop, from the files in `.work/<id>/`.
 
 Answer every stop in that same chat.
+
+**Fixing work you started by hand** (ADR 0004): run `/start-task 86c1abcde --mr 142`
+for your own open MR, or `--branch <branch>` for a branch with no MR yet. The
+task runs the same route on that branch: the planner ticks what your commits
+already cover, the reviewer and fix loop work on it, and the shipper updates
+your MR, keeping your title and description. A teammate's MR is refused: use
+`/review-mr` for that.
 
 ### Stops and what to reply
 

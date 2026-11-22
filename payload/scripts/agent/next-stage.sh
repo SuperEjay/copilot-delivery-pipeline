@@ -27,7 +27,8 @@
 #
 # It walks the pipeline in order and the first unfinished step decides:
 #   requirements.md   missing: run requirements. Not approved as it is now: stop.
-#   plan.md           missing: run planner. Requirements changed since the plan
+#   plan.md           missing: run planner (an adopted task, ADR 0004: told to
+#                     tick what the branch's commits cover). Requirements changed since the plan
 #                     was accepted: run planner. A Stop flag "yes" or more than
 #                     MAX_PLAN_SLICES S slices: stop (once approved, it goes
 #                     on); otherwise it goes on and adds an auto-decision to
@@ -261,7 +262,14 @@ decide() {
   fi
 
   STAGE=plan
-  if [ ! -f "$DIR/plan.md" ]; then _run planner "Plan $TASK."; return; fi
+  if [ ! -f "$DIR/plan.md" ]; then
+    if [ -n "$(state_adopted "$TASK")" ]; then
+      _run planner "Plan $TASK. The branch was adopted: tick the slices its existing commits already cover."
+    else
+      _run planner "Plan $TASK."
+    fi
+    return
+  fi
   check_plan "$fp" || return
 
   STAGE=build

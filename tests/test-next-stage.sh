@@ -118,6 +118,11 @@ next T1
 check "requirements changed after approval: the stop repeats" '[[ "$out" == "stop requirements "* ]]'
 next T1; next T1 approve; next T1
 check "approved again: on to the planner" '[ "$out" = "run planner AUTO RUN. Plan T1." ]'
+cp $W/state.env "$T/state.keep"
+bash -c 'source scripts/agent/config.sh; state_set_adopted T1 branch'
+next T1
+check "an adopted task: the planner is told to credit the existing commits (ADR 0004)" '[ "$out" = "run planner AUTO RUN. Plan T1. The branch was adopted: tick the slices its existing commits already cover." ]'
+cp "$T/state.keep" $W/state.env
 
 # ---------- run.log: one line per decision and approval (ADR 0002) ----------
 # "<UTC time> <run|stop|end|approve> <agent or stop id, - for end> round=<n>/<max> head=<short HEAD>"

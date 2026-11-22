@@ -17,6 +17,7 @@
 #   state_mr_iid <task>         the merge request's iid           required
 #   state_clickup_id <task>     an MR review's ClickUp task       default empty
 #   state_target_branch <task>  the branch an MR review's MR targets  default empty
+#   state_adopted <task>        mr or branch for an adopted task (ADR 0004)  default empty
 #   state_review_round <task>   Duo review rounds counted so far  default 0
 #   state_review_ids <task>     checksum of the last thread ids   default empty
 #   state_reviewed_sha <task>   commit the reviewer last reviewed default empty
@@ -25,6 +26,7 @@
 #   state_init_review <task> <iid>         the same, for an MR review
 #   state_set_clickup_id <task> <id>
 #   state_set_target_branch <task> <branch>
+#   state_set_adopted <task> mr|branch
 #   state_set_mr_iid <task> <iid>
 #   state_set_review <task> <round> <ids>  both review keys, always together
 #   state_set_reviewed_sha <task> <sha>
@@ -83,6 +85,7 @@ state_review_ids()   { _state_optional "$1" REVIEW_IDS ""; }
 state_reviewed_sha() { _state_optional "$1" REVIEWED_SHA ""; }
 state_clickup_id()   { _state_optional "$1" CLICKUP_ID ""; }
 state_target_branch() { _state_optional "$1" TARGET_BRANCH ""; }
+state_adopted()      { _state_optional "$1" ADOPTED ""; }   # mr | branch: an adopted task (ADR 0004)
 
 # _state_check <task> <KEY> <value>: refuse a value that would break the format.
 _state_check() {
@@ -120,6 +123,11 @@ state_set_clickup_id() {
 state_set_target_branch() {
   _state_require_file "$1" && _state_check "$1" TARGET_BRANCH "$2" || return 1
   _state_put "$1" TARGET_BRANCH "$2"
+}
+state_set_adopted() {
+  case "$2" in mr|branch) ;; *) echo "ADOPTED must be mr or branch, not: $2" >&2; return 1 ;; esac
+  _state_require_file "$1" || return 1
+  _state_put "$1" ADOPTED "$2"
 }
 state_set_mr_iid() {
   _state_require_file "$1" && _state_check "$1" MR_IID "$2" || return 1

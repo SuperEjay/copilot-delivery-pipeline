@@ -48,6 +48,10 @@ _Avoid_: state file, task env
 The router's record of an auto run in `.work/<id>/run.log`: one line for each decision it prints and each approval it records, only ever appended. Only the router writes it; it is not one of the inputs that tell a stalled stage.
 _Avoid_: history, audit log, trace
 
+**Adopted task**:
+A delivery task started on a branch the user already has, with `/start-task <clickup-id> --branch <branch>` or, for their own open MR, `--mr <iid>` (ADR 0004). It runs the whole delivery route on top of the existing commits; the MR is recorded only when the shipper updates it.
+_Avoid_: imported task, takeover
+
 **MR review**:
 The pipeline's second route: a read-only review of an existing merge request, usually a teammate's, against its spec, started with `/review-mr <iid> [clickup-id]`. It finds bugs, technical debt and improvements, and posts only the findings the user picks. It never changes the MR's code.
 _Avoid_: verifier, MR verification, PR review

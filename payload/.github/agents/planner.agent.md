@@ -27,6 +27,12 @@ When handed findings with `Route: re-plan` from `code-review.md`:
 - If a finding can't be planned without a behaviour decision, list it under "Requirement gaps" and end with the "Requirement gaps found" **Next:** line.
 - Reply with the new slices only, one line each.
 
+## Adopted branch
+When the prompt says the branch was adopted (ADR 0004), it already has commits the user made outside the pipeline. Read `.work/<task-id>/adopted-commits.md` (its commits and changed files), then open only the changed files the ACs touch.
+- Write the slices as usual, so every AC is covered.
+- Tick `- [x]` each slice the existing commits already cover, and name those commits under it. Leave `- [ ]` only for real gaps.
+- Don't plan rework of code that already meets an AC: the reviewer judges its quality later, and its findings come back as fix rounds.
+
 ## Template
 ~~~markdown
 # Plan: <task-id>
