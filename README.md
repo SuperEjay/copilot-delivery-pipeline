@@ -1,7 +1,8 @@
 # Copilot delivery pipeline
 
 Turn a ClickUp task into a reviewed GitLab merge request with GitHub Copilot in
-VS Code. You install it into your own project. It adds a set of Copilot agents,
+VS Code, or review a teammate's MR against its ClickUp task. You install it into
+your own project. It adds a set of Copilot agents,
 each doing one step of delivery, and scripts and hooks that keep them inside
 safe limits. You stay in charge of every decision that matters.
 
@@ -75,7 +76,7 @@ into your project as [`docs/agent-pipeline.md`](payload/docs/agent-pipeline.md).
 | VS Code 1.106+ with GitHub Copilot | Runs the agents, skills and hooks. Hooks are a preview feature, and your organization may restrict them. |
 | `bash` | Every pipeline script. macOS's own bash 3.2 is enough. |
 | `git` | Branches, commits and the ship gate |
-| `glab`, logged in to your GitLab | MRs and the GitLab Duo review loop |
+| `glab`, logged in to your GitLab | MRs, the GitLab Duo review loop and MR reviews |
 | `jq` | The hook guard (on every agent tool call), ClickUp and GitLab data |
 | `curl` | The ClickUp API, and the one-line install |
 | Node.js (current LTS) with `npx` | Playwright screenshots for evidence, and the optional skills |
@@ -230,17 +231,20 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    git commit -m "Add the agent pipeline"
    ```
 
-   Leave `.gitattributes` out if you didn't create one.
+   Leave `.gitattributes` out if you didn't create one. If you installed the
+   ponytail and caveman skills, add `.agents/skills skills-lock.json` too.
 7. Fully quit and reopen VS Code, then check:
    - the agents (requirements … review-responder, and **pipeline**) are in the
      Copilot Chat agent picker
-   - `/start-task` and `/fetch-review` appear when you type `/`
+   - `/start-task`, `/fetch-review` and `/review-mr` appear when you type `/`
    - asking any agent to run `git push` is refused, with the guard's reason
 8. Pick **pipeline** and start your first task with
    `/start-task <clickup-id> <short-slug>`: see
    [Daily use: auto run](payload/docs/agent-pipeline.md#daily-use-auto-run). To
    go stage by stage instead, pick **requirements** first: see
-   [Manual mode](payload/docs/agent-pipeline.md#manual-mode-fallback).
+   [Manual mode](payload/docs/agent-pipeline.md#manual-mode-fallback). To review
+   a teammate's MR, pick **pipeline** and run `/review-mr <iid>`: see
+   [Review a teammate's MR](#review-a-teammates-mr).
 
 ## Updating an existing install
 
@@ -309,7 +313,7 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
 | `install.sh --update [dir]` | Update to this version. Files you changed are kept, with the new version next to each as `<file>.new` to merge. |
 | `install.sh --update --force [dir]` | Update and replace changed files (your versions saved as `.bak`) |
 | `install.sh --uninstall [dir]` | Remove the pipeline. Keeps `.agent.env` and `.work/`. |
-| `install.sh --with-skills` | Also install the ponytail and caveman skills for Copilot |
+| `install.sh --with-skills` | Also install the ponytail and caveman skills for Copilot, into `.agents/skills/` (needs `npx`). A first install asks about them anyway, unless `--yes`. |
 | `install.sh --yes` | No questions asked |
 | `install.sh --version <tag>` | When run through curl: download that release instead of the script's own |
 
@@ -321,6 +325,12 @@ Through curl, pass options after `bash -s --`, for example
   - `.github/agents/`, `.github/skills/`, `.github/hooks/`
   - `scripts/agent/`
   - `docs/agent-pipeline.md`, `.agent.env.example`
+- **Optional skills** (`--with-skills`, or yes to the question): the `skills`
+  CLI writes ponytail and caveman into `.agents/skills/` and records them in
+  `skills-lock.json`. They're not in the manifest, so `--update` and
+  `--uninstall` leave them alone. If one fails, install it later with
+  `npx -y skills add DietrichGebert/ponytail -a github-copilot -y` (or
+  `JuliusBrussee/caveman`).
 - **Your existing files:** it never overwrites them. Rules go into
   `.github/copilot-instructions.md` and ignores into `.gitignore`, each inside
   `BEGIN/END agent-pipeline` markers. `--update` replaces everything between

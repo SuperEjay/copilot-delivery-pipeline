@@ -141,7 +141,7 @@ admin policy that blocks MCP servers doesn't affect any of this.
    Code version, one line each, and changes nothing. Fix every FAIL. Run it again
    whenever something acts up, or when a teammate sets up.
 9. **Fully quit and reopen VS Code.** The agents appear in the Copilot Chat
-   agent picker, and `/start-task` and `/fetch-review` appear when you type `/`.
+   agent picker, and `/start-task`, `/fetch-review` and `/review-mr` appear when you type `/`.
    They're agent skills, not prompt files, because Copilot (Agent Host)
    sessions don't load prompt files. If they're missing, check that VS Code is
    open on the project's root folder.

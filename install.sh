@@ -245,8 +245,13 @@ fi
 if $SKILLS || { [ "$MODE" = install ] && confirm "Install the ponytail and caveman skills for Copilot now?"; }; then
   if command -v npx >/dev/null 2>&1; then
     say ""
-    npx -y skills add DietrichGebert/ponytail -a github-copilot </dev/null && ok "ponytail" || warn "ponytail install failed: install it later"
-    npx -y skills add JuliusBrussee/caveman -a github-copilot </dev/null && ok "caveman" || warn "caveman install failed: install it later"
+    # The second -y is skills' own: without it, and with stdin not a terminal,
+    # `skills add` stops at its "Select skills" prompt and installs nothing.
+    for repo in DietrichGebert/ponytail JuliusBrussee/caveman; do
+      name="${repo#*/}"
+      npx -y skills add "$repo" -a github-copilot -y </dev/null && ok "$name" \
+        || warn "$name install failed: install it later with  npx -y skills add $repo -a github-copilot -y"
+    done
   else
     warn "skipped skills: npx is missing"
   fi

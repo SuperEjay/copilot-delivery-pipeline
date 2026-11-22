@@ -96,6 +96,26 @@ chmod +x "$T/pipebin/curl" "$T/pipebin/npx" "$T/pipebin/glab"
 check "piped install: the skills step doesn't eat the rest of the script" 'grep -q "^Checking the setup (scripts/agent/doctor.sh)" "$T/out.txt"'
 check "piped install: doctor.sh doesn't eat it either, the install reaches Done" 'grep -q "^Done. Next steps:" "$T/out.txt"'
 
+# 7d. the skills on a first install, run by a person (no agent detected): with
+# stdin not a terminal, the real `skills add` stops at its "Select skills" prompt
+# and installs nothing unless it gets -y. This fake npx does the same.
+git init -q -b main "$T/skilled"; git -C "$T/skilled" commit -q --allow-empty -m init
+mkdir -p "$T/skillbin"
+cat > "$T/skillbin/npx" <<'EOF'
+#!/bin/sh
+[ "$1" = -y ] && shift
+[ "$1" = skills ] && [ "$2" = add ] || exit 1
+repo="$3"; shift 3; yes=false
+for a in "$@"; do case "$a" in -y|--yes) yes=true ;; esac; done
+$yes || { echo "[SKILLS_PROMPT_REQUIRES_TTY] Nothing was installed." >&2; exit 1; }
+mkdir -p ".agents/skills/${repo#*/}"
+EOF
+chmod +x "$T/skillbin/npx"
+PATH="$T/skillbin:$PATH" "$ROOT/install.sh" --yes --with-skills "$T/skilled" > "$T/out.txt" 2>&1
+check "first install: the ponytail skill is installed" '[ -d "$T/skilled/.agents/skills/ponytail" ] && grep -q "✓ ponytail" "$T/out.txt"'
+check "first install: the caveman skill is installed" '[ -d "$T/skilled/.agents/skills/caveman" ] && grep -q "✓ caveman" "$T/out.txt"'
+check "first install: no skill install failed" '! grep -q "install failed" "$T/out.txt"'
+
 # ---------- 8. updates accept v1.2.x and later only (ADR 0002) ----------
 version="$(cat "$ROOT/VERSION")"
 # old_install <tag> <dir>: a real install of that release, by its own installer.

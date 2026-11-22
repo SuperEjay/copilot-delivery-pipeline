@@ -52,6 +52,8 @@
   - **Guide:** `docs/agent-pipeline.md` has a new section, "MR review (a teammate's MR)": how it starts, the stages and their three stops, posting, re-review, read-only enforcement, `--done`, and the settings `INSTALL_CMD`, `MR_REVIEW_MAX_FILES` and `MR_REVIEW_SKIP_PATTERN`. Its file list and its hooks table include the review skill, scripts and guard rules.
   - **Agent rules:** the rules every agent gets (`copilot-instructions.md`) say an MR review is read-only.
   - **Tests:** `tests/test-orchestrator.sh` checks that the docs cover the route. Several test helpers no longer pipe into `grep -q`, which with `pipefail` could fail at random.
+- **Fix: the ponytail and caveman skills failed on a first install.** Run by a person (not an agent), `skills add` stopped at its "Select skills" prompt and, with no terminal on stdin, installed nothing, so the installer warned `ponytail install failed` and `caveman install failed`. The installer now passes `skills add` its own `-y`, and a failure's warning gives the command to run later. New check in `tests/test-install.sh`.
+- **README:** covers the MR review route throughout: the intro, `glab`'s requirement, `/review-mr` in the post-install check and the first steps, and where the optional skills go (`.agents/skills/`, `skills-lock.json`) and how to commit them. The guide's setup check lists `/review-mr` too.
 
 ## v2.0.0
 
