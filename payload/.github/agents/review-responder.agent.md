@@ -16,7 +16,12 @@ Two phases. Fixes are pushed only after the verifier has passed them.
    - **PUSH BACK**: wrong, out of scope, or it contradicts requirements.md or plan.md. Give a one-sentence reason.
    - **ASK**: a judgement call for the user (design, product, scope).
 3. Write `.work/<task-id>/review-triage.md`: first a `Round: <n>` line with the round the fetch script printed, then a table (thread id, file:line, verdict, reason) and show it to the user. **Wait for their OK.**
-4. Make the FIX changes. Add a test when a fix changes behaviour. Run `scripts/agent/run-checks.sh <task-id> fast`.
+4. Make the FIX changes. When a FIX thread's body has a ```` ```suggestion ```` block, run `scripts/agent/apply-suggestion.sh <task-id> <thread-id>` for it instead of writing the fix yourself: it puts the suggested lines in place and commits nothing. Never use GitLab's **Apply suggestion** button: it commits on the remote and skips the tests. A suggestion doesn't make a thread FIX; triage it like any other.
+   - Applied as it is: start that thread's reason cell with `Suggestion applied.`
+   - Applied, then changed by you: start it with `Suggestion applied, then adjusted: <why>.`
+   - Refused (exit 3: stale lines, several blocks, a removed line): fix it by hand, using the suggestion as a hint.
+
+   Add a test when a fix changes behaviour. Run `scripts/agent/run-checks.sh <task-id> fast`.
 5. Commit with `fix(review): <summary> [<task-id>]`, and note each commit's short sha in the triage table. **Don't push**: the verifier runs first.
 6. If there were FIX items, stop here and hand over to the verifier. If there were none, go straight to "Push and reply" (nothing gets pushed).
 
@@ -24,6 +29,7 @@ Two phases. Fixes are pushed only after the verifier has passed them.
 1. If there are FIX commits, run `scripts/agent/push-branch.sh <task-id>`. It refuses unless HEAD is the commit the verifier passed. VS Code asks the user to confirm the push.
 2. Reply on each thread with `scripts/agent/reply-thread.sh <task-id> <discussion-id> <message-file> [--resolve]`. Write each message to a temp file in `.work/<task-id>/` first.
    - FIX: "Fixed in <short-sha>: <what changed>". Resolve the thread.
+   - FIX whose reason cell starts `Suggestion applied.`: "Applied the suggestion in <short-sha>." Resolve the thread.
    - PUSH BACK: give the reason. Don't resolve; a human decides.
    - ASK: don't reply. Leave it for the user.
 3. Add a `Replied: yes` line under the `Round:` line in review-triage.md.

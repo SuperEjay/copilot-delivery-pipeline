@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Suggestions are applied, not rewritten** (#95). When a review thread the review-responder triages FIX carries a GitLab ```` ```suggestion ```` block, it runs the new `scripts/agent/apply-suggestion.sh <task-id> <thread-id>` instead of writing its own fix. It saves tokens and lands exactly what the reviewer asked for. The script puts the lines in place in the working tree and commits nothing; the checks, the verifier and the push gate run as before. It applies the block where the reviewer's lines still are, at the same line numbers or, if they moved, where they appear exactly once. It refuses (exit 3, nothing written) when they changed, when the comment offers several blocks (alternatives), or when the thread is on a removed line. Then the fix is made by hand. Threads applied as they are get the reply "Applied the suggestion in <sha>." Triage is unchanged: a suggestion doesn't make a thread FIX. Never use GitLab's **Apply suggestion** button: it commits on the remote and skips the tests.
+- `review.json` now keeps each thread's `new_line` and `head_sha` (the commit the comment was made on).
+
 ## v2.1.0
 
 A second route: **MR review** (ADR 0003). `/review-mr <iid>` reviews an MR that already exists, usually a teammate's, against its ClickUp spec, read-only, and posts only the findings you pick, each one after you confirm it. Also: the optional skills install on a first install again, and `install.sh --local` keeps the pipeline out of git.

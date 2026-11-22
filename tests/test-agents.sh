@@ -77,6 +77,8 @@ check "review-responder: triage commits FIX changes without an OK" 'auto review-
 check "review-responder: ASK threads are left for the duo stop" 'auto review-responder "ASK.*duo stop"'
 check "review-responder: triage returns even with no FIX items" 'auto review-responder "even with no FIX items"'
 check "review-responder: push and reply needs no further go-ahead" 'auto review-responder "\"Push and reply <task-id>\"" && auto review-responder "no further go-ahead"'
+check "review-responder: a suggestion block goes through apply-suggestion.sh, never GitLab's button" 'section review-responder "Triage and fix (\"Triage <task-id>\")" | grep -q "apply-suggestion.sh <task-id> <thread-id>" && section review-responder "Triage and fix (\"Triage <task-id>\")" | grep -q "Never use GitLab.s \*\*Apply suggestion\*\*"'
+check "review-responder: a verbatim suggestion gets its own reply" 'grep -q "Applied the suggestion in <short-sha>." "$A/review-responder.agent.md"'
 check "evidence: no approval steps in an auto run; the pre-ship stop gives them" 'auto evidence "pre-ship stop"'
 
 # ---------- "In an MR review" sections (ADR 0003) ----------

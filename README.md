@@ -385,6 +385,7 @@ tests/test-doctor.sh      # checks doctor.sh: each PASS, WARN and FAIL, with fak
 tests/test-start-review.sh  # checks the start of an MR review: which MRs, the review worktree, dependencies, ClickUp, --done
 tests/test-post-review.sh   # checks posting an MR review's findings (diff or general threads), replies and review signals
 tests/test-findings.sh      # checks reading and changing code-review.md findings, against the reviewer agent's own templates
+tests/test-apply-suggestion.sh  # checks applying a review thread's suggestion block: moved lines, stale lines, refusals
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release
