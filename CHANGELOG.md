@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## v2.1.0
+
+A second route: **MR review** (ADR 0003). `/review-mr <iid>` reviews an MR that already exists, usually a teammate's, against its ClickUp spec, read-only, and posts only the findings you pick, each one after you confirm it. Also: the optional skills install on a first install again, and `install.sh --local` keeps the pipeline out of git.
+
+**Not yet tried for real:** `/review-mr` on a live GitLab MR (placing a thread on a diff line is the least proven part: when it can't, the finding goes up as a general thread naming the file and line), and, with `--local`, Copilot loading `.github/instructions/agent-pipeline.instructions.md`. Pinned models are still unverified on a paid plan (#67).
+
+### Upgrading to v2.1.0
+
+1. From v2.0.0 (or any v1.2.x, see "Upgrading to v2" first), run `install.sh --update` from v2.1.0: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.1.0/install.sh | bash -s -- --update`.
+2. Merge each `<file>.new` it reports. The requirements, verifier and reviewer agents have a new "In an MR review" section: an MR review stops with a message while one of them lacks it. Delivery tasks aren't affected.
+3. The installer lists the new settings your `.agent.env` doesn't set: `INSTALL_CMD`, `MR_REVIEW_MAX_FILES`, `MR_REVIEW_SKIP_PATTERN`. Copy any you want from `.agent.env.example`; the defaults work without them.
+4. Commit the updated pipeline files (with `--local`, there's nothing to commit), fully quit and reopen VS Code, and check that `/review-mr` appears when you type `/`.
+
+Tasks in progress carry on: a `state.env` without `KIND` reads as delivery.
+
+### Changes
 
 - **MR review, part 1: starting a review** (ADR 0003, #79). `/review-mr <iid> [clickup-id]` on the pipeline agent runs the new `scripts/agent/start-review.sh`. It checks the MR with `glab` and refuses merged and closed MRs; drafts are fine. It fetches `refs/merge-requests/<iid>/head`, so fork MRs work too, and checks that commit out into a **review worktree** at `.git/pipeline-reviews/mr-<iid>`. Test runners and linters run in your checkout can't see it there. The work folder is `.work/mr-<iid>/`. Your branch and uncommitted work are never touched, so a dirty checkout doesn't block a review. Run it again to move the worktree to the MR's new head. The router's MR review route comes in a later change (#81).
 - The task state has a kind: `state_kind` prints `DELIVERY` or `MR_REVIEW`. A `state.env` without `KIND`, from any earlier version, reads as delivery. An MR review's file has no branch (`state_branch` says so) and no Duo round. New: `state_init_review`, plus `state_clickup_id` and `state_set_clickup_id` for the ClickUp id given at the start. That id is kept across runs, and a new one replaces it.
