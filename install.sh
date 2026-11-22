@@ -9,6 +9,7 @@
 #                   (without it, a file you changed is kept and the new version
 #                   is written next to it as <file>.new, for you to merge)
 #   --with-skills   also install the ponytail and caveman skills for Copilot
+#   --local         keep the pipeline out of git: ignored in .git/info/exclude, on this machine only
 #   --yes           don't ask questions (CI, scripts)
 #   --version TAG   install a specific release when downloading (default: this script's version)
 #
@@ -25,17 +26,19 @@ BEGIN_MARK="<!-- BEGIN agent-pipeline (managed by install.sh; edits inside are r
 END_MARK="<!-- END agent-pipeline -->"
 GI_BEGIN="# BEGIN agent-pipeline"
 GI_END="# END agent-pipeline"
+LOCAL_RULES=".github/instructions/agent-pipeline.instructions.md"   # the rules, with --local
 
-MODE=install; FORCE=false; SKILLS=false; YES=false; TARGET=""
+MODE=install; FORCE=false; SKILLS=false; YES=false; LOCAL=false; TARGET=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --update) MODE=update ;;
     --uninstall) MODE=uninstall ;;
     --force) FORCE=true ;;
     --with-skills) SKILLS=true ;;
+    --local) LOCAL=true ;;
     --yes|-y) YES=true ;;
     --version) PIPELINE_VERSION="${2:?--version needs a tag}"; shift ;;
-    -h|--help) sed -n '2,15p' "$0" 2>/dev/null || true; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0" 2>/dev/null || true; exit 0 ;;
     -*) echo "Unknown option: $1" >&2; exit 2 ;;
     *) TARGET="$1" ;;
   esac
@@ -51,6 +54,32 @@ confirm() {   # confirm "question" -> 0 yes / 1 no; --yes or no terminal = yes
   [ -r /dev/tty ] || return 0
   local a; read -r -p "$1 [y/N] " a </dev/tty || return 1
   [[ "$a" =~ ^[Yy] ]]
+}
+ask_no() {    # ask_no "question" -> 0 only on an explicit yes; --yes or no terminal = no
+  $YES && return 1
+  [ -r /dev/tty ] || return 1
+  local a; read -r -p "$1 [y/N] " a </dev/tty || return 1
+  [[ "$a" =~ ^[Yy] ]]
+}
+# remove_block <file> <begin> <end>: drop the lines between the markers, and the markers.
+remove_block() {
+  awk -v b="$2" -v e="$3" '$0==b{skip=1;next} $0==e{skip=0;next} !skip' "$1" > "$1.tmp" && mv "$1.tmp" "$1"
+}
+# put_block <file> <lines-file>: replace the lines inside the agent-pipeline
+# block, or add the block at the end. Says which it did.
+put_block() {
+  local f="$1" lines="$2"
+  if [ -f "$f" ] && grep -qF "$GI_BEGIN" "$f"; then
+    awk -v b="$GI_BEGIN" -v e="$GI_END" -v l="$lines" '
+      $0==b { print; while ((getline line < l) > 0) print line; skip=1; next }
+      $0==e { skip=0; print; next }
+      !skip' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+    ok "updated the pipeline block in $f"
+  else
+    mkdir -p "$(dirname "$f")"
+    { printf '\n%s\n' "$GI_BEGIN"; cat "$lines"; printf '%s\n' "$GI_END"; } >> "$f"
+    ok "added the pipeline block to $f"
+  fi
 }
 sha256() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 
@@ -78,17 +107,22 @@ if [ "$MODE" = uninstall ]; then
     rm -f "$path" "$path.new" && ok "removed $path"
   done < "$MANIFEST"
   rm -f "$MANIFEST"
-  if [ -f .github/copilot-instructions.md ]; then
+  [ -f "$LOCAL_RULES" ] && rm -f "$LOCAL_RULES" && ok "removed $LOCAL_RULES"
+  EXCLUDE="$(git rev-parse --git-path info/exclude)"
+  if [ -f "$EXCLUDE" ] && grep -qF "$GI_BEGIN" "$EXCLUDE"; then
+    remove_block "$EXCLUDE" "$GI_BEGIN" "$GI_END"; ok "removed the pipeline block from $EXCLUDE"
+  fi
+  if [ -f .github/copilot-instructions.md ] && grep -qF "$BEGIN_MARK" .github/copilot-instructions.md; then
     awk -v b="$BEGIN_MARK" -v e="$END_MARK" '$0==b{skip=1;next} $0==e{skip=0;next} !skip' .github/copilot-instructions.md > .github/copilot-instructions.md.tmp
     mv .github/copilot-instructions.md.tmp .github/copilot-instructions.md
     [ -s .github/copilot-instructions.md ] && grep -q '[^[:space:]]' .github/copilot-instructions.md || rm -f .github/copilot-instructions.md
     ok "removed the pipeline block from .github/copilot-instructions.md"
   fi
-  if [ -f .gitignore ]; then
-    awk -v b="$GI_BEGIN" -v e="$GI_END" '$0==b{skip=1;next} $0==e{skip=0;next} !skip' .gitignore > .gitignore.tmp && mv .gitignore.tmp .gitignore
+  if [ -f .gitignore ] && grep -qF "$GI_BEGIN" .gitignore; then
+    remove_block .gitignore "$GI_BEGIN" "$GI_END"
     ok "removed the pipeline block from .gitignore"
   fi
-  find .github/agents .github/prompts .github/skills/start-task .github/skills/fetch-review .github/skills/review-mr .github/skills .github/hooks scripts/agent/hooks scripts/agent docs -type d -empty -delete 2>/dev/null || true
+  find .github/agents .github/instructions .github/prompts .github/skills/start-task .github/skills/fetch-review .github/skills/review-mr .github/skills .github/hooks scripts/agent/hooks scripts/agent docs -type d -empty -delete 2>/dev/null || true
   say ""
   say "Done. Kept: .agent.env (your settings) and .work/ (task folders). Delete them yourself if you no longer need them."
   exit 0
@@ -137,7 +171,16 @@ if [ "$MODE" = update ] && [ ! -f "$MANIFEST" ]; then
   die "Nothing to update: the pipeline isn't installed here. Run without --update."
 fi
 
+# ---------- shared (committed) or local (kept out of git) ----------
+# An update keeps the mode the manifest records; --local switches a shared install to local.
+if [ -f "$MANIFEST" ] && grep -qx '# local' "$MANIFEST"; then LOCAL=true; fi
+if [ "$MODE" = install ] && ! $LOCAL \
+  && ask_no "Keep the pipeline out of git (only on this machine, not shared with your team)?"; then
+  LOCAL=true
+fi
+
 say "Installing the agent pipeline $PIPELINE_VERSION into $TARGET"
+$LOCAL && say "Local mode: the pipeline is ignored in .git/info/exclude and never committed."
 say ""
 
 # ---------- copy pipeline-owned files ----------
@@ -147,6 +190,7 @@ old_hash() { awk -F'\t' -v p="$1" '$2 == p { print $1; exit }' "$OLD_MANIFEST"; 
 
 NEW_MANIFEST="$(mktemp)"
 echo "# agent-pipeline $PIPELINE_VERSION installed $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$NEW_MANIFEST"
+$LOCAL && echo "# local" >> "$NEW_MANIFEST"
 skipped=0; written=0; unchanged=0
 
 while IFS= read -r rel; do
@@ -197,6 +241,14 @@ msg="pipeline files: $written written, $unchanged unchanged"; [ "$skipped" -gt 0
 
 # ---------- merge copilot-instructions.md ----------
 INSTR=.github/copilot-instructions.md
+if $LOCAL; then
+  # Own file, so a tracked copilot-instructions.md stays unchanged and the tree clean.
+  mkdir -p "$(dirname "$LOCAL_RULES")"
+  { printf -- '---\napplyTo: "**"\n---\n\n'; cat "$PAYLOAD/pipeline-instructions.md"; } > "$LOCAL_RULES"
+  ok "wrote the pipeline rules to $LOCAL_RULES"
+  [ -f "$INSTR" ] && grep -qF "$BEGIN_MARK" "$INSTR" \
+    && warn "$INSTR still has the pipeline block from a shared install: remove the lines between its BEGIN/END agent-pipeline markers (the rules are now in $LOCAL_RULES)"
+else
 block="$(printf '%s\n%s\n%s' "$BEGIN_MARK" "$(cat "$PAYLOAD/pipeline-instructions.md")" "$END_MARK")"
 if [ -f "$INSTR" ] && grep -qF "$BEGIN_MARK" "$INSTR"; then
   awk -v b="$BEGIN_MARK" -v e="$END_MARK" -v f="$PAYLOAD/pipeline-instructions.md" '
@@ -209,6 +261,7 @@ elif [ -f "$INSTR" ]; then
 else
   mkdir -p .github; printf '%s\n' "$block" > "$INSTR"; ok "created $INSTR"
 fi
+fi
 
 # ---------- .gitignore ----------
 GI_LINES='.work/
@@ -216,19 +269,24 @@ GI_LINES='.work/
 .auth/
 *.bak
 *.new'
-gi_block="$(printf '%s\n%s\n%s' "$GI_BEGIN" "$GI_LINES" "$GI_END")"
-if [ -f .gitignore ] && grep -qF "$GI_BEGIN" .gitignore; then
-  # Replace the block's lines, so an older install gets the ones added since.
-  gi_lines_file="$(mktemp)"; printf '%s\n' "$GI_LINES" > "$gi_lines_file"
-  awk -v b="$GI_BEGIN" -v e="$GI_END" -v f="$gi_lines_file" '
-    $0==b { print; while ((getline line < f) > 0) print line; skip=1; next }
-    $0==e { skip=0; print; next }
-    !skip' .gitignore > .gitignore.tmp && mv .gitignore.tmp .gitignore
-  rm -f "$gi_lines_file"
-  ok "updated the pipeline block in .gitignore"
+gi_lines_file="$(mktemp)"; printf '%s\n' "$GI_LINES" > "$gi_lines_file"
+if $LOCAL; then
+  # Every pipeline path, anchored, so your own files in scripts/ or .github/ stay tracked.
+  { printf '/%s\n' "$MANIFEST" "$LOCAL_RULES"
+    grep -v '^#' "$MANIFEST" | cut -f2 | sed 's#^#/#'
+    printf '%s\n' '/.agents/skills/ponytail*/' '/.agents/skills/caveman*/' '/skills-lock.json'
+  } >> "$gi_lines_file"
+  put_block "$(git rev-parse --git-path info/exclude)" "$gi_lines_file"
+  # Ignoring doesn't untrack: pipeline files committed by a shared install stay in git.
+  if [ -n "$(git ls-files -- "$MANIFEST" $(grep -v '^#' "$MANIFEST" | cut -f2))" ]; then
+    warn "pipeline files are committed here, and ignoring them doesn't untrack them. To take them out of git (they stay on disk), run:"
+    say  "      git rm -r --cached --quiet --ignore-unmatch -- $MANIFEST \$(grep -v '^#' $MANIFEST | cut -f2) && git commit -m 'Keep the agent pipeline out of git'"
+  fi
 else
-  printf '\n%s\n' "$gi_block" >> .gitignore; ok "added $(printf '%s' "$GI_LINES" | tr '\n' ' ' | sed 's/ /, /g') to .gitignore"
+  # On update, replace the block's lines, so an older install gets the ones added since.
+  put_block .gitignore "$gi_lines_file"
 fi
+rm -f "$gi_lines_file"
 
 # ---------- settings ----------
 if [ -f .agent.env ]; then
@@ -245,8 +303,13 @@ fi
 if $SKILLS || { [ "$MODE" = install ] && confirm "Install the ponytail and caveman skills for Copilot now?"; }; then
   if command -v npx >/dev/null 2>&1; then
     say ""
-    npx -y skills add DietrichGebert/ponytail -a github-copilot </dev/null && ok "ponytail" || warn "ponytail install failed: install it later"
-    npx -y skills add JuliusBrussee/caveman -a github-copilot </dev/null && ok "caveman" || warn "caveman install failed: install it later"
+    # The second -y is skills' own: without it, and with stdin not a terminal,
+    # `skills add` stops at its "Select skills" prompt and installs nothing.
+    for repo in DietrichGebert/ponytail JuliusBrussee/caveman; do
+      name="${repo#*/}"
+      npx -y skills add "$repo" -a github-copilot -y </dev/null && ok "$name" \
+        || warn "$name install failed: install it later with  npx -y skills add $repo -a github-copilot -y"
+    done
   else
     warn "skipped skills: npx is missing"
   fi
@@ -263,6 +326,7 @@ bash scripts/agent/doctor.sh </dev/null || doctor_failed=true
 
 say ""
 say "Done. Next steps:"
+$LOCAL && say "  (The pipeline is kept out of git, in .git/info/exclude: there's nothing to commit.)"
 say "  1. Fill in .agent.env (test commands, Duo username, ClickUp workspace ID)."
 say "  2. Export CLICKUP_API_TOKEN in your shell profile, and run 'glab auth login'."
 say "  3. Check the model names in .github/agents/*.agent.md match your Copilot model picker."

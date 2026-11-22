@@ -56,6 +56,7 @@ config  .github/skills/start-task/
 config  .github/skills/fetch-review/
 config  .github/skills/review-mr/
 config  .github/copilot-instructions.md
+config  .github/instructions/agent-pipeline.instructions.md
 config  scripts/agent/
 config  .agent.env
 state   state.env

@@ -96,6 +96,64 @@ chmod +x "$T/pipebin/curl" "$T/pipebin/npx" "$T/pipebin/glab"
 check "piped install: the skills step doesn't eat the rest of the script" 'grep -q "^Checking the setup (scripts/agent/doctor.sh)" "$T/out.txt"'
 check "piped install: doctor.sh doesn't eat it either, the install reaches Done" 'grep -q "^Done. Next steps:" "$T/out.txt"'
 
+# 7d. the skills on a first install, run by a person (no agent detected): with
+# stdin not a terminal, the real `skills add` stops at its "Select skills" prompt
+# and installs nothing unless it gets -y. This fake npx does the same.
+git init -q -b main "$T/skilled"; git -C "$T/skilled" commit -q --allow-empty -m init
+mkdir -p "$T/skillbin"
+cat > "$T/skillbin/npx" <<'EOF'
+#!/bin/sh
+[ "$1" = -y ] && shift
+[ "$1" = skills ] && [ "$2" = add ] || exit 1
+repo="$3"; shift 3; yes=false
+for a in "$@"; do case "$a" in -y|--yes) yes=true ;; esac; done
+$yes || { echo "[SKILLS_PROMPT_REQUIRES_TTY] Nothing was installed." >&2; exit 1; }
+mkdir -p ".agents/skills/${repo#*/}"
+EOF
+chmod +x "$T/skillbin/npx"
+PATH="$T/skillbin:$PATH" "$ROOT/install.sh" --yes --with-skills "$T/skilled" > "$T/out.txt" 2>&1
+check "first install: the ponytail skill is installed" '[ -d "$T/skilled/.agents/skills/ponytail" ] && grep -q "✓ ponytail" "$T/out.txt"'
+check "first install: the caveman skill is installed" '[ -d "$T/skilled/.agents/skills/caveman" ] && grep -q "✓ caveman" "$T/out.txt"'
+check "first install: no skill install failed" '! grep -q "install failed" "$T/out.txt"'
+
+# 7e. --local: the pipeline stays on this machine. The ignores go in
+# .git/info/exclude, the rules in their own ignored file, and no tracked file
+# changes, so start-task.sh and the ship gate see a clean tree.
+git init -q -b main "$T/loc"; cd "$T/loc"
+git config user.email t@t; git config user.name t
+mkdir -p .github scripts
+printf '# Our team rules\n' > .github/copilot-instructions.md
+printf 'node_modules/\n' > .gitignore
+printf 'echo build\n' > scripts/build.sh
+git add -A; git commit -qm init
+EXCLUDE="$(git rev-parse --git-path info/exclude)"
+LOCAL_RULES=.github/instructions/agent-pipeline.instructions.md
+PATH="$T/skillbin:$PATH" "$ROOT/install.sh" --yes --local --with-skills . > "$T/out.txt" 2>&1
+check "local: install exits 0" '[ $? -eq 0 ]'
+check "local: pipeline files installed" '[ -x scripts/agent/run-checks.sh ] && [ -f .github/agents/pipeline.agent.md ]'
+check "local: git status shows nothing, not even untracked files" '[ -z "$(git status --porcelain)" ]'
+check "local: copilot-instructions.md and .gitignore untouched" 'git diff --quiet HEAD -- .github/copilot-instructions.md .gitignore'
+check "local: the rules are in their own file, applied to every chat" 'head -n3 "$LOCAL_RULES" | grep -q "^applyTo: \"\*\*\"" && grep -q "Delivery pipeline" "$LOCAL_RULES"'
+check "local: the ignores are in .git/info/exclude, once" '[ "$(grep -c "BEGIN agent-pipeline" "$EXCLUDE")" -eq 1 ] && grep -qx "/scripts/agent/run-checks.sh" "$EXCLUDE" && grep -qx ".work/" "$EXCLUDE"'
+check "local: the project's own scripts/ files aren't ignored" '! git check-ignore -q scripts/new.sh && ! git check-ignore -q .github/agents/ours.agent.md'
+check "local: the manifest records local mode" 'grep -qx "# local" .github/agent-pipeline.manifest'
+check "local: the next steps don't say to commit the pipeline" 'grep -q "kept out of git" "$T/out.txt"'
+"$ROOT/install.sh" --yes --update . > "$T/out.txt" 2>&1
+check "local: --update stays local without the flag" '[ -z "$(git status --porcelain)" ] && [ "$(grep -c "BEGIN agent-pipeline" "$EXCLUDE")" -eq 1 ] && grep -qx "# local" .github/agent-pipeline.manifest'
+"$ROOT/install.sh" --yes --uninstall . > "$T/out.txt" 2>&1
+check "local: uninstall removes the rules file and the exclude block" '[ ! -f "$LOCAL_RULES" ] && ! grep -q "agent-pipeline" "$EXCLUDE"'
+check "local: uninstall leaves the tracked files as they were" 'git diff --quiet HEAD'
+
+# 7f. --update --local on a shared install whose files are committed: ignoring
+# doesn't untrack them, so the installer says how.
+git init -q -b main "$T/sw"; cd "$T/sw"; git config user.email t@t; git config user.name t
+git commit -q --allow-empty -m init
+"$ROOT/install.sh" --yes . > /dev/null 2>&1; git add -A; git commit -qm pipeline
+"$ROOT/install.sh" --yes --update --local . > "$T/out.txt" 2>&1
+check "switch to local: says how to untrack the committed pipeline files" 'grep -q "git rm -r --cached" "$T/out.txt"'
+check "switch to local: says the old rules block is still in copilot-instructions.md" 'grep -q "copilot-instructions.md still has the pipeline block" "$T/out.txt"'
+cd "$T/proj"
+
 # ---------- 8. updates accept v1.2.x and later only (ADR 0002) ----------
 version="$(cat "$ROOT/VERSION")"
 # old_install <tag> <dir>: a real install of that release, by its own installer.
