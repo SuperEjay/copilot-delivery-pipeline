@@ -68,6 +68,7 @@ sh ask 'scripts/agent/create-mr.sh T-1'
 sh ask 'scripts/agent/push-branch.sh T-1'
 sh ask 'scripts/agent/upload-evidence.sh T-1'
 sh ask 'scripts/agent/clickup.sh comment T-1 "done"'
+sh allow 'scripts/agent/apply-suggestion.sh T-1 disc1'   # edits the working tree only, publishes nothing
 
 # ---------- shell writes to pipeline config ----------
 sh deny "echo 'echo {}; exit 0' > scripts/agent/hooks/pre-tool-guard.sh"

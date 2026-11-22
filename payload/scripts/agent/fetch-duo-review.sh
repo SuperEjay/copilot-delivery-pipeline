@@ -59,6 +59,8 @@ glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=10
             author: .notes[0].author.username,
             file: (.notes[0].position.new_path // .notes[0].position.old_path),
             line: (.notes[0].position.new_line // .notes[0].position.old_line),
+            new_line: .notes[0].position.new_line,
+            head_sha: .notes[0].position.head_sha,
             body: .notes[0].body,
             replies: [ .notes[1:][] | {author: .author.username, body: (.body | .[0:400])} ]
           }

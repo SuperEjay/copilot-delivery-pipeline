@@ -94,7 +94,7 @@ its reply with a **Next:** line naming the agent to pick and what to say, e.g.
 | `.github/skills/review-mr/SKILL.md` | `/review-mr <iid> [clickup-id]`: check out an existing MR for a read-only review and start its auto run when **pipeline** is picked; `/review-mr <iid> --done` cleans up (see "MR review (a teammate's MR)") |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
 | `.github/copilot-instructions.md` | Six short rules every agent follows (kept short on purpose: it's sent with every request) |
-| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, thread reply/resolve, MR review setup and posting (`start-review.sh`, `set-review-spec.sh`, `post-review-thread.sh`), and `doctor.sh`, which checks your setup |
+| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, applying a thread's suggestion block (`apply-suggestion.sh`), thread reply/resolve, MR review setup and posting (`start-review.sh`, `set-review-spec.sh`, `post-review-thread.sh`), and `doctor.sh`, which checks your setup |
 | `.agent.env.example` | Your test commands, Duo username, round limit, ClickUp workspace and status, and the MR review settings |
 
 **No MCP needed.** ClickUp goes through its REST API (`scripts/agent/clickup.sh`)

@@ -24,7 +24,7 @@ case "$*" in
 esac
 EOF
 chmod +x "$STUB/glab"; export PATH="$STUB:$PATH"
-threads() { jq -n --args '[$ARGS.positional[] | {id: ., notes: [{resolvable: true, resolved: false, author: {username: "duo"}, body: "fix it", position: {new_path: "a.txt", new_line: 1}}]}]' "$@" > "$STUB/discussions.json"; }
+threads() { jq -n --args '[$ARGS.positional[] | {id: ., notes: [{resolvable: true, resolved: false, author: {username: "duo"}, body: "fix it", position: {new_path: "a.txt", new_line: 1, head_sha: "sha-\(.)"}}]}]' "$@" > "$STUB/discussions.json"; }
 
 # ---------- scratch repo ----------
 git init -q --bare -b main "$T/remote.git"
@@ -122,6 +122,7 @@ check "MR update allowed once re-verified (no new evidence needed)" '[ $? -eq 0 
 threads d1 d2
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
 check "first fetch is round 1" 'grep -q "^Round 1: 2 " "$T/out.txt"'
+check "review.json keeps new_line and the commit each thread was made on (head_sha)" 'jq -e "map([.new_line, .head_sha]) == [[1,\"sha-d1\"],[1,\"sha-d2\"]]" $W/review.json >/dev/null'
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
 check "same threads again stay round 1" 'grep -q "^Round 1: 2 .*not a new round" "$T/out.txt" && grep -q "^REVIEW_ROUND=1$" $W/state.env'
 threads d2 d3
