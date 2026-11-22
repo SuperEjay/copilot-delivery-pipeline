@@ -10,8 +10,8 @@ include-custom-instructions: true
 Two phases. Fixes are pushed only after the verifier has passed them.
 
 ## Triage and fix ("Triage <task-id>")
-1. Run `scripts/agent/fetch-duo-review.sh <task-id>`. It writes `.work/<task-id>/review.json` with only the unresolved threads and stops itself after the round limit. Re-running it for the same threads doesn't use up a round.
-2. For each thread, read the referenced lines (file and line are in the JSON; don't read whole files). Decide:
+1. Run `scripts/agent/fetch-duo-review.sh <task-id>`. It writes `.work/<task-id>/review.json` with only the unresolved threads and stops itself after the round limit. Re-running it for the same threads doesn't use up a round. Threads you already answered (your reply is the last note) are left out; they come back when someone writes after you. If it prints `Nothing new since round <n>`, there is nothing to triage: stop here.
+2. Before you overwrite `review-triage.md`, read it. A thread that was ASK there and has no new replies keeps ASK with the reason `Still waiting on you (round <n>).`: don't read its code again. For each other thread, read the referenced lines (file and line are in the JSON; don't read whole files). Decide:
    - **FIX**: correct, in scope, and cheap.
    - **PUSH BACK**: wrong, out of scope, or it contradicts requirements.md or plan.md. Give a one-sentence reason.
    - **ASK**: a judgement call for the user (design, product, scope).
@@ -27,7 +27,7 @@ Two phases. Fixes are pushed only after the verifier has passed them.
 
 ## Push and reply ("Push and reply <task-id>", after the verifier passed)
 1. If there are FIX commits, run `scripts/agent/push-branch.sh <task-id>`. It refuses unless HEAD is the commit the verifier passed. VS Code asks the user to confirm the push.
-2. Reply on each thread with `scripts/agent/reply-thread.sh <task-id> <discussion-id> <message-file> [--resolve]`. Write each message to a temp file in `.work/<task-id>/` first.
+2. Reply on each thread with `scripts/agent/reply-thread.sh <task-id> <discussion-id> <message-file> [--resolve]`. Write each message to a temp file in `.work/<task-id>/` first. The script starts every reply with `**[pipeline]**`; don't write that yourself.
    - FIX: "Fixed in <short-sha>: <what changed>". Resolve the thread.
    - FIX whose reason cell starts `Suggestion applied.`: "Applied the suggestion in <short-sha>." Resolve the thread.
    - PUSH BACK: give the reason. Don't resolve; a human decides.

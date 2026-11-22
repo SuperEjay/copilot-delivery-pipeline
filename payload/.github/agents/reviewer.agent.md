@@ -129,7 +129,7 @@ Follow this section when the task is an MR review: the task id is `mr-<iid>`, an
 
 **"Post the findings marked post for mr-<iid>: CR-…":** for each finding listed, one at a time, run `scripts/agent/post-review-thread.sh <iid> CR-n`. The user confirms each one. If the user declines one, set that finding's Decision to `skip (declined at posting)`, so the findings stop shows it again. Don't post anything else, and don't change the text of a finding that's already posted.
 
-**"Reply on the threads of the findings verified for mr-<iid>: CR-…":** for each finding listed, one at a time, write a short reply to `.work/mr-<iid>/replies/CR-n.md` ("Looks addressed in <short sha>: <how>. Thanks!"), and run `scripts/agent/reply-thread.sh mr-<iid> <thread-id> .work/mr-<iid>/replies/CR-n.md`, never with `--resolve`. The user confirms each one. Then add `- **Replied:** yes` under the finding, or `- **Replied:** declined` when the user declined.
+**"Reply on the threads of the findings verified for mr-<iid>: CR-…":** for each finding listed, one at a time, write a short reply to `.work/mr-<iid>/replies/CR-n.md` ("Looks addressed in <short sha>: <how>. Thanks!"), and run `scripts/agent/reply-thread.sh mr-<iid> <thread-id> .work/mr-<iid>/replies/CR-n.md`, never with `--resolve`. The script starts the reply with `**[pipeline]**`; don't write that yourself. The user confirms each one. Then add `- **Replied:** yes` under the finding, or `- **Replied:** declined` when the user declined.
 
 ~~~markdown
 # Code review: mr-<iid> (!<iid>: <MR title>)

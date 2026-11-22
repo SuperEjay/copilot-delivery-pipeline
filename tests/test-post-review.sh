@@ -118,6 +118,7 @@ $S/reply-thread.sh mr-7 disc1 "$T/reply.md" --resolve > "$T/out.txt" 2>&1; rc=$?
 check "reply-thread.sh --resolve in an MR review: refused, nothing sent" '[ $rc -eq 1 ] && grep -q "never resolves a thread" "$T/out.txt" && [ ! -s "$STUB/calls.log" ]'
 $S/reply-thread.sh mr-7 disc1 "$T/reply.md" > "$T/out.txt" 2>&1; rc=$?
 check "reply-thread.sh in an MR review replies on the thread, and doesn't resolve it" '[ $rc -eq 0 ] && grep -q "Replied to disc1" "$T/out.txt" && grep -q "discussions/disc1/notes" "$STUB/calls.log" && ! grep -q "PUT" "$STUB/calls.log"'
+check "reply-thread.sh tags every reply as the pipeline one (#98)" 'grep -qF "body=**[pipeline]** Verified in the new commits." "$STUB/calls.log"'
 
 # ---------- review signals for an MR review: the worktree, against the target ----------
 git commit -q --allow-empty -m "the user's own work"   # the main checkout moves on; it must not matter
