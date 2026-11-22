@@ -80,6 +80,8 @@ check "review-responder: push and reply needs no further go-ahead" 'auto review-
 check "review-responder: a suggestion block goes through apply-suggestion.sh, never GitLab's button" 'section review-responder "Triage and fix (\"Triage <task-id>\")" | grep -q "apply-suggestion.sh <task-id> <thread-id>" && section review-responder "Triage and fix (\"Triage <task-id>\")" | grep -q "Never use GitLab.s \*\*Apply suggestion\*\*"'
 check "review-responder: a verbatim suggestion gets its own reply" 'grep -q "Applied the suggestion in <short-sha>." "$A/review-responder.agent.md"'
 check "review-responder: an open ASK thread keeps ASK without reading its code again (#98)" 'grep -q "Still waiting on you (round <n>)." "$A/review-responder.agent.md" && grep -q "Nothing new since round <n>" "$A/review-responder.agent.md"'
+check "planner: an adopted branch ticks what its commits cover (ADR 0004)" 'section planner "Adopted branch" | grep -q "adopted-commits.md" && section planner "Adopted branch" | grep -q "Tick .- \[x\]."'
+check "shipper: an adopted MR keeps its title and description (ADR 0004)" 'grep -q "adopted-mr.md" "$A/shipper.agent.md" && grep -q "description word for word" "$A/shipper.agent.md"'
 check "evidence: no approval steps in an auto run; the pre-ship stop gives them" 'auto evidence "pre-ship stop"'
 
 # ---------- "In an MR review" sections (ADR 0003) ----------

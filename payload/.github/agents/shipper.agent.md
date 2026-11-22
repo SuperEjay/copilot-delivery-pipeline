@@ -11,7 +11,7 @@ include-custom-instructions: true
 1. Read `verification.md`. If it doesn't say `Result: PASS`, stop.
 1b. Run `scripts/agent/upload-evidence.sh <task-id> --check`. If it fails, **stop**: the user hasn't approved the evidence, it changed after they approved it, or new commits landed after approval. Pass on the script's message. Never tick checkboxes in evidence.md and never run `approve-evidence.sh`; approval is the user's job.
 2. Collect the change set: `git log --oneline origin/<BASE_BRANCH>..HEAD` and `git diff --stat origin/<BASE_BRANCH>...HEAD`. Open a full diff only for files whose purpose isn't clear from plan.md.
-3. Write `.work/<task-id>/mr.md` (the pr skill's guidance applies). The first line is the title.
+3. Write `.work/<task-id>/mr.md` (the pr skill's guidance applies). The first line is the title. If `.work/<task-id>/adopted-mr.md` exists, the task adopted the user's own MR (ADR 0004): keep its first line as the title and its description word for word, then a `---` line, then this template's sections below the title. create-mr.sh updates that MR instead of creating one.
 4. Show the user the title and the "What & why" section, and **ask for a go-ahead**. Don't push without one.
 5. Run `scripts/agent/create-mr.sh <task-id>`. It refuses unless HEAD is the commit the verifier passed (and, for a new MR, the commit the evidence was approved at). If it refuses, pass on its message and stop. VS Code asks the user to confirm, which is their final go-ahead. It pushes, creates or updates the MR, and saves `MR_IID` to state.env.
 6. Update ClickUp:
