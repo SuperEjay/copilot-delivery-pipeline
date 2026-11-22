@@ -16,6 +16,7 @@ export STUB="$T/stub"; mkdir -p "$STUB"
 cat > "$STUB/glab" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in
+  "api user") [ -f "$STUB/no-user" ] && { echo "401 Unauthorized" >&2; exit 1; }; echo '{"username":"me"}' ;;
   "api --paginate"*discussions*) cat "$STUB/discussions.json" ;;
   "api projects/:id/merge_requests?"*) if [ -f "$STUB/mr" ]; then echo '[{"iid":7,"web_url":"https://gitlab.test/mr/7"}]'; else echo '[]'; fi ;;
   "mr create"*) touch "$STUB/mr" ;;
@@ -24,6 +25,9 @@ case "$*" in
 esac
 EOF
 chmod +x "$STUB/glab"; export PATH="$STUB:$PATH"
+# discs <id>:<author>[,<author>...]: one thread per argument, its notes by those
+# authors in order (each note with its own id). "me" is the glab user.
+discs() { jq -n --args '[$ARGS.positional[] | split(":") as [$id, $who] | {id: $id, notes: [$who | split(",") | to_entries[] | {id: "\($id)-n\(.key)", resolvable: true, resolved: false, author: {username: .value}, body: "note by \(.value)", position: {new_path: "a.txt", new_line: 1, head_sha: "sha-\($id)"}}]}]' "$@" > "$STUB/discussions.json"; }
 threads() { jq -n --args '[$ARGS.positional[] | {id: ., notes: [{resolvable: true, resolved: false, author: {username: "duo"}, body: "fix it", position: {new_path: "a.txt", new_line: 1, head_sha: "sha-\(.)"}}]}]' "$@" > "$STUB/discussions.json"; }
 
 # ---------- scratch repo ----------
@@ -134,6 +138,28 @@ $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
 check "round 3 refused at MAX_REVIEW_ROUNDS=2, even with MAX_REVIEW_ROUNDS=99 in state.env" '[ $? -eq 3 ] && jq -e "map(.id) == [\"d2\",\"d3\"]" $W/review.json >/dev/null'
 $S/fetch-duo-review.sh T1 --force > "$T/out.txt" 2>&1
 check "--force goes past the limit" 'grep -q "^Round 3: 1 " "$T/out.txt"'
+
+# ---------- threads you already answered (#98) ----------
+discs d4:duo,me
+$S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
+check "your reply is the last note: skipped, nothing new, no round (even at the limit)" '[ $? -eq 0 ] && grep -q "^1 thread(s) already answered by you, skipped" "$T/out.txt" && grep -q "^Nothing new since round 3" "$T/out.txt" && grep -q "^REVIEW_ROUND=3$" $W/state.env && jq -e ". == []" $W/review.json >/dev/null'
+sed -i 's/^DUO_USERNAMES=.*/DUO_USERNAMES=/' .agent.env
+discs d4:duo,me d5:me
+$S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
+check "a thread you started yourself counts as answered" '[ $? -eq 0 ] && grep -q "^2 thread(s) already answered by you, skipped" "$T/out.txt" && grep -q "^REVIEW_ROUND=3$" $W/state.env'
+env_with true
+discs d4:duo,me,duo
+$S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
+check "Duo wrote after your reply: the thread is back, a new round (refused at the limit)" '[ $? -eq 3 ] && grep -q "^REVIEW_ROUND=3$" $W/state.env'
+$S/fetch-duo-review.sh T1 --force > "$T/out.txt" 2>&1
+check "... and with --force it is round 4" '[ $? -eq 0 ] && grep -q "^Round 4: 1 " "$T/out.txt" && jq -e "map(.id) == [\"d4\"]" $W/review.json >/dev/null'
+discs d4:duo,me,duo d6:duo,me
+$S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
+check "an unanswered thread with no new note, plus an answered one: same round" '[ $? -eq 0 ] && grep -q "^Round 4: 1 .*not a new round" "$T/out.txt" && grep -q "^1 thread(s) already answered" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
+touch "$STUB/no-user"
+$S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
+check "the glab user can't be looked up: the fetch fails, the round is untouched" '[ $? -ne 0 ] && [ $? -ne 3 ] && grep -qi "glab user" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
+rm -f "$STUB/no-user"
 # ---------- an MR review's threads: every author, no round (ADR 0003) ----------
 # Discussions from Duo, a person, a resolved one, a system note and a plain
 # (unresolvable) comment.

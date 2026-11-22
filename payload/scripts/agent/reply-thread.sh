@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Usage: reply-thread.sh <task-id> <discussion-id> <message-file> [--resolve]
-# Posts the message file as a reply in an MR discussion thread, and resolves
+# Posts the message file as a reply in an MR discussion thread, starting with
+# "**[pipeline]** " so teammates can tell it came from the pipeline, and resolves
 # the thread when --resolve is given. In an MR review (task mr-<iid>, ADR 0003)
 # --resolve is refused: resolving stays with the MR's author and team.
 set -euo pipefail
@@ -19,7 +20,7 @@ fi
 [ -s "$MSG" ] || { echo "Message file is empty or missing: $MSG" >&2; exit 1; }
 
 glab api -X POST "projects/:id/merge_requests/$MR_IID/discussions/$DID/notes" \
-  -f "body=$(cat "$MSG")" >/dev/null
+  -f "body=**[pipeline]** $(cat "$MSG")" >/dev/null
 
 if [ "$RESOLVE" = "--resolve" ]; then
   glab api -X PUT "projects/:id/merge_requests/$MR_IID/discussions/$DID" \
