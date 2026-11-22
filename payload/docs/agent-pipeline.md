@@ -111,6 +111,8 @@ admin policy that blocks MCP servers doesn't affect any of this.
    ignores sit between `BEGIN/END agent-pipeline` markers, and `--update`
    replaces everything between them: put your own lines outside the markers.
 2. **Commit the pipeline files** so your teammates get the same agents and hooks.
+   Or, to keep the pipeline to yourself, install with `install.sh --local`: see
+   "Keep the pipeline out of git" in the README.
 3. **Don't edit pipeline files casually.** `--update` keeps files you changed
    and writes the new version next to each as `<file>.new`; until you merge it,
    you miss its improvements, and an auto run won't start with an old agent
@@ -480,7 +482,7 @@ instructions into enforcement:
 | **Deny** | Raw `git push`, `glab` write commands, or direct ClickUp API calls (the scripts must be used) |
 | **Deny** | In an MR review: changing the review worktree (`.git/pipeline-reviews/`) through edit tools or the shell, committing or pushing there, any ClickUp write for an `mr-<iid>` task, and `reply-thread.sh mr-<iid> … --resolve`. Agents may read the worktree. |
 | **Deny** | Raw test, lint and typecheck commands (`npm test`, `npx vitest`, `npx playwright test`, `npx tsc`…), so output always goes through the condensed `run-checks.sh` |
-| **Deny** | Agent changes to pipeline config, through edit tools or the shell: agent files (including their pinned models), hooks, the pipeline's skills, `copilot-instructions.md`, `scripts/agent/`, `.agent.env`. Copying one of these files elsewhere (`cp scripts/agent/x.sh /tmp`) is refused too: the guard can't tell which way a copy goes. |
+| **Deny** | Agent changes to pipeline config, through edit tools or the shell: agent files (including their pinned models), hooks, the pipeline's skills, `copilot-instructions.md` (or `agent-pipeline.instructions.md` with `--local`), `scripts/agent/`, `.agent.env`. Copying one of these files elsewhere (`cp scripts/agent/x.sh /tmp`) is refused too: the guard can't tell which way a copy goes. |
 
 The agent sees the reason and adjusts. Every ask or deny is logged to
 `.work/hooks.log`, so you can see what was blocked. **You** can still edit all

@@ -224,7 +224,9 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    model picker. See
    [Models](payload/docs/agent-pipeline.md#models-pinned-per-agent).
 6. Commit the pipeline files, so your teammates get the same agents and hooks.
-   `.agent.env` is gitignored and stays on your machine.
+   `.agent.env` is gitignored and stays on your machine. (Installed with
+   `--local`? Skip this step: there's nothing to commit. See
+   [Keep the pipeline out of git](#keep-the-pipeline-out-of-git).)
 
    ```bash
    git add .github scripts/agent docs/agent-pipeline.md .agent.env.example .gitignore .gitattributes
@@ -314,6 +316,7 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
 | `install.sh --update --force [dir]` | Update and replace changed files (your versions saved as `.bak`) |
 | `install.sh --uninstall [dir]` | Remove the pipeline. Keeps `.agent.env` and `.work/`. |
 | `install.sh --with-skills` | Also install the ponytail and caveman skills for Copilot, into `.agents/skills/` (needs `npx`). A first install asks about them anyway, unless `--yes`. |
+| `install.sh --local [dir]` | Keep the pipeline out of git, on this machine only. See [Keep the pipeline out of git](#keep-the-pipeline-out-of-git). A first install asks about it too, unless `--yes`. |
 | `install.sh --yes` | No questions asked |
 | `install.sh --version <tag>` | When run through curl: download that release instead of the script's own |
 
@@ -336,6 +339,37 @@ Through curl, pass options after `bash -s --`, for example
   `BEGIN/END agent-pipeline` markers. `--update` replaces everything between
   the markers, so put your own rules and ignores outside them. `.agent.env` is
   created only if missing.
+
+### Keep the pipeline out of git
+
+By default you commit the pipeline, so the whole team shares the same agents
+and hooks. To use it only yourself, without adding anything to the project's
+history, install with `--local`:
+
+```bash
+/tmp/cdp/install.sh --local .
+```
+
+Through curl: `curl -fsSL <install.sh URL> | bash -s -- --local`.
+
+- **Ignored on your machine only:** every pipeline file (`scripts/agent/`, the
+  pipeline's files in `.github/`, `docs/agent-pipeline.md`, the manifest, the
+  optional skills) plus `.work/`, `.agent.env` and the rest go in a
+  `BEGIN/END agent-pipeline` block in `.git/info/exclude`. It works like
+  `.gitignore` but is never committed. Only the pipeline's exact paths are
+  ignored, so your project's own files in `scripts/` or `.github/` stay tracked.
+- **No tracked file changes:** the rules go in their own file,
+  `.github/instructions/agent-pipeline.instructions.md` (applied to every chat),
+  instead of `.github/copilot-instructions.md`, and `.gitignore` isn't touched.
+  `git status` stays clean, so `/start-task` and the ship gate run as usual.
+- **Updates stay local:** `--update` reads the mode from the manifest, so you
+  don't pass `--local` again. `--uninstall` removes the rules file and the
+  block.
+- **Switching a shared install to local:** run `install.sh --update --local .`.
+  Ignoring doesn't untrack committed files, so the installer prints the
+  `git rm --cached` command that takes them out of git (they stay on disk). It
+  also says if `copilot-instructions.md` still has the pipeline block for you to
+  remove.
 
 ## Development
 
