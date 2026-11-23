@@ -163,6 +163,11 @@ check "upgraded from REVIEW_IDS: the same threads are no new round (#106)" '[ $?
 discs d4:duo,me,duo,duo
 $S/fetch-duo-review.sh T1 --force > "$T/out.txt" 2>&1
 check "... and the next round writes REVIEW_SEEN and drops REVIEW_IDS" '[ $? -eq 0 ] && grep -q "^Round 5: 1 " "$T/out.txt" && grep -qx "REVIEW_SEEN=d4:d4-n3" $W/state.env && ! grep -q "^REVIEW_IDS=" $W/state.env'
+# A task in a Duo round on v2.1.0 recorded REVIEW_IDS as one cksum over the
+# sorted thread ids (as jq -r printed them): the same threads are no new round.
+grep -v "^REVIEW_SEEN=" $W/state.env > "$T/s"; echo "REVIEW_IDS=$(printf 'd4\n' | cksum | cut -d' ' -f1)" >> "$T/s"; mv "$T/s" $W/state.env
+$S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
+check "upgraded from v2.1.0's REVIEW_IDS: the same threads are no new round" '[ $? -eq 0 ] && grep -q "^Nothing new since round 5" "$T/out.txt" && grep -q "^REVIEW_ROUND=5$" $W/state.env'
 mv "$STUB/me" "$STUB/me.off"
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1; rc=$?
 check "the glab user can't be looked up: the fetch fails (not a round-limit exit), the round is untouched" '[ $rc -ne 0 ] && [ $rc -ne 3 ] && grep -qi "glab user" "$T/out.txt" && grep -q "^REVIEW_ROUND=5$" $W/state.env'

@@ -20,6 +20,9 @@ US=$'\037'
 # old_seen <pair>...: the seen set as fetch-duo-review.sh recorded it before
 # #106 (REVIEW_IDS): one cksum per "id:last-note-id", sorted, comma-separated.
 old_seen() { local p; for p in "$@"; do printf '%s' "$p" | cksum | cut -d' ' -f1; done | sort | paste -sd, -; }
+# v210_seen <thread-id>...: REVIEW_IDS as v2.1.0 recorded it: one cksum over the
+# sorted thread ids joined by commas, as jq -r printed them (with a newline).
+v210_seen() { printf '%s\n' "$(printf '%s\n' "$@" | sort | paste -sd, -)" | cksum | cut -d' ' -f1; }
 
 # ---------- round_threads: which threads, which fields ----------
 # d1 Duo's, with your reply and then Duo's again; d2 Duo's, you replied last;
@@ -79,6 +82,13 @@ decide "same 2"                2 ""          ""                    # all answere
 decide "same 2"                2 "$(old_seen d1:13 d6:61)" "d1:13,d6:61"
 decide "same 2"                2 "$(old_seen d1:13 d6:61)" "d1:13"
 decide "new 3 d1:14,d6:61"     2 "$(old_seen d1:13 d6:61)" "d1:14,d6:61"
+# Upgrading from v2.1.0 (one cksum over the sorted thread ids): the same
+# threads are no new round. Any other set is a new one, as v2.1.0 counted it:
+# one checksum can't tell a resolved thread from a new one.
+decide "same 2"                2 "$(v210_seen d6 d1)"   "d1:13,d6:61"
+decide "new 3 d1:13,d6:61,d7:70" 2 "$(v210_seen d1 d6)" "d1:13,d6:61,d7:70"
+decide "new 3 d1:13"           2 "$(v210_seen d1 d6)"   "d1:13"
+decide "same 1"                1 "$(v210_seen d1)"      "d1:99"   # v2.1.0 counted threads, not notes
 lib round_decide 1 "" "a:1" 3 --frce
 check "round_decide: an unknown option is an error, not a decision" '[ $rc -ne 0 ] && [ -z "$out" ]'
 lib round_decide x "" "a:1" 3

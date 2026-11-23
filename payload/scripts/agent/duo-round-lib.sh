@@ -16,8 +16,10 @@
 #         same <n>          nothing new: the round stays <n> (record nothing)
 #         new <n> <seen>    a thread is new or has a new note: round <n> starts
 #         over <n>          round <n> would pass <max>; --force allows it
-#       <last-seen> may still be REVIEW_IDS from before #106 (one cksum per
-#       pair), compared the old way, so upgrading doesn't cost a round.
+#       <last-seen> may still be an older REVIEW_IDS, compared the old way so
+#       upgrading doesn't cost a round: v2.1.0's one cksum over the sorted
+#       thread ids (any other set of threads is then a new round, as v2.1.0
+#       counted it), or one cksum per pair (main between #98 and #106).
 #   round_triage <review-triage.md>
 #       "<round> <replied yes|no> <asks>": the round the file triaged, whether
 #       its replies were posted, and its ASK threads. No file is "0 no 0".
@@ -49,6 +51,13 @@ round_threads() {
         skipped: ([ $t[] | select(._answered) ] | length) }'
 }
 
+# _round_v210 <seen>: the seen set's threads as v2.1.0's REVIEW_IDS recorded them.
+_round_v210() {
+  local ids="" pair
+  for pair in ${1//,/ }; do ids="$ids${pair%%:*}"$'\n'; done
+  printf '%s\n' "$(printf '%s' "$ids" | sort | paste -sd, -)" | cksum | cut -d' ' -f1
+}
+
 # _round_old <pair>: a seen pair as REVIEW_IDS recorded it before #106.
 _round_old() { printf '%s' "$1" | cksum | cut -d' ' -f1; }
 
@@ -56,6 +65,11 @@ round_decide() {
   local last="$1" last_seen="$2" seen="$3" max="$4" force="${5:-}" pair key new=no round
   case "$last$max" in ''|*[!0-9]*) echo "round_decide: the round and the limit must be numbers" >&2; return 2 ;; esac
   case "$force" in ''|--force) ;; *) echo "round_decide: unknown option '$force'" >&2; return 2 ;; esac
+  # v2.1.0's REVIEW_IDS: one cksum over the sorted thread ids, as jq -r printed them.
+  case "$last_seen" in
+    *[!0-9]*|'') ;;
+    *) [ "$last_seen" = "$(_round_v210 "$seen")" ] && { echo "same $last"; return 0; } ;;
+  esac
   for pair in ${seen//,/ }; do
     key="$pair"
     # REVIEW_IDS (before #106) holds checksums only: compare those.
