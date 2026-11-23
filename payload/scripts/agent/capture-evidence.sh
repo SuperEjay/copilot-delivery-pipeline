@@ -4,12 +4,19 @@
 # save screenshots into the same folder (they get its path as EVIDENCE_DIR).
 # Prints a short summary only; the full output goes to logs/evidence.log.
 # Re-capturing cancels any earlier approval, because the evidence has changed.
+# Without Playwright in the project it exits 3 and changes nothing: the evidence
+# agent then writes Text evidence for screenshot ACs (ADR 0005).
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
-require npx jq
 
 TASK="${1:?usage: capture-evidence.sh <task-id> [playwright args]}"
 shift
+if ! has_playwright; then
+  echo "No Playwright in this project (no @playwright/test in package.json), so no screenshots."
+  echo "Use Text evidence for screenshot ACs, and say so in the manifest."
+  exit 3
+fi
+require npx jq
 EV="$(task_dir "$TASK")/evidence"
 LOG="$(task_dir "$TASK")/logs/evidence.log"
 mkdir -p "$EV" "$(dirname "$LOG")"

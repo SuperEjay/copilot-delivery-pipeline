@@ -15,8 +15,12 @@ Produce development evidence for each AC in `.work/<task-id>/requirements.md`, l
    - **Screenshot**: the AC is visible in the UI.
    - **Text**: not visible in a UI (an API, a job, data). Write `evidence/AC-n.md` with the exact command and a trimmed output (≤30 lines). Never include tokens, passwords or personal data.
    - **None**: nothing meaningful to show. Say why in the manifest.
+
+   **No Playwright in the project** (`capture-evidence.sh` exits 3 with "No Playwright in this project"): skip steps 3–5. Make every screenshot AC **Text** evidence instead: `evidence/AC-n.md` with what the AC shows in the UI and the tests that cover it (from verification.md). Put this line under the manifest's header: "No screenshot tool in this project (no @playwright/test): screenshot ACs are text. To add your own, save a PNG in this folder and add a `- [ ]` line for it before approving." Never install Playwright.
+
+   **PNGs already in `evidence/`** that no spec of yours wrote were saved by hand by the user: list each one in the manifest under its AC, with "(saved by hand)" in the caption. Never delete or overwrite them.
 3. Write `.work/<task-id>/evidence/<task-id>.evidence.spec.ts`, with one test per screenshot AC (template below).
-4. Run `scripts/agent/capture-evidence.sh <task-id>`. To retake specific items, add `--grep "AC-2"`. If a failure is in your spec, fix it, at most 3 tries. If the app itself is wrong, stop and end with the "App bug found" **Next:** line.
+4. Run `scripts/agent/capture-evidence.sh <task-id>`. If it exits 3 (no Playwright), follow "No Playwright in the project" above. To retake specific items, add `--grep "AC-2"`. If a failure is in your spec, fix it, at most 3 tries. If the app itself is wrong, stop and end with the "App bug found" **Next:** line.
 5. Look at each screenshot (open the PNG) and check it shows what its caption claims. If you can't view images, say so; the user will check.
 6. Write `evidence/evidence.md` (manifest template below), with **every checkbox unticked**.
 7. Reply with the number of items, anything you couldn't capture, and these steps for the user, word for word:

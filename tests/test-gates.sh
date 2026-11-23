@@ -66,6 +66,13 @@ sed -i '/^E2E_CMD=/d' .agent.env; echo 'E2E_CMD=' >> .agent.env
 check "an explicit empty E2E_CMD wins over @playwright/test" '[ -z "$(e2e_cmd)" ]'
 rm package.json; rm -f $W/verified-head; env_with true
 
+# ---------- evidence without Playwright (#114) ----------
+mkdir -p $W/evidence; echo keep > $W/evidence/APPROVED
+$S/capture-evidence.sh T1 > "$T/out.txt" 2>&1; rc=$?
+check "capture-evidence without @playwright/test: exit 3, says to use Text evidence" '[ $rc -eq 3 ] && grep -q "No Playwright" "$T/out.txt" && grep -q "Text evidence" "$T/out.txt"'
+check "capture-evidence without Playwright: an earlier approval is kept" '[ -f $W/evidence/APPROVED ]'
+rm -f $W/evidence/APPROVED
+
 # ---------- ship gate: the rules, called directly ----------
 gate() { bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate.sh; gate_require "$@"' _ "$@" > "$T/out.txt" 2>&1; }
 approve() { bash -c 'source scripts/agent/config.sh; source scripts/agent/evidence-lib.sh; approval_write T1 AC-1.md' > /dev/null; }
@@ -102,6 +109,13 @@ check "gate: new MR refused when evidence is from an older commit" '[ $? -ne 0 ]
 approve
 gate T1 new-mr
 check "gate: new MR allowed with evidence approved at the verified commit" '[ $? -eq 0 ]'
+# A screenshot the user saved by hand, listed in the manifest, is approved like any other file.
+printf -- '- [x] AC-1 · `AC-1.md` · works\n- [x] AC-2 · `AC-2-dialog.png` · export dialog (saved by hand)\n' > $W/evidence/evidence.md
+printf 'PNG' > $W/evidence/AC-2-dialog.png
+bash -c 'source scripts/agent/config.sh; source scripts/agent/evidence-lib.sh; approval_write T1 AC-1.md AC-2-dialog.png' > /dev/null
+gate T1 new-mr
+check "gate: a hand-saved PNG in the manifest is approved and passes the gate (#114)" '[ $? -eq 0 ] && grep -q "AC-2-dialog.png" $W/evidence/APPROVED'
+printf -- '- [x] AC-1 · `AC-1.md` · works\n' > $W/evidence/evidence.md; rm -f $W/evidence/AC-2-dialog.png; approve
 echo changed > $W/evidence/AC-1.md
 gate T1 new-mr
 check "gate: new MR refused when an approved file changed" '[ $? -ne 0 ] && grep -q "changed after approval" "$T/out.txt"'
