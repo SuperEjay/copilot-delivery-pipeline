@@ -243,8 +243,8 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    Leave `.gitattributes` out if you didn't create one. If you installed the
    ponytail and caveman skills, add `.agents/skills skills-lock.json` too.
 7. Fully quit and reopen VS Code, then check:
-   - the agents (requirements … review-responder, and **pipeline**) are in the
-     Copilot Chat agent picker
+   - the agents (requirements … review-responder, **pipeline** and
+     **gap-checker**) are in the Copilot Chat agent picker
    - `/start-task`, `/fetch-review` and `/review-mr` appear when you type `/`
    - asking any agent to run `git push` is refused, with the guard's reason
 8. Pick **pipeline** and start your first task with

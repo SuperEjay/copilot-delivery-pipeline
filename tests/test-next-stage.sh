@@ -317,6 +317,10 @@ check "no gaps in verification.md: the stop doesn't mention gaps (#114)" '[[ "$o
 cp $W/verification.md "$T/verification.keep"
 printf '## Gaps\n- e2e skipped: no @playwright/test in package.json\n- AC-2: the export dialog isn'"'"'t tested end to end\n' >> $W/verification.md; next T1
 check "verification.md lists gaps: the pre-ship stop says how many, and where (#114)" '[[ "$out" == "stop pre-ship "*"verification.md lists 2 gap(s)"*"Gaps section"* ]]'
+check "gaps and no Playwright: the stop points to the gap-checker agent (#123)" '[[ "$out" == *"gap-checker"*"Check the gaps for T1"* ]]'
+echo '{"devDependencies":{"@playwright/test":"^1.50.0"}}' > package.json; next T1
+check "gaps with Playwright: no gap-checker line" '[[ "$out" == *"2 gap(s)"* ]] && [[ "$out" != *"gap-checker"* ]]'
+rm package.json
 cp "$T/verification.keep" $W/verification.md; next T1
 next T1 approve
 check "approve refuses until the evidence is approved" '[ $rc -eq 1 ] && grep -q "approve-evidence.sh" "$T/out.txt"'

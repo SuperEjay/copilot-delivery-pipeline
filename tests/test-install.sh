@@ -20,6 +20,7 @@ git add -A; git commit -qm init
 run; check "install exits 0" '[ $? -eq 0 ]'
 check "agents copied" '[ -f .github/agents/reviewer.agent.md ]'
 check "orchestrator copied" '[ -f .github/agents/pipeline.agent.md ]'
+check "gap-checker copied, listed in the manifest (#123)" '[ -f .github/agents/gap-checker.agent.md ] && grep -q ".github/agents/gap-checker.agent.md" .github/agent-pipeline.manifest'
 check "hooks copied" '[ -f .github/hooks/pipeline-guard.json ]'
 check "scripts executable" '[ -x scripts/agent/run-checks.sh ] && [ -x scripts/agent/hooks/pre-tool-guard.sh ]'
 check "every payload script is 100755 in git" '[ -z "$(git -C "$ROOT" ls-files -s -- "payload/*.sh" | awk "\$1 != \"100755\" { print \$4 }")" ]'
