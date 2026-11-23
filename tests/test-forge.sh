@@ -50,6 +50,14 @@ jq 'del(.state)' "$FAKE_FORGE/mr-7.json" > "$FAKE_FORGE/mr-9.json"; lib forge_mr
 check "forge_mr: no state, non-zero and says so" '[ $rc -ne 0 ] && [ -z "$out" ] && grep -qi "state" "$T/out.txt"'
 lib forge_mr x
 check "forge_mr: a non-number iid is refused before glab" '[ $rc -ne 0 ] && ! grep -q "fake glab" "$T/out.txt"'
+jq '. + {title: "Add export", description: "Line one\n\nLine three"}' "$FAKE_FORGE/mr-7.json" > "$FAKE_FORGE/mr-11.json"
+: > "$FAKE_FORGE/calls.log"; lib forge_mr 11 --with-text
+check "forge_mr --with-text: the fact line, then the title, then the description" '[ $rc -eq 0 ] && [ "$(head -n1 <<<"$out" | tr "$US" "|")" = "7|opened|ann|feature/x|main|no|h1|b1|s1" ] && [ "$(sed -n 2p <<<"$out")" = "Add export" ] && [ "$(tail -n +3 <<<"$out")" = $'"'"'Line one\n\nLine three'"'"' ]'
+check "forge_mr --with-text: one call to GitLab" '[ "$(wc -l < "$FAKE_FORGE/calls.log" | tr -d " ")" = 1 ]'
+jq 'del(.title, .description)' "$FAKE_FORGE/mr-11.json" > "$FAKE_FORGE/mr-12.json"; lib forge_mr 12 --with-text
+check "forge_mr --with-text: no title or description, nothing after the fact line" '[ $rc -eq 0 ] && [ "$(head -n1 <<<"$out" | tr "$US" "|")" = "7|opened|ann|feature/x|main|no|h1|b1|s1" ] && [ -z "$(tail -n +2 <<<"$out" | tr -d "\n")" ]'
+lib forge_mr 11 --text
+check "forge_mr: an unknown option is refused before glab" '[ $rc -ne 0 ] && [ -z "$out" ] && grep -q "unknown option" "$T/out.txt"'
 
 # ---------- forge_mr_summary ----------
 jq '. + {title: "Export", description: "Closes CU-86abc", web_url: "https://gitlab.test/mr/7", draft: true}' "$FAKE_FORGE/mr-7.json" > "$T/m" && mv "$T/m" "$FAKE_FORGE/mr-7.json"

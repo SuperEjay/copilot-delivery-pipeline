@@ -30,12 +30,46 @@ done <<< "$RULES"
 # The forge module (#103): only forge-lib.sh runs glab. doctor.sh may run
 # "glab auth status", a check of the tool itself. A comment, a message, or a
 # check that glab is installed (require, has, a doctor tool list) isn't a call.
+# glab_calls <file>: the lines of <file> that run glab, as "<n>:<line>". A
+# command substitution of glab always is one. Otherwise quoted text (messages)
+# and the tool checks are dropped first, and glab must then be a command.
+glab_calls() {
+  awk '
+    /^[ \t]*#/ { next }
+    /\$\([ \t]*glab[ \t]/ || /`[ \t]*glab[ \t]/ { print FNR ":" $0; next }
+    {
+      s = $0
+      gsub(/"[^"]*"/, "\"\"", s); gsub(/'"'"'[^'"'"']*'"'"'/, "", s)
+      gsub(/glab auth status|(require|has)( [a-z]+)* glab|for t in [a-z ]*glab/, "", s)
+      if (s ~ /(^|[;&|({ \t])glab[ \t]/) print FNR ":" $0
+    }' "$1"
+}
+# The rule itself, on lines that are calls and lines that aren't.
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/calls.sh" <<'LINES'
+x="$(glab api projects/:id/merge_requests/1)"; echo "done"
+echo "$(glab api user)"
+printf '%s\n' "$(glab api user)"
+result INFO "$(glab api projects/:id/merge_requests/1 | jq -r .state)"
+glab api -X PUT "projects/:id/merge_requests/1" -f a=b || echo "failed"
+y=`glab api user`
+has glab && glab api user
+LINES
+cat > "$T/not-calls.sh" <<'LINES'
+# glab api user, in a comment
+echo "Can't look up your glab user (glab api user). Check glab auth status." >&2
+result FAIL "glab isn't logged in: run glab auth login (add --hostname for a self-managed GitLab)"
+printf 'Run glab mr view %s yourself.\n' "$IID"
+require git glab jq
+if has glab && glab auth status >/dev/null 2>&1; then :; fi
+for t in git curl jq glab node npx; do :; done
+LINES
+n_calls=$(wc -l < "$T/calls.sh" | tr -d ' ')
+if [ "$(glab_calls "$T/calls.sh" | wc -l | tr -d ' ')" = "$n_calls" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: the glab rule finds every call, also next to a message"; diff <(glab_calls "$T/calls.sh" | cut -d: -f2-) "$T/calls.sh" | sed 's/^/      /'; fi
+if [ -z "$(glab_calls "$T/not-calls.sh")" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: the glab rule ignores comments, messages and tool checks"; glab_calls "$T/not-calls.sh" | sed 's/^/      /'; fi
+
 hits=$(cd "$ROOT" && for f in $(find payload/scripts -name '*.sh' ! -name forge-lib.sh | sort); do
-  grep -nE '(^|[;&|({`"'"'"'$[:space:]])glab[[:space:]]' "$f" \
-    | grep -vE '^[0-9]+:[[:space:]]*#' \
-    | grep -vE '^[0-9]+:.*(echo|printf|result) ' \
-    | grep -vE 'glab auth status|(require|has)( [a-z]+)* glab|for t in [a-z ]*glab' \
-    | sed "s|^|$f:|"
+  glab_calls "$f" | sed "s|^|$f:|"
 done)
 if [ -z "$hits" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: glab run outside forge-lib.sh"; echo "$hits" | sed 's/^/      /'; fi
 

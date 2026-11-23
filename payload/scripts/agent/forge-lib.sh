@@ -15,6 +15,8 @@
 #                               fork is yes or no; head base start are the
 #                               diff refs (empty when GitLab has none yet). Read it with
 #                                 IFS=$'\037' read -r iid state author … <<<"$line"
+#   forge_mr <iid> --with-text  the same line, then the title on one line, then
+#                               the description: one call for --mr adoption
 #   forge_mr_summary <iid>      JSON: iid title description source_branch
 #                               target_branch web_url author draft commits[id title message]
 #   forge_discussions <iid>     JSON: every discussion, all pages, unfiltered
@@ -70,13 +72,19 @@ _forge_mr_json() {
 }
 
 forge_mr() {
-  local json
+  local json text=no
+  case "${2:-}" in
+    '') ;;
+    --with-text) text=yes ;;
+    *) echo "forge_mr: unknown option '$2' (--with-text)" >&2; return 2 ;;
+  esac
   json="$(_forge_mr_json "$1")" || return 1
-  jq -r --arg us "$FORGE_US" '
-      [ .iid, .state, .author.username, .source_branch, .target_branch,
-        (if .source_project_id == .project_id then "no" else "yes" end),
-        .diff_refs.head_sha, .diff_refs.base_sha, .diff_refs.start_sha ]
-      | map(. // "" | tostring) | join($us)' <<<"$json"
+  jq -r --arg us "$FORGE_US" --arg text "$text" '
+      ([ .iid, .state, .author.username, .source_branch, .target_branch,
+         (if .source_project_id == .project_id then "no" else "yes" end),
+         .diff_refs.head_sha, .diff_refs.base_sha, .diff_refs.start_sha ]
+       | map(. // "" | tostring) | join($us)),
+      (if $text == "yes" then (.title // "" | gsub("\n"; " ")), (.description // "") else empty end)' <<<"$json"
 }
 
 forge_mr_summary() {

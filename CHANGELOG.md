@@ -16,6 +16,9 @@
   - `/fetch-review` prints `Nothing new since round <n>` whenever no round starts, also when ASK threads are still waiting. The review-responder stops there if it has already triaged that round.
   - The planner's "the branch was adopted" note is now in every planner prompt for an adopted task, not only the first plan.
 
+- Follow-ups to the forge module (below):
+  - `/start-task <id> --mr <iid>` asks GitLab twice (who you are, and the MR with its title and description) instead of four times, using the new `forge_mr <iid> --with-text`.
+  - `tests/test-portability.sh` now also catches a `glab` call on the same line as a message, such as `x="$(glab api …)"; echo done` or `echo "$(glab api …)"`. Before, it skipped any line containing `echo`, `printf` or `result`.
 - **One forge module talks to GitLab** (#103). The new `scripts/agent/forge-lib.sh` is the only code that runs `glab`, apart from `doctor.sh`'s `glab auth status`. It covers who you are, an MR's facts and summary, its threads, whether it can be reviewed or adopted, and the writes: create or update an MR, reply, resolve and post a thread. `start-review.sh`, `start-task.sh --mr`, `fetch-duo-review.sh`, `doctor.sh`, `create-mr.sh`, `reply-thread.sh` and `post-review-thread.sh` use it. Behaviour and messages are unchanged, with two exceptions: `/review-mr` and `--mr` now also refuse an MR GitLab returns without a state or target branch, and a failed GitLab write now says which step failed. `tests/test-portability.sh` fails when another script runs `glab`, and `tests/test-guard.sh` checks that sourcing the library is denied. The tests share one fake glab (`tests/lib/fake-glab/glab`) that answers from files and logs each write, in place of their own argv-matching stubs. New `tests/test-forge.sh`.
 - **One Duo round module** (#106). The new `scripts/agent/duo-round-lib.sh` is the only code that knows a Duo round's formats:
   - which threads go into `review.json`
