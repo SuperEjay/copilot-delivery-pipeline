@@ -34,9 +34,7 @@ case "$MODE" in
   *)        BRANCH="$BRANCH_PREFIX/$TASK-$MODE" ;;
 esac
 DIR="$(task_dir "$TASK")"
-MR_JSON=""
-# field <jq path>: one value of the MR read for --mr, empty when missing.
-field() { jq -r "$1 // empty" <<< "$MR_JSON"; }
+MR_SUMMARY=""   # for --mr: the MR's title and description (forge_mr_summary)
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "You have uncommitted changes. Commit or stash them first." >&2
@@ -45,20 +43,21 @@ fi
 
 if [ "$ADOPT" = mr ]; then
   require glab jq
-  ME="$(glab api user | jq -r '.username // empty')" || ME=""
-  [ -n "$ME" ] || { echo "Can't look up your glab user (glab api user). Check glab auth status." >&2; exit 1; }
-  MR_JSON="$(glab api "projects/:id/merge_requests/$MR")" || { echo "Can't read MR !$MR (see above)." >&2; exit 1; }
-  state="$(field .state)"; author="$(field .author.username)"; target="$(field .target_branch)"
-  [ "$state" = opened ] || { echo "MR !$MR is $state, not open. Only an open MR can be adopted." >&2; exit 1; }
-  if [ "$author" != "$ME" ]; then
-    echo "MR !$MR is by $author, not you ($ME). The pipeline only fixes your own MRs. To review a teammate's, run /review-mr $MR." >&2
+  source "$(dirname "$0")/forge-lib.sh"
+  ME="$(forge_me)" || { echo "Can't look up your glab user (glab api user). Check glab auth status." >&2; exit 1; }
+  MR_LINE="$(forge_mr "$MR")" || { echo "Can't read MR !$MR (see above)." >&2; exit 1; }
+  IFS=$'\037' read -r _ state author source target _ <<<"$MR_LINE"
+  if ! why="$(forge_eligible adopt "$MR_LINE" "$ME" "$BASE_BRANCH")"; then
+    case "$why" in
+      not-mine) echo "MR !$MR is by $author, not you ($ME). The pipeline only fixes your own MRs. To review a teammate's, run /review-mr $MR." >&2 ;;
+      fork) echo "MR !$MR comes from a fork. The pipeline pushes to origin, so it can't adopt it." >&2 ;;
+      wrong-target) echo "MR !$MR targets $target, but BASE_BRANCH is $BASE_BRANCH. Adopt only MRs into $BASE_BRANCH." >&2 ;;
+      *) echo "MR !$MR is $state, not open. Only an open MR can be adopted." >&2 ;;
+    esac
     exit 1
   fi
-  if [ "$(field .source_project_id)" != "$(field .project_id)" ]; then
-    echo "MR !$MR comes from a fork. The pipeline pushes to origin, so it can't adopt it." >&2; exit 1
-  fi
-  [ "$target" = "$BASE_BRANCH" ] || { echo "MR !$MR targets $target, but BASE_BRANCH is $BASE_BRANCH. Adopt only MRs into $BASE_BRANCH." >&2; exit 1; }
-  BRANCH="$(field .source_branch)"
+  MR_SUMMARY="$(forge_mr_summary "$MR")" || { echo "Can't read MR !$MR's title and description (see above)." >&2; exit 1; }
+  BRANCH="$source"
 fi
 
 if [ "$BRANCH" = "$BASE_BRANCH" ]; then
@@ -116,7 +115,7 @@ state_init "$TASK" "$BRANCH"
 if [ -n "$ADOPT" ]; then
   state_set_adopted "$TASK" "$ADOPT"
   if [ "$ADOPT" = mr ]; then
-    { echo "# $(field .title)"; echo; field .description; } > "$DIR/adopted-mr.md"
+    jq -r '"# \(.title // "")\n\n\(.description // "")"' <<<"$MR_SUMMARY" > "$DIR/adopted-mr.md"
   fi
   # What the branch already has, for the planner (it can't run git).
   base="$(git merge-base HEAD "origin/$BASE_BRANCH")"

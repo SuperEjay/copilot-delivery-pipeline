@@ -389,6 +389,7 @@ tests/test-findings.sh      # checks reading and changing code-review.md finding
 tests/test-apply-suggestion.sh  # checks applying a review thread's suggestion block: moved lines, stale lines, refusals
 tests/test-start-task.sh    # checks starting a task, and adopting your own branch or MR (--branch, --mr)
 tests/test-portability.sh   # checks the scripts use nothing newer than macOS's bash 3.2
+tests/test-forge.sh         # checks forge-lib.sh, the only code that runs glab, against the shared fake glab (tests/lib/fake-glab)
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release

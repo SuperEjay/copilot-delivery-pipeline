@@ -56,6 +56,10 @@ _Avoid_: imported task, takeover
 The pipeline's second route: a read-only review of an existing merge request, usually a teammate's, against its spec, started with `/review-mr <iid> [clickup-id]`. It finds bugs, technical debt and improvements, and posts only the findings the user picks. It never changes the MR's code.
 _Avoid_: verifier, MR verification, PR review
 
+**Forge**:
+The code host the pipeline asks about merge requests and their threads: GitLab, through `glab`. Only `forge-lib.sh` talks to it; scripts get plain facts from it (an MR's state, author, branches; whether it can be reviewed or adopted) and word their own refusals. ADR 0002 names this seam and builds no second forge.
+_Avoid_: GitLab client, glab wrapper
+
 **Review worktree**:
 The separate git worktree an MR review checks the MR's head out into, so the user's own branch and uncommitted work are never touched. Agents may read it but not change it.
 _Avoid_: review checkout, sandbox

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# The shared fake glab (#103): the tests' only GitLab. Put this folder first on
+# PATH and point FAKE_FORGE at a folder that holds the forge's state:
+#   me                     the glab user's name (missing: "api user" fails, 401)
+#   logged-out             present: "auth status" fails
+#   mr-<iid>.json          an MR as GitLab's API returns it (missing: 404)
+#   commits-<iid>.json     its commits (missing: none)
+#   discussions-<iid>.json its discussions (missing: none)
+# Anything else is an unexpected call: it fails and says so, so a test notices a
+# script talking to GitLab in a way the fake (and forge-lib.sh) doesn't know.
+set -uo pipefail
+F="${FAKE_FORGE:?fake glab: set FAKE_FORGE to the fake forge folder}"
+unexpected() { echo "fake glab: unexpected call: glab $*" >&2; exit 64; }
+
+case "$*" in
+  "auth status")
+    [ -e "$F/logged-out" ] && { echo "You are not logged into any GitLab hosts." >&2; exit 1; }
+    echo "Logged in to gitlab.test as $(cat "$F/me" 2>/dev/null)" ;;
+  "api user")
+    [ -f "$F/me" ] || { echo "glab: 401 Unauthorized" >&2; exit 1; }
+    jq -n --arg u "$(cat "$F/me")" '{username: $u}' ;;
+  "api --paginate projects/:id/merge_requests/"*)
+    p="${3#projects/:id/merge_requests/}"; iid="${p%%/*}"; what="${p#*/}"
+    case "$what" in "commits?per_page=100") what=commits ;; "discussions?per_page=100") what=discussions ;; *) unexpected "$@" ;; esac
+    case "$iid" in ''|*[!0-9]*) unexpected "$@" ;; esac
+    cat "$F/$what-$iid.json" 2>/dev/null || echo '[]' ;;
+  "api projects/:id/merge_requests/"*)
+    iid="${2#projects/:id/merge_requests/}"
+    case "$iid" in ''|*[!0-9]*) unexpected "$@" ;; esac
+    [ $# -eq 2 ] || unexpected "$@"
+    cat "$F/mr-$iid.json" 2>/dev/null || { echo "glab: 404 Not Found" >&2; exit 1; } ;;
+  *) unexpected "$@" ;;
+esac

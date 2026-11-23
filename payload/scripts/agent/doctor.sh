@@ -113,8 +113,9 @@ fi
 reviews="$(git worktree list --porcelain 2>/dev/null | sed -n 's#^worktree .*/pipeline-reviews/mr-\([0-9][0-9]*\)$#\1#p')"
 if [ -n "$reviews" ]; then
   if has glab && glab auth status >/dev/null 2>&1; then
+    source "$(dirname "$0")/forge-lib.sh"
     for iid in $reviews; do
-      st="$(glab api "projects/:id/merge_requests/$iid" 2>/dev/null | jq -r '.state // empty' 2>/dev/null)"
+      st=""; line="$(forge_mr "$iid" 2>/dev/null)" && IFS=$'\037' read -r _ st _ <<<"$line"
       case "$st" in
         merged|closed) result WARN "review worktree of MR !$iid is still here, and the MR is $st: run /review-mr $iid --done to remove it" ;;
         opened|locked) ;;
