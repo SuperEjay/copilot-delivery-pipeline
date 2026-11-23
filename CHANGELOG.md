@@ -1,9 +1,27 @@
 # Changelog
 
-## Unreleased
+## v2.4.0
 
-- **Check the gaps in VS Code's browser** (#123). A new **gap-checker** agent, which you pick yourself at the pre-ship stop, walks each `PASS (gap)` AC in VS Code's built-in browser (no Playwright) and writes `.work/<id>/gap-checks.md`: `looks right`, `looks wrong` or `couldn't check`, with what it saw. It changes nothing else and never counts toward `VERIFIED` (ADR 0005). When there are gaps and no Playwright, the pre-ship stop points to it. It can't run inside the auto run, because VS Code doesn't give subagents the browser tools (#113).
+**UI work without Playwright, start to finish.** In a project without Playwright, a UI acceptance criterion whose logic is unit- or integration-tested now passes with a recorded gap instead of failing, evidence falls back to text (plus any screenshots you save yourself), and the pre-ship stop says how many gaps there are. Before approving, you can have the new **gap-checker** agent walk those criteria in VS Code's built-in browser. The #113 spike settled why that's a separate agent you pick yourself: VS Code doesn't give subagents the browser tools, so nothing in the auto run can drive a browser (ADR 0005).
+
+**Not yet tried for real:**
+- A full auto run in a project without Playwright: the `PASS (gap)` grading, Text evidence and the gap count at the pre-ship stop have only been checked through the agent files and the router tests.
+- The gap-checker agent in VS Code. The spike proved the browser tools themselves, not this agent's instructions.
+- Pinned models are still unverified on a paid plan (#67). gap-checker is pinned to Claude Sonnet 5.5; on Copilot Free it runs on Auto.
+
+### Upgrading to v2.4.0
+
+1. From v2.3.0 (or earlier, see the earlier upgrade notes first), run `install.sh --update` from v2.4.0: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.4.0/install.sh | bash -s -- --update`.
+2. Merge each `<file>.new` it reports. `verifier.agent.md` and `evidence.agent.md` changed (grading and evidence without Playwright). `gap-checker.agent.md` is new.
+3. No new `.agent.env` settings. gap-checker opens `EVIDENCE_BASE_URL`, so set it if your app isn't on `http://localhost:3000`.
+4. Commit the updated pipeline files (with `--local`, there's nothing to commit), fully quit and reopen VS Code. **gap-checker** should now be in the agent picker.
+
+Tasks in progress carry on.
+
+### Changes
+
 - **UI acceptance criteria and evidence work without Playwright** (#114, ADR 0005). With e2e skipped, the verifier grades a UI AC whose logic is covered by unit or integration tests `PASS (gap)` instead of FAIL, and lists it under Gaps; an AC no test covers at all still fails. The pre-ship stop says how many gaps `verification.md` lists. `capture-evidence.sh` exits 3 without Playwright, and the evidence agent writes Text evidence for screenshot ACs; PNGs you save in `evidence/` yourself are listed and approved like any other file. The #113 spike found VS Code's browser tools aren't available to subagents, so there are no live browser checks.
+- **Check the gaps in VS Code's browser** (#123). A new **gap-checker** agent, which you pick yourself at the pre-ship stop, walks each `PASS (gap)` AC in VS Code's built-in browser (no Playwright) and writes `.work/<id>/gap-checks.md`: `looks right`, `looks wrong` or `couldn't check`, with what it saw. It changes nothing else and never counts toward `VERIFIED` (ADR 0005). When there are gaps and no Playwright, the pre-ship stop points to it. It can't run inside the auto run, because VS Code doesn't give subagents the browser tools (#113).
 
 ## v2.3.0
 
