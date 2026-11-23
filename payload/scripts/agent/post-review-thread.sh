@@ -15,6 +15,7 @@
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/findings-lib.sh"
+source "$(dirname "$0")/forge-lib.sh"
 require git glab jq
 
 IID="${1:?usage: post-review-thread.sh <mr-iid> <CR-n>}"
@@ -40,10 +41,8 @@ FILE=""; LINE=""
 if [[ $LOCATION =~ ^([^:]+):([0-9]+) ]]; then FILE="${BASH_REMATCH[1]}"; LINE="${BASH_REMATCH[2]}"; fi
 
 # The MR must still be at the head that was reviewed.
-MR_JSON="$(glab api "projects/:id/merge_requests/$IID")"
-BASE_SHA="$(jq -r '.diff_refs.base_sha // empty' <<<"$MR_JSON")"
-START_SHA="$(jq -r '.diff_refs.start_sha // empty' <<<"$MR_JSON")"
-HEAD_SHA="$(jq -r '.diff_refs.head_sha // empty' <<<"$MR_JSON")"
+MR_LINE="$(forge_mr "$IID")" || { echo "Can't read MR !$IID (see above)." >&2; exit 1; }
+IFS=$'\037' read -r _ _ _ _ _ _ HEAD_SHA BASE_SHA START_SHA <<<"$MR_LINE"
 REVIEWED="$(git -C "$WT" rev-parse HEAD 2>/dev/null || true)"
 if [ -z "$HEAD_SHA" ] || [ "$HEAD_SHA" != "$REVIEWED" ]; then
   echo "MR !$IID is at ${HEAD_SHA:0:12} now, but the review is of ${REVIEWED:0:12}. Run /review-mr $IID to review the new commits before posting." >&2
@@ -77,8 +76,7 @@ case "$kind" in
   *)       jq -n --arg body "$BODY" '{body: $body}' > "$TMP" ;;
 esac
 
-DID="$(glab api -X POST "projects/:id/merge_requests/$IID/discussions" -H "Content-Type: application/json" --input "$TMP" | jq -r '.id // empty')"
-[ -n "$DID" ] || { echo "GitLab gave no thread id for $CR; check the MR before posting again." >&2; exit 1; }
+DID="$(forge_post_thread "$IID" "$TMP")" || { echo "Couldn't post $CR (see above); check the MR before posting again." >&2; exit 1; }
 
 # Record the thread under the finding, after its Decision line.
 finding_set_thread "$REVIEW" "$CR" "$DID" || { echo "Posted $CR (thread $DID), but couldn't record it in $REL: add \"- **Thread:** $DID\" under its Decision line." >&2; exit 1; }

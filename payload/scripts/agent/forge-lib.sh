@@ -26,6 +26,20 @@
 #                                         merged closed not-open not-mine fork wrong-target
 #                               The first reason that applies wins. Each caller
 #                               words the refusal itself.
+#   forge_mr_for_branch <branch>
+#                               "iid url" of the branch's open MR, or nothing
+#
+# Writes (the guard lets agents reach them only through create-mr.sh,
+# reply-thread.sh and post-review-thread.sh, which hold the pipeline's rules):
+#   forge_mr_create <branch> <target> <title> <description> [--draft]
+#                               opens an MR that removes its branch when merged;
+#                               prints "iid url"
+#   forge_mr_update <iid> <title> <description>
+#   forge_reply <iid> <discussion-id> <body>
+#   forge_resolve <iid> <discussion-id>
+#   forge_post_thread <iid> <json-file>
+#                               a new thread from GitLab's request body (body,
+#                               and a position for a diff line); prints its id
 
 FORGE_US=$'\037'
 
@@ -80,6 +94,54 @@ forge_discussions() {
   _forge_iid "$1" || return 1
   json="$(glab api --paginate "projects/:id/merge_requests/$1/discussions?per_page=100")" || return 1
   jq -s 'add // []' <<<"$json"
+}
+
+# _forge_did <discussion-id>: refuses anything but letters and digits.
+_forge_did() {
+  case "$1" in
+    ''|*[!0-9A-Za-z]*) echo "forge: not a thread id: '$1'" >&2; return 1 ;;
+  esac
+}
+
+forge_mr_for_branch() {
+  local enc json
+  enc="$(jq -rn --arg b "$1" '$b | @uri')" || return 1
+  json="$(glab api "projects/:id/merge_requests?source_branch=$enc&state=opened")" || return 1
+  jq -r '.[0] | if . == null then empty else "\(.iid) \(.web_url)" end' <<<"$json"
+}
+
+forge_mr_create() {
+  local found
+  local args=(--source-branch "$1" --target-branch "$2" --title "$3" --description "$4" --remove-source-branch --yes)
+  [ "${5:-}" = --draft ] && args+=(--draft)
+  glab mr create "${args[@]}" >/dev/null || return 1
+  found="$(forge_mr_for_branch "$1")" || return 1
+  [ -n "$found" ] || { echo "forge: glab reported the MR created, but GitLab has no open MR for $1." >&2; return 1; }
+  printf '%s\n' "$found"
+}
+
+forge_mr_update() {
+  _forge_iid "$1" || return 1
+  glab api -X PUT "projects/:id/merge_requests/$1" -f "title=$2" -f "description=$3" >/dev/null
+}
+
+forge_reply() {
+  _forge_iid "$1" && _forge_did "$2" || return 1
+  glab api -X POST "projects/:id/merge_requests/$1/discussions/$2/notes" -f "body=$3" >/dev/null
+}
+
+forge_resolve() {
+  _forge_iid "$1" && _forge_did "$2" || return 1
+  glab api -X PUT "projects/:id/merge_requests/$1/discussions/$2" -f "resolved=true" >/dev/null
+}
+
+forge_post_thread() {
+  local json id
+  _forge_iid "$1" || return 1
+  json="$(glab api -X POST "projects/:id/merge_requests/$1/discussions" -H "Content-Type: application/json" --input "$2")" || return 1
+  id="$(jq -r '.id // empty' <<<"$json" 2>/dev/null)"
+  [ -n "$id" ] || { echo "forge: GitLab gave no thread id for the new thread on MR !$1." >&2; return 1; }
+  printf '%s\n' "$id"
 }
 
 forge_eligible() {

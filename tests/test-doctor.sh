@@ -14,7 +14,7 @@ check() {
 
 # ---------- a PATH with only what we allow ----------
 # Real system tools the scripts need, linked into $T/sys. Fakes for the tools a
-# case turns on or off go in $T/fake: glab (logged in or not), code (a version),
+# case turns on or off go in $T/fake: glab (the shared fake), code (a version),
 # node, npx, curl, pdftotext, pandoc.
 mkdir -p "$T/sys" "$T/fake"
 for t in bash sh env git jq sed awk grep cat head tail tr sort uniq cut find xargs wc mktemp rm mkdir dirname basename date uname printf sha256sum shasum od ls; do
@@ -25,7 +25,12 @@ fake() {   # fake <name> <exit code> [stdout]
 }
 unfake() { rm -f "$T/fake/$1"; }
 for t in node npx curl; do fake "$t" 0; done
-fake glab 0 "Logged in to gitlab.com"   # glab auth status: 0 = logged in
+# glab is the shared fake (tests/lib/fake-glab), its state in $T/forge:
+# logged in as "me" until a case adds logged-out.
+export FAKE_FORGE="$T/forge"; mkdir -p "$FAKE_FORGE"; echo me > "$FAKE_FORGE/me"
+glab_on() { cp "$ROOT/tests/lib/fake-glab/glab" "$T/fake/glab"; rm -f "$FAKE_FORGE/logged-out"; }
+glab_logged_out() { glab_on; touch "$FAKE_FORGE/logged-out"; }
+glab_on
 fake code 0 "1.146.0"
 
 # ---------- scratch project with the pipeline installed ----------
@@ -69,9 +74,9 @@ check "it never prints the token" '! grep -q "pk_test_123" "$T/out.txt"'
 # ---------- each FAIL ----------
 unfake glab; doc
 check "glab missing: FAIL, exit 1" '[ $rc -eq 1 ] && line FAIL "glab is missing"'
-fake glab 1; doc
+glab_logged_out; doc
 check "glab not logged in: FAIL, says how" '[ $rc -eq 1 ] && line FAIL "glab isn.t logged in" && grep -q "glab auth login" "$T/out.txt"'
-fake glab 0
+glab_on
 env -i HOME="$T" PATH="$T/fake:$T/sys" bash scripts/agent/doctor.sh > "$T/out.txt" 2>&1; rc=$?
 check "token not exported: FAIL, says where to put it" '[ $rc -eq 1 ] && line FAIL "CLICKUP_API_TOKEN isn.t exported" && grep -q "shell profile" "$T/out.txt"'
 echo 'CLICKUP_API_TOKEN="pk_test_123"' >> .agent.env; doc
@@ -103,10 +108,6 @@ check "Windows with Git Bash: FAIL, unsupported, use WSL" '[ $rc -eq 1 ] && line
 unfake uname
 
 # ---------- review worktrees of finished MRs (ADR 0003, #87) ----------
-# The shared fake glab (tests/lib/fake-glab) answers from $T/forge: logged in,
-# and each MR from mr-<iid>.json.
-export FAKE_FORGE="$T/forge"; mkdir -p "$FAKE_FORGE"; echo me > "$FAKE_FORGE/me"
-cp "$ROOT/tests/lib/fake-glab/glab" "$T/fake/glab"
 # mrstate <iid> <state>: the MR as the fake forge has it.
 mrstate() { jq -n --argjson i "$1" --arg s "$2" '{iid: $i, state: $s, target_branch: "main"}' > "$FAKE_FORGE/mr-$1.json"; }
 doc
@@ -121,9 +122,9 @@ check "a closed MR's: WARN too" 'line WARN "review worktree of MR !6 is still he
 check "an open MR's worktree is fine: no WARN" '! grep -q "MR !8" "$T/out.txt"'
 rm "$FAKE_FORGE/mr-6.json"; doc
 check "an MR glab can't read: INFO, not a guess" 'line INFO "can.t tell whether MR !6 is still open"'
-fake glab 1; doc
+glab_logged_out; doc
 check "glab not logged in: no MR states asked for, an INFO" 'line INFO "review worktrees: 3" && ! grep -q "is merged" "$T/out.txt"'
-fake glab 0 "Logged in to gitlab.com"
+glab_on
 for i in 5 6 8; do git worktree remove --force "$(review_wt mr-$i)"; done
 
 # ---------- it's a pipeline script ----------

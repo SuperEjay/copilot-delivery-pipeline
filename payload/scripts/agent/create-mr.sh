@@ -8,6 +8,7 @@
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/ship-gate.sh"
+source "$(dirname "$0")/forge-lib.sh"
 require git glab jq
 
 TASK="${1:?usage: create-mr.sh <task-id>}"
@@ -18,30 +19,19 @@ MR_FILE="$DIR/mr.md"
 [ -f "$MR_FILE" ] || { echo "Write $MR_FILE first." >&2; exit 1; }
 TITLE="$(head -n1 "$MR_FILE" | sed -E 's/^#[[:space:]]*//')"
 DESC="$(tail -n +2 "$MR_FILE")"
-BRANCH_ENC="$(jq -rn --arg b "$BRANCH" '$b|@uri')"
-
-find_mr() {
-  glab api "projects/:id/merge_requests?source_branch=$BRANCH_ENC&state=opened" \
-    | jq -r '.[0] | if . == null then empty else "\(.iid) \(.web_url)" end'
-}
 
 gate_require "$TASK" push
-existing="$(find_mr)"
+existing="$(forge_mr_for_branch "$BRANCH")" || { echo "Can't ask GitLab for $BRANCH's open MR (see above)." >&2; exit 1; }
 [ -n "$existing" ] || gate_require "$TASK" new-mr
 
 git push --quiet -u origin "$BRANCH"
 if [ -n "$existing" ]; then
   IID="${existing%% *}"
-  glab api -X PUT "projects/:id/merge_requests/$IID" \
-    -f "title=$TITLE" -f "description=$DESC" >/dev/null
+  forge_mr_update "$IID" "$TITLE" "$DESC" || { echo "Pushed, but couldn't update MR !$IID (see above)." >&2; exit 1; }
   action="Updated"
 else
-  args=(--source-branch "$BRANCH" --target-branch "$BASE_BRANCH"
-        --title "$TITLE" --description "$DESC" --remove-source-branch --yes)
-  [ "$MR_DRAFT" = "true" ] && args+=(--draft)
-  glab mr create "${args[@]}" >/dev/null
-  existing="$(find_mr)"
-  [ -n "$existing" ] || { echo "MR creation reported success but no open MR was found." >&2; exit 1; }
+  draft=""; [ "$MR_DRAFT" = "true" ] && draft=--draft
+  existing="$(forge_mr_create "$BRANCH" "$BASE_BRANCH" "$TITLE" "$DESC" $draft)" || { echo "Pushed, but couldn't create the MR (see above)." >&2; exit 1; }
   IID="${existing%% *}"
   action="Created"
 fi

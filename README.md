@@ -377,7 +377,7 @@ Through curl: `curl -fsSL <install.sh URL> | bash -s -- --local`.
 ```bash
 tests/test-install.sh     # installs into a scratch repo, then updates, forces and uninstalls
 tests/test-guard.sh       # checks the hook guard's allow / deny / ask decision for each tool call
-tests/test-gates.sh       # checks that only the verified commit can be pushed (stub glab, local remote)
+tests/test-gates.sh       # checks that only the verified commit can be pushed (fake glab, local remote)
 tests/test-task-state.sh  # checks that .work/<id>/state.env is read as data and written in one format
 tests/test-next-stage.sh  # checks the auto run's router: the next stage or stop for fixture .work/ folders
 tests/test-agents.sh      # checks the stage agents: subagent frontmatter, no handoffs, the "In an auto run" sections
