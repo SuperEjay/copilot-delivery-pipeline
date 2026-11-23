@@ -1,6 +1,24 @@
 # Changelog
 
-## Unreleased
+## v2.3.0
+
+**No Playwright, no blocker.** A project without Playwright now gets through the full delivery pipeline: e2e is skipped and recorded as a gap instead of failing the verifier and blocking the push (ADR 0005). Local installs also keep every agent skill out of git, not just the two the installer adds.
+
+**Not yet tried for real:**
+- A full auto run in a project without Playwright. The verifier's Gaps line and the reviewer's view of it have only been checked through the agent files, not with a real model.
+- The evidence stage still needs Playwright for screenshots. Without it, screenshot ACs can't be captured yet (#114, after the #113 spike).
+
+### Upgrading to v2.3.0
+
+1. From v2.2.0 (or earlier, see the earlier upgrade notes first), run `install.sh --update` from v2.3.0: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.3.0/install.sh | bash -s -- --update`.
+2. Merge each `<file>.new` it reports. `verifier.agent.md` changed (skipped checks go under Gaps).
+3. **If your project has no Playwright, remove the `E2E_CMD="npx playwright test …"` line from `.agent.env`.** An explicit `E2E_CMD` still wins, so that line keeps e2e failing. `scripts/agent/doctor.sh` warns about it.
+4. With `--local`, the update replaces the ponytail/caveman lines in `.git/info/exclude` with `/.agents/`. Skills you'd committed under `.agents/` stay tracked; the installer prints how to untrack them.
+5. Commit the updated pipeline files (with `--local`, there's nothing to commit), fully quit and reopen VS Code.
+
+Tasks in progress carry on.
+
+### Changes
 
 - **e2e is skipped, not failed, when the project has no Playwright** (#112, ADR 0005). `E2E_CMD` now defaults to Playwright only when `package.json` has `@playwright/test`; otherwise `run-checks.sh` prints `SKIP  e2e`, `all` can still print `VERIFIED`, and the verifier lists the skip under Gaps. An explicit `E2E_CMD` (even empty) still wins. `.agent.env.example` no longer sets `E2E_CMD`. `doctor.sh` reports when e2e will be skipped, and warns when `E2E_CMD` runs Playwright in a project without it: remove that line from your `.agent.env` to get the new default.
 - **`--local` keeps the whole `.agents/` folder out of git** (#115). It used to ignore only the ponytail and caveman skills, so any other skill added with `npx skills add` showed up as untracked. `--update` replaces the old lines. If skills under `.agents/` are already committed, the installer says they stay tracked and how to untrack them. Shared installs are unchanged.
