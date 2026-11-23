@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **`--local` keeps the whole `.agents/` folder out of git** (#115). It used to ignore only the ponytail and caveman skills, so any other skill added with `npx skills add` showed up as untracked. `--update` replaces the old lines. If skills under `.agents/` are already committed, the installer says they stay tracked and how to untrack them. Shared installs are unchanged.
+
 ## v2.2.0
 
 **Adopt your own work, and fewer Duo round-trips.** `/start-task <clickup-id> --mr <iid>` or `--branch <branch>` puts work you began outside the pipeline through the whole delivery route (ADR 0004). A Duo `suggestion` block is applied by a script instead of being rewritten. Threads you already answered aren't triaged again, and the pipeline's replies are tagged `**[pipeline]**`. Under the hood, one module now owns GitLab (`forge-lib.sh`) and one owns a Duo round's formats (`duo-round-lib.sh`). The review-responder writes `review-triage.md` from a template, and the router reads it strictly.
