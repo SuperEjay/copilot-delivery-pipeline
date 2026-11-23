@@ -34,7 +34,7 @@ case "$MODE" in
   *)        BRANCH="$BRANCH_PREFIX/$TASK-$MODE" ;;
 esac
 DIR="$(task_dir "$TASK")"
-MR_SUMMARY=""   # for --mr: the MR's title and description (forge_mr_summary)
+MR_TITLE=""; MR_DESC=""   # for --mr: the MR's title and description
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "You have uncommitted changes. Commit or stash them first." >&2
@@ -45,7 +45,8 @@ if [ "$ADOPT" = mr ]; then
   require glab jq
   source "$(dirname "$0")/forge-lib.sh"
   ME="$(forge_me)" || { echo "Can't look up your glab user (glab api user). Check glab auth status." >&2; exit 1; }
-  MR_LINE="$(forge_mr "$MR")" || { echo "Can't read MR !$MR (see above)." >&2; exit 1; }
+  MR_TEXT="$(forge_mr "$MR" --with-text)" || { echo "Can't read MR !$MR (see above)." >&2; exit 1; }
+  MR_LINE="$(head -n1 <<<"$MR_TEXT")"; MR_TITLE="$(sed -n 2p <<<"$MR_TEXT")"; MR_DESC="$(tail -n +3 <<<"$MR_TEXT")"
   IFS=$'\037' read -r _ state author source target _ <<<"$MR_LINE"
   if ! why="$(forge_eligible adopt "$MR_LINE" "$ME" "$BASE_BRANCH")"; then
     case "$why" in
@@ -56,7 +57,6 @@ if [ "$ADOPT" = mr ]; then
     esac
     exit 1
   fi
-  MR_SUMMARY="$(forge_mr_summary "$MR")" || { echo "Can't read MR !$MR's title and description (see above)." >&2; exit 1; }
   BRANCH="$source"
 fi
 
@@ -115,7 +115,7 @@ state_init "$TASK" "$BRANCH"
 if [ -n "$ADOPT" ]; then
   state_set_adopted "$TASK" "$ADOPT"
   if [ "$ADOPT" = mr ]; then
-    jq -r '"# \(.title // "")\n\n\(.description // "")"' <<<"$MR_SUMMARY" > "$DIR/adopted-mr.md"
+    printf '# %s\n\n%s\n' "$MR_TITLE" "$MR_DESC" > "$DIR/adopted-mr.md"
   fi
   # What the branch already has, for the planner (it can't run git).
   base="$(git merge-base HEAD "origin/$BASE_BRANCH")"

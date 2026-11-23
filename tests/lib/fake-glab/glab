@@ -7,6 +7,7 @@
 #   commits-<iid>.json     its commits (missing: none)
 #   discussions-<iid>.json its discussions (missing: none)
 #   next-iid               the iid "mr create" gives the next MR (missing: 1)
+# Every call, read or write, adds its arguments to calls.log.
 # Writes change that state and add one line to writes.log:
 #   create !<iid>          mr create: a new open mr-<iid>.json, by "me"
 #   update !<iid>          PUT title and description into mr-<iid>.json
@@ -18,6 +19,7 @@
 set -uo pipefail
 F="${FAKE_FORGE:?fake glab: set FAKE_FORGE to the fake forge folder}"
 ARGS="$*"
+printf '%s\n' "$ARGS" >> "$F/calls.log"
 unexpected() { echo "fake glab: unexpected call: glab $ARGS" >&2; exit 64; }
 P="projects/:id/merge_requests"
 # number <value>: refuses anything but a number (an iid).

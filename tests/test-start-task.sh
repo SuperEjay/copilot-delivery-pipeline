@@ -100,10 +100,12 @@ git checkout -q a.txt
 
 # ---------- --mr: your own open MR ----------
 remote_branch feat/mr7 1; mr 7 feat/mr7
-start T7 --mr 7
+: > "$STUB/calls.log"; start T7 --mr 7
 check "--mr: its source branch is checked out, ADOPTED=mr" '[ $rc -eq 0 ] && [ "$(git branch --show-current)" = feat/mr7 ] && [ "$(st state_adopted T7)" = mr ] && [ "$(st state_branch T7)" = feat/mr7 ]'
 check "--mr: no MR_IID yet, so the full route runs before ship" '! grep -q "^MR_IID=" .work/T7/state.env'
 check "--mr: your title and description are kept in adopted-mr.md" '[ "$(head -n1 .work/T7/adopted-mr.md)" = "# My own title" ] && grep -q "^Second paragraph.$" .work/T7/adopted-mr.md'
+check "--mr asks GitLab twice: who you are, and the MR" '[ "$(cat "$STUB/calls.log")" = "$(printf "api user\napi projects/:id/merge_requests/7")" ]'
+check "--mr: adopted-mr.md is the title, a blank line, then the description" '[ "$(cat .work/T7/adopted-mr.md)" = "$(printf "# My own title\n\nMy description.\n\nSecond paragraph.")" ]'
 home
 
 remote_branch feat/mr8 1; mr 8 feat/mr8 opened ann
