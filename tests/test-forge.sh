@@ -69,6 +69,47 @@ check "forge_discussions: every discussion, unfiltered" '[ $rc -eq 0 ] && [ "$(j
 lib forge_discussions 10
 check "forge_discussions: none is []" '[ $rc -eq 0 ] && [ "$(jq -c . <<<"$out")" = "[]" ]'
 
+# ---------- forge_mr_for_branch, forge_mr_create, forge_mr_update ----------
+rm -f "$FAKE_FORGE"/mr-*.json; echo 7 > "$FAKE_FORGE/next-iid"
+lib forge_mr_for_branch "feat/a b"
+check "forge_mr_for_branch: no open MR, nothing printed" '[ $rc -eq 0 ] && [ -z "$out" ]'
+lib forge_mr_create "feat/a b" main "Add a" $'Line one\n\nLine two'
+check "forge_mr_create: prints the new MR's iid and url" '[ $rc -eq 0 ] && [ "$out" = "7 https://gitlab.test/mr/7" ]'
+check "forge_mr_create: an open MR by you, from the branch into the target, not a draft, removing its branch" '[ "$(jq -c "[.state, .author.username, .source_branch, .target_branch, .title, .draft, .force_remove_source_branch]" "$FAKE_FORGE/mr-7.json")" = "[\"opened\",\"me\",\"feat/a b\",\"main\",\"Add a\",false,true]" ] && [ "$(jq -r .description "$FAKE_FORGE/mr-7.json")" = $'"'"'Line one\n\nLine two'"'"' ]'
+check "forge_mr_create: one write" '[ "$(cat "$FAKE_FORGE/writes.log")" = "create !7" ]'
+lib forge_mr_for_branch "feat/a b"
+check "forge_mr_for_branch: finds it, even with a space in the branch" '[ $rc -eq 0 ] && [ "$out" = "7 https://gitlab.test/mr/7" ]'
+lib forge_mr_create feat/c main "Add c" "" --draft
+check "forge_mr_create --draft: a draft" '[ $rc -eq 0 ] && [ "$out" = "8 https://gitlab.test/mr/8" ] && [ "$(jq .draft "$FAKE_FORGE/mr-8.json")" = true ]'
+jq '.state = "merged"' "$FAKE_FORGE/mr-8.json" > "$T/m" && mv "$T/m" "$FAKE_FORGE/mr-8.json"
+lib forge_mr_for_branch feat/c
+check "forge_mr_for_branch: a merged MR doesn't count" '[ $rc -eq 0 ] && [ -z "$out" ]'
+lib forge_mr_update 7 "New title" "New description"
+check "forge_mr_update: title and description replaced" '[ $rc -eq 0 ] && [ -z "$out" ] && [ "$(jq -c "[.title, .description]" "$FAKE_FORGE/mr-7.json")" = "[\"New title\",\"New description\"]" ] && tail -n1 "$FAKE_FORGE/writes.log" | grep -qx "update !7"'
+lib forge_mr_update 99 t d
+check "forge_mr_update: an MR glab can't find, non-zero" '[ $rc -ne 0 ] && grep -q 404 "$T/out.txt"'
+# A glab that "creates" without the MR appearing: forge_mr_create fails and says so.
+mkdir -p "$T/liar"; printf '#!/bin/sh\ncase "$1" in mr) exit 0 ;; *) echo "[]" ;; esac\n' > "$T/liar/glab"; chmod +x "$T/liar/glab"
+PATH="$T/liar:$PATH" lib forge_mr_create feat/d main "Add d" ""
+check "forge_mr_create: created but not found, non-zero and says so" '[ $rc -ne 0 ] && [ -z "$out" ] && grep -qi "no open MR" "$T/out.txt"'
+
+# ---------- forge_reply, forge_resolve, forge_post_thread ----------
+: > "$FAKE_FORGE/writes.log"
+lib forge_reply 7 abc123 $'**[pipeline]** Fixed in 1a2b.\nSecond line'
+check "forge_reply: the body as given, one write" '[ $rc -eq 0 ] && [ -z "$out" ] && [ "$(cat "$FAKE_FORGE/reply-1.txt")" = $'"'"'**[pipeline]** Fixed in 1a2b.\nSecond line'"'"' ] && [ "$(cat "$FAKE_FORGE/writes.log")" = "reply !7 abc123" ]'
+lib forge_resolve 7 abc123
+check "forge_resolve: one write" '[ $rc -eq 0 ] && [ -z "$out" ] && tail -n1 "$FAKE_FORGE/writes.log" | grep -qx "resolve !7 abc123"'
+lib forge_reply 7 "../x" body
+check "forge_reply: a thread id that isn't one is refused before glab" '[ $rc -ne 0 ] && ! grep -q "fake glab" "$T/out.txt" && [ ! -e "$FAKE_FORGE/reply-2.txt" ]'
+lib forge_resolve x abc123
+check "forge_resolve: a non-number iid is refused before glab" '[ $rc -ne 0 ] && ! grep -q "fake glab" "$T/out.txt"'
+jq -n '{body: "hello", position: {new_line: 3}}' > "$T/thread.json"
+lib forge_post_thread 7 "$T/thread.json"
+check "forge_post_thread: the request body as given, prints the thread id" '[ $rc -eq 0 ] && [ "$out" = disc1 ] && cmp -s "$T/thread.json" "$FAKE_FORGE/thread-1.json" && tail -n1 "$FAKE_FORGE/writes.log" | grep -qx "thread !7 disc1"'
+printf '#!/bin/sh\necho "{}"\n' > "$T/liar/glab"
+PATH="$T/liar:$PATH" lib forge_post_thread 7 "$T/thread.json"
+check "forge_post_thread: no thread id back, non-zero and says so" '[ $rc -ne 0 ] && [ -z "$out" ] && grep -qi "thread id" "$T/out.txt"'
+
 # ---------- forge_eligible (no glab at all) ----------
 # line <state> <author> <target> <fork>: an MR line as forge_mr prints it.
 line() { printf '7%s%s%s%s%sfeature/x%s%s%s%s%sh1%sb1%ss1' "$US" "$1" "$US" "$2" "$US" "$US" "$3" "$US" "$4" "$US" "$US" "$US"; }

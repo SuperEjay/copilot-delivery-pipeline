@@ -27,5 +27,17 @@ while IFS= read -r rule; do
   if [ -z "$hits" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $what"; echo "$hits" | sed 's/^/      /'; fi
 done <<< "$RULES"
 
+# The forge module (#103): only forge-lib.sh runs glab. doctor.sh may run
+# "glab auth status", a check of the tool itself. A comment, a message, or a
+# check that glab is installed (require, has, a doctor tool list) isn't a call.
+hits=$(cd "$ROOT" && for f in $(find payload/scripts -name '*.sh' ! -name forge-lib.sh | sort); do
+  grep -nE '(^|[;&|({`"'"'"'$[:space:]])glab[[:space:]]' "$f" \
+    | grep -vE '^[0-9]+:[[:space:]]*#' \
+    | grep -vE '^[0-9]+:.*(echo|printf|result) ' \
+    | grep -vE 'glab auth status|(require|has)( [a-z]+)* glab|for t in [a-z ]*glab' \
+    | sed "s|^|$f:|"
+done)
+if [ -z "$hits" ]; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: glab run outside forge-lib.sh"; echo "$hits" | sed 's/^/      /'; fi
+
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

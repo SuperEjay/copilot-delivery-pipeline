@@ -223,6 +223,11 @@ sh deny "bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate
 sh deny "bash -c 'source scripts/agent/config.sh; source scripts/agent/evidence-lib.sh; approval_write T-1 AC-1.md'"
 sh deny "bash -c 'source scripts/agent/config.sh; state_set_review T-1 0 x'"
 sh deny '. ./scripts/agent/config.sh && set_state T-1 REVIEW_ROUND 0'
+# The forge module (#103) holds the GitLab writes: sourcing it would reach GitLab
+# around create-mr.sh, reply-thread.sh and post-review-thread.sh.
+sh deny "bash -c 'source scripts/agent/forge-lib.sh; forge_resolve 7 disc1'"
+sh deny '. scripts/agent/forge-lib.sh && forge_post_thread 7 /tmp/t.json'
+sh allow 'scripts/agent/reply-thread.sh T-1 disc1 .work/T-1/reply.md'
 sh deny 'bash -c ". \"$PWD/scripts/agent/config.sh\"; state_set_mr_iid T-1 1"'
 sh deny 'cd src; source ../scripts/agent/task-state.sh'
 sh deny 'source Scripts/Agent/config.sh'   # case-insensitive file systems

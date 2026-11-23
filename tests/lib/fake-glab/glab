@@ -6,28 +6,91 @@
 #   mr-<iid>.json          an MR as GitLab's API returns it (missing: 404)
 #   commits-<iid>.json     its commits (missing: none)
 #   discussions-<iid>.json its discussions (missing: none)
+#   next-iid               the iid "mr create" gives the next MR (missing: 1)
+# Writes change that state and add one line to writes.log:
+#   create !<iid>          mr create: a new open mr-<iid>.json, by "me"
+#   update !<iid>          PUT title and description into mr-<iid>.json
+#   thread !<iid> <id>     a new thread, its request body in thread-<n>.json, id disc<n>
+#   reply !<iid> <did>     a reply, its body in reply-<n>.txt
+#   resolve !<iid> <did>
 # Anything else is an unexpected call: it fails and says so, so a test notices a
 # script talking to GitLab in a way the fake (and forge-lib.sh) doesn't know.
 set -uo pipefail
 F="${FAKE_FORGE:?fake glab: set FAKE_FORGE to the fake forge folder}"
-unexpected() { echo "fake glab: unexpected call: glab $*" >&2; exit 64; }
+ARGS="$*"
+unexpected() { echo "fake glab: unexpected call: glab $ARGS" >&2; exit 64; }
+P="projects/:id/merge_requests"
+# number <value>: refuses anything but a number (an iid).
+number() { case "$1" in ''|*[!0-9]*) unexpected ;; esac; }
+# nth <prefix> <suffix>: the next free n for $F/<prefix><n><suffix>.
+nth() { local n=1; while [ -e "$F/$1$n$2" ]; do n=$((n + 1)); done; echo "$n"; }
+# fields "$@": the -f key=value pairs as a JSON object.
+fields() {
+  local o='{}'
+  while [ $# -gt 0 ]; do
+    if [ "$1" = -f ] && [ $# -ge 2 ]; then o="$(jq --arg k "${2%%=*}" --arg v "${2#*=}" '.[$k] = $v' <<<"$o")"; shift; fi
+    shift
+  done
+  printf '%s\n' "$o"
+}
 
-case "$*" in
+case "$ARGS" in
   "auth status")
     [ -e "$F/logged-out" ] && { echo "You are not logged into any GitLab hosts." >&2; exit 1; }
     echo "Logged in to gitlab.test as $(cat "$F/me" 2>/dev/null)" ;;
   "api user")
     [ -f "$F/me" ] || { echo "glab: 401 Unauthorized" >&2; exit 1; }
     jq -n --arg u "$(cat "$F/me")" '{username: $u}' ;;
-  "api --paginate projects/:id/merge_requests/"*)
-    p="${3#projects/:id/merge_requests/}"; iid="${p%%/*}"; what="${p#*/}"
-    case "$what" in "commits?per_page=100") what=commits ;; "discussions?per_page=100") what=discussions ;; *) unexpected "$@" ;; esac
-    case "$iid" in ''|*[!0-9]*) unexpected "$@" ;; esac
+  "api --paginate $P/"*)
+    p="${3#"$P"/}"; iid="${p%%/*}"; what="${p#*/}"; number "$iid"
+    case "$what" in "commits?per_page=100") what=commits ;; "discussions?per_page=100") what=discussions ;; *) unexpected ;; esac
     cat "$F/$what-$iid.json" 2>/dev/null || echo '[]' ;;
-  "api projects/:id/merge_requests/"*)
-    iid="${2#projects/:id/merge_requests/}"
-    case "$iid" in ''|*[!0-9]*) unexpected "$@" ;; esac
-    [ $# -eq 2 ] || unexpected "$@"
+  "api $P?source_branch="*"&state=opened")
+    want="${2#"$P"?source_branch=}"; want="${want%&state=opened}"
+    for f in "$F"/mr-*.json; do [ -f "$f" ] || continue; cat "$f"; done \
+      | jq -s --arg b "$want" '[ .[] | select((.source_branch | @uri) == $b and .state == "opened") | {iid, web_url} ]' ;;
+  "api $P/"*)
+    iid="${2#"$P"/}"; number "$iid"; [ $# -eq 2 ] || unexpected
     cat "$F/mr-$iid.json" 2>/dev/null || { echo "glab: 404 Not Found" >&2; exit 1; } ;;
-  *) unexpected "$@" ;;
+  "mr create "*)
+    shift 2; src=""; tgt=""; title=""; desc=""; draft=false; remove=false; yes=no
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --source-branch) src="$2"; shift ;; --target-branch) tgt="$2"; shift ;;
+        --title) title="$2"; shift ;; --description) desc="$2"; shift ;;
+        --draft) draft=true ;; --remove-source-branch) remove=true ;; --yes) yes=yes ;;
+        *) unexpected ;;
+      esac
+      shift
+    done
+    [ -n "$src" ] && [ -n "$tgt" ] && [ -n "$title" ] && [ "$yes" = yes ] || unexpected
+    iid="$(cat "$F/next-iid" 2>/dev/null || echo 1)"; echo $((iid + 1)) > "$F/next-iid"
+    jq -n --argjson i "$iid" --arg me "$(cat "$F/me" 2>/dev/null)" --arg s "$src" --arg t "$tgt" --arg ti "$title" --arg d "$desc" \
+          --argjson dr "$draft" --argjson rm "$remove" \
+      '{iid: $i, project_id: 1, source_project_id: 1, state: "opened", author: {username: $me},
+        source_branch: $s, target_branch: $t, title: $ti, description: $d, draft: $dr,
+        force_remove_source_branch: $rm, web_url: "https://gitlab.test/mr/\($i)"}' > "$F/mr-$iid.json"
+    echo "create !$iid" >> "$F/writes.log"
+    echo "https://gitlab.test/mr/$iid" ;;
+  "api -X PUT $P/"*"/discussions/"*" -f resolved=true")
+    p="${4#"$P"/}"; iid="${p%%/*}"; did="${p##*/}"; number "$iid"; [ $# -eq 6 ] || unexpected
+    echo "resolve !$iid $did" >> "$F/writes.log" ;;
+  "api -X PUT $P/"*)
+    iid="${4#"$P"/}"; number "$iid"; [ -f "$F/mr-$iid.json" ] || { echo "glab: 404 Not Found" >&2; exit 1; }
+    set -- "${@:5}"; new="$(fields "$@")"
+    [ "$(jq -c 'keys' <<<"$new")" = '["description","title"]' ] || unexpected
+    jq --argjson n "$new" '. + $n' "$F/mr-$iid.json" > "$F/mr.tmp" && mv "$F/mr.tmp" "$F/mr-$iid.json"
+    echo "update !$iid" >> "$F/writes.log"
+    echo "{}" ;;
+  "api -X POST $P/"*"/discussions/"*"/notes -f body="*)
+    p="${4#"$P"/}"; iid="${p%%/*}"; did="${p#*/discussions/}"; did="${did%/notes}"; number "$iid"; [ $# -eq 6 ] || unexpected
+    n="$(nth reply- .txt)"; printf '%s' "${6#body=}" > "$F/reply-$n.txt"
+    echo "reply !$iid $did" >> "$F/writes.log"
+    echo "{\"id\":$n}" ;;
+  "api -X POST $P/"*"/discussions -H Content-Type: application/json --input "*)
+    p="${4#"$P"/}"; iid="${p%/discussions}"; number "$iid"; [ $# -eq 8 ] || unexpected
+    n="$(nth thread- .json)"; cp "$8" "$F/thread-$n.json"
+    echo "thread !$iid disc$n" >> "$F/writes.log"
+    echo "{\"id\":\"disc$n\"}" ;;
+  *) unexpected ;;
 esac

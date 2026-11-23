@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests the push gates in a scratch repo with a local bare remote and a stub
-# glab: the ship gate's rules (called directly), that push-branch, create-mr and
+# Tests the push gates in a scratch repo with a local bare remote and the shared
+# fake glab: the ship gate's rules (called directly), that push-branch, create-mr and
 # upload-evidence go through it, re-fetching the same Duo review isn't a new round,
 # and the scripts treat state.env as data.
 # Usage: tests/test-gates.sh     (exit 0 = all passed)
@@ -11,24 +11,14 @@ pass=0; fail=0
 check() { if eval "$2"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $1"; cat "$T/out.txt" 2>/dev/null | sed 's/^/      /'; fi; }
 S=scripts/agent
 
-# ---------- stub glab ----------
-export STUB="$T/stub"; mkdir -p "$STUB"
-cat > "$STUB/glab" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  "api user") [ -f "$STUB/no-user" ] && { echo "401 Unauthorized" >&2; exit 1; }; echo '{"username":"me"}' ;;
-  "api --paginate"*discussions*) cat "$STUB/discussions.json" ;;
-  "api projects/:id/merge_requests?"*) if [ -f "$STUB/mr" ]; then echo '[{"iid":7,"web_url":"https://gitlab.test/mr/7"}]'; else echo '[]'; fi ;;
-  "mr create"*) touch "$STUB/mr" ;;
-  "api -X PUT"*) : ;;
-  *) echo "stub glab: unexpected $*" >&2; exit 1 ;;
-esac
-EOF
-chmod +x "$STUB/glab"; export PATH="$STUB:$PATH"
+# ---------- the shared fake glab (tests/lib/fake-glab): the forge's state in $STUB ----------
+# The MR create-mr.sh opens is !7; its threads are discussions-7.json.
+export STUB="$T/stub"; mkdir -p "$STUB"; echo me > "$STUB/me"; echo 7 > "$STUB/next-iid"
+export FAKE_FORGE="$STUB" PATH="$ROOT/tests/lib/fake-glab:$PATH"
 # discs <id>:<author>[,<author>...]: one thread per argument, its notes by those
 # authors in order (each note with its own id). "me" is the glab user.
-discs() { jq -n --args '[$ARGS.positional[] | split(":") as [$id, $who] | {id: $id, notes: [$who | split(",") | to_entries[] | {id: "\($id)-n\(.key)", resolvable: true, resolved: false, author: {username: .value}, body: "note by \(.value)", position: {new_path: "a.txt", new_line: 1, head_sha: "sha-\($id)"}}]}]' "$@" > "$STUB/discussions.json"; }
-threads() { jq -n --args '[$ARGS.positional[] | {id: ., notes: [{resolvable: true, resolved: false, author: {username: "duo"}, body: "fix it", position: {new_path: "a.txt", new_line: 1, head_sha: "sha-\(.)"}}]}]' "$@" > "$STUB/discussions.json"; }
+discs() { jq -n --args '[$ARGS.positional[] | split(":") as [$id, $who] | {id: $id, notes: [$who | split(",") | to_entries[] | {id: "\($id)-n\(.key)", resolvable: true, resolved: false, author: {username: .value}, body: "note by \(.value)", position: {new_path: "a.txt", new_line: 1, head_sha: "sha-\($id)"}}]}]' "$@" > "$STUB/discussions-7.json"; }
+threads() { jq -n --args '[$ARGS.positional[] | {id: ., notes: [{resolvable: true, resolved: false, author: {username: "duo"}, body: "fix it", position: {new_path: "a.txt", new_line: 1, head_sha: "sha-\(.)"}}]}]' "$@" > "$STUB/discussions-7.json"; }
 
 # ---------- scratch repo ----------
 git init -q --bare -b main "$T/remote.git"
@@ -109,18 +99,18 @@ check "push-branch pushes the verified commit" '[ $? -eq 0 ] && [ "$(git ls-remo
 printf '# feat: gate [T1]\n\nbody\n' > $W/mr.md
 rm -f $W/evidence/APPROVED
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
-check "create-mr refuses a new MR without evidence approval" '[ $? -ne 0 ] && [ ! -f "$STUB/mr" ]'
+check "create-mr refuses a new MR without evidence approval" '[ $? -ne 0 ] && [ ! -f "$STUB/mr-7.json" ] && [ ! -s "$STUB/writes.log" ]'
 approve
 $S/upload-evidence.sh T1 --check > "$T/out.txt" 2>&1
 check "upload-evidence --check accepts the approval" '[ $? -eq 0 ] && grep -q "valid: 1 file" "$T/out.txt"'
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
-check "MR created at the verified, approved commit" '[ $? -eq 0 ] && [ -f "$STUB/mr" ] && grep -q "^MR_IID=7$" $W/state.env'
+check "MR created at the verified, approved commit" '[ $? -eq 0 ] && [ "$(cat "$STUB/writes.log")" = "create !7" ] && [ "$(jq -r .source_branch "$STUB/mr-7.json")" = feature/T1-gate ] && grep -q "^MR_IID=7$" $W/state.env'
 echo six >> a.txt; git commit -qam "duo fix"
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
 check "MR update refused before re-verification" '[ $? -ne 0 ]'
 $S/run-checks.sh T1 all > /dev/null 2>&1
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
-check "MR update allowed once re-verified (no new evidence needed)" '[ $? -eq 0 ] && grep -q "^Updated" "$T/out.txt"'
+check "MR update allowed once re-verified (no new evidence needed)" '[ $? -eq 0 ] && grep -q "^Updated" "$T/out.txt" && [ "$(tail -n1 "$STUB/writes.log")" = "update !7" ]'
 
 # ---------- Duo review rounds ----------
 threads d1 d2
@@ -156,10 +146,10 @@ check "... and with --force it is round 4" '[ $? -eq 0 ] && grep -q "^Round 4: 1
 discs d4:duo,me,duo d6:duo,me
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
 check "an unanswered thread with no new note, plus an answered one: same round, nothing new" '[ $? -eq 0 ] && grep -q "^Round 4: 1 .*not a new round" "$T/out.txt" && grep -q "^Nothing new since round 4" "$T/out.txt" && grep -q "^1 thread(s) already answered" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
-touch "$STUB/no-user"
+mv "$STUB/me" "$STUB/me.off"
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1; rc=$?
 check "the glab user can't be looked up: the fetch fails (not a round-limit exit), the round is untouched" '[ $rc -ne 0 ] && [ $rc -ne 3 ] && grep -qi "glab user" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
-rm -f "$STUB/no-user"
+mv "$STUB/me.off" "$STUB/me"
 # ---------- an MR review's threads: every author, no round (ADR 0003) ----------
 # Discussions from Duo, a person, a resolved one, a system note and a plain
 # (unresolvable) comment.
@@ -170,7 +160,7 @@ jq -n '[
   {id: "t3", notes: [{resolvable: true, resolved: true, author: {username: "bob"}, body: "done"}]},
   {id: "t4", notes: [{system: true, resolvable: false, author: {username: "ann"}, body: "added 1 commit"}]},
   {id: "t5", notes: [{resolvable: false, author: {username: "bob"}, body: "looks fine overall"}]}
-]' > "$STUB/discussions.json"
+]' > "$STUB/discussions-7.json"
 bash -c 'source scripts/agent/config.sh; state_init_review mr-7 7'
 cp $W/state.env "$T/delivery-state"
 $S/fetch-duo-review.sh mr-7 > "$T/out.txt" 2>&1
