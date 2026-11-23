@@ -16,6 +16,7 @@
   - `/fetch-review` prints `Nothing new since round <n>` whenever no round starts, also when ASK threads are still waiting. The review-responder stops there if it has already triaged that round.
   - The planner's "the branch was adopted" note is now in every planner prompt for an adopted task, not only the first plan.
 
+- The router asks the ship gate for the verified commit (`gate_verified`) instead of reading `.work/<id>/verified-head` itself, so only `ship-gate.sh` knows where that commit is kept. `tests/test-gates.sh` fails when another script reads the file. Behaviour is unchanged.
 - Follow-ups to the forge module (below):
   - `/start-task <id> --mr <iid>` asks GitLab twice (who you are, and the MR with its title and description) instead of four times, using the new `forge_mr <iid> --with-text`.
   - `tests/test-portability.sh` now also catches a `glab` call on the same line as a message, such as `x="$(glab api …)"; echo done` or `echo "$(glab api …)"`. Before, it skipped any line containing `echo`, `printf` or `result`.

@@ -106,6 +106,7 @@
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
+source "$(dirname "$0")/ship-gate.sh"
 source "$(dirname "$0")/findings-lib.sh"
 source "$(dirname "$0")/duo-round-lib.sh"
 
@@ -186,17 +187,20 @@ _last_value() {
 # empty.
 _status_value() { _last_value "$STATUS" "$1: "; }
 
-# _checksum <file|@HEAD|@unticked:file|@nothreads:file>...: one checksum over
-# these inputs (a missing file counts too). @unticked:<file> reads every "- [x]"
+# _checksum <file|@HEAD|@verified|@unticked:file|@nothreads:file>...: one
+# checksum over these inputs (a missing file counts too). @verified is the
+# verified commit, from the ship gate (gate_verified). @unticked:<file> reads every "- [x]"
 # as "- [ ]", so ticking a slice in plan.md or an item in evidence.md isn't a
 # change to what was approved. @nothreads:<file> leaves out the lines added
 # after approval (findings_without_added: Thread and Replied), so posting a
 # finding or replying on its thread isn't a change to the decisions approved.
 _checksum() {
-  local f
+  local f verified
   for f in "$@"; do
     echo "== $f"
     if [ "$f" = @HEAD ]; then _head
+    elif [ "$f" = @verified ]; then   # the verified commit, from the ship gate
+      verified="$(gate_verified "$TASK")"; if [ -n "$verified" ]; then printf '%s\n' "$verified"; else echo "(none)"; fi
     elif [ "${f#@nothreads:}" != "$f" ] && [ -f "$DIR/${f#@nothreads:}" ]; then
       findings_without_added "$DIR/${f#@nothreads:}"
     elif [ "${f#@unticked:}" != "$f" ] && [ -f "$DIR/${f#@unticked:}" ]; then
@@ -461,7 +465,7 @@ check_verified() {
     if [ "$vc" = "$head" ]; then
       case "$vr" in
         FAIL) _fix_run "verify:$head" "Fix the verification failures for $TASK (see verification.md)."; return 1 ;;
-        PASS) [ "$(cat "$DIR/verified-head" 2>/dev/null)" = "$head" ] && return 0 ;;
+        PASS) [ "$(gate_verified "$TASK")" = "$head" ] && return 0 ;;
         *) _unreadable verify "$REL/verification.md has no 'Result: PASS|FAIL' line."; return 1 ;;
       esac
     fi
@@ -531,7 +535,7 @@ apply_fix_round() {
 # means the stage ran and changed nothing: stop instead of looping. Approving
 # that stop lets the stage run once more.
 INPUTS=(@HEAD requirements.md plan.md verification.md code-review.md evidence/evidence.md
-        evidence/APPROVED mr.md auto-decisions.md review-triage.md state.env verified-head)
+        evidence/APPROVED mr.md auto-decisions.md review-triage.md state.env @verified)
 [ "$KIND" = MR_REVIEW ] && INPUTS=(@HEAD requirements.md focus.md verification.md code-review.md tech-debt.md state.env)
 check_stall() {
   [ "$VERB" = run ] || return 0
