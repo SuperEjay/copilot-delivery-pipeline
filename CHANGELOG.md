@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Pinned models are confirmed on a paid plan** (#67). On a paid Copilot plan, with a model other than Auto picked, each stage of a real auto run ran on its pinned model. The guide's "Pinned models in an auto run", ADR 0001 and ADR 0002 now say so. Docs only.
+
 ## v2.4.0
 
 **UI work without Playwright, start to finish.** In a project without Playwright, a UI acceptance criterion whose logic is unit- or integration-tested now passes with a recorded gap instead of failing, evidence falls back to text (plus any screenshots you save yourself), and the pre-ship stop says how many gaps there are. Before approving, you can have the new **gap-checker** agent walk those criteria in VS Code's built-in browser. The #113 spike settled why that's a separate agent you pick yourself: VS Code doesn't give subagents the browser tools, so nothing in the auto run can drive a browser (ADR 0005).

@@ -253,7 +253,7 @@ fail before the fix.
 |---|---|
 | ✅ **Done** | v2.1.0 to v2.4.0 released: MR review, adopting your own work, applied suggestions, UI work without Playwright, and gap checks. The browser-tools spike (#113) is settled: subagents don't get the tools, so the gap check is an agent you pick. |
 | 🔶 **In progress** | First real runs: a task in a project without Playwright, and gap-checker in VS Code. |
-| ➡️ **Next** | A run against real GitLab instead of stubs, then pinned models on paid plans (#67). |
+| ➡️ **Next** | A run against real GitLab instead of stubs. Pinned models are confirmed on a paid plan (#67). |
 
 ---
 
