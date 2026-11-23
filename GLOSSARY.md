@@ -56,6 +56,14 @@ _Avoid_: imported task, takeover
 The pipeline's second route: a read-only review of an existing merge request, usually a teammate's, against its spec, started with `/review-mr <iid> [clickup-id]`. It finds bugs, technical debt and improvements, and posts only the findings the user picks. It never changes the MR's code.
 _Avoid_: verifier, MR verification, PR review
 
+**Duo round**:
+One fetch's set of Duo threads that are new or have a new note since the last round, counted against `MAX_REVIEW_ROUNDS`. Fetching the same threads again is the same round. Threads you answered last are left out until someone writes after you. Only `duo-round-lib.sh` knows its formats: `review.json`, the seen set in task state, and `review-triage.md`.
+_Avoid_: review cycle, iteration
+
+**Triage**:
+The review-responder's verdict on each thread of a Duo round, FIX, PUSH BACK or ASK, written to `review-triage.md` from the template in its instructions. The router reads the round, whether replies were posted, and the ASK threads from it.
+_Avoid_: classification, sorting
+
 **Forge**:
 The code host the pipeline asks about merge requests and their threads: GitLab, through `glab`. Only `forge-lib.sh` talks to it; scripts get plain facts from it (an MR's state, author, branches; whether it can be reviewed or adopted) and word their own refusals. ADR 0002 names this seam and builds no second forge.
 _Avoid_: GitLab client, glab wrapper

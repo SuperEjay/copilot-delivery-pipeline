@@ -107,6 +107,7 @@ set -uo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"
 source "$(dirname "$0")/findings-lib.sh"
+source "$(dirname "$0")/duo-round-lib.sh"
 
 # A plan with more S slices than this stops for the user (ADR 0001).
 MAX_PLAN_SLICES=6
@@ -411,19 +412,17 @@ _review_files() {
 # is triaged, re-verified, and pushed and replied to, with one stop before the
 # push when there are ASK threads or commits to push.
 check_duo() {
-  local round triage_round head pushed asks fp why=""
+  local round triage triage_round replied asks head pushed fp why=""
   round="$(state_review_round "$TASK")"
   if [ "$round" = 0 ]; then _end "MR open. Run /fetch-review $TASK after Duo has reviewed it."; return; fi
-  if [ -f "$DIR/review-triage.md" ]; then
-    triage_round="$(_field review-triage.md Round)"
-    case "$triage_round" in
-      ''|*[!0-9]*) _unreadable duo "$REL/review-triage.md has no 'Round: <n>' line. The review-responder must write the round it triaged."; return ;;
-    esac
+  if ! triage="$(round_triage "$DIR/review-triage.md" 2>&1)"; then
+    _unreadable duo "$REL/$triage. The review-responder must write it from the review-triage.md template in its instructions."; return
   fi
-  if [ "${triage_round:-0}" -lt "$round" ]; then
+  read -r triage_round replied asks <<< "$triage"
+  if [ "$triage_round" -lt "$round" ]; then
     RESET_ROUNDS=1; _run review-responder "Triage $TASK."; return
   fi
-  if [ "$(_field review-triage.md Replied)" = yes ]; then
+  if [ "$replied" = yes ]; then
     _end "Duo round $round is answered. Run /fetch-review $TASK after the next review."; return
   fi
 
@@ -431,7 +430,6 @@ check_duo() {
 
   head="$(git rev-parse HEAD)"
   pushed="$(git rev-parse --verify -q "refs/remotes/origin/$(state_branch "$TASK")" || true)"
-  asks="$(awk -F'|' '{ for (i = 2; i < NF; i++) { c = $i; gsub(/^[ \t]+|[ \t]+$/, "", c); if (c == "ASK") { n++; break } } } END { print n + 0 }' "$DIR/review-triage.md")"
   if [ "$asks" -gt 0 ] || [ "$pushed" != "$head" ]; then
     fp="$(_checksum @HEAD review-triage.md)"
     if ! _approved duo "$fp"; then

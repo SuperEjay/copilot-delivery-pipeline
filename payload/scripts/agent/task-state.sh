@@ -19,8 +19,9 @@
 #   state_target_branch <task>  the branch an MR review's MR targets  default empty
 #   state_adopted <task>        mr or branch for an adopted task (ADR 0004)  default empty
 #   state_review_round <task>   Duo review rounds counted so far  default 0
-#   state_review_ids <task>     the round's open threads: one checksum per thread and
-#                               its last note, comma-separated (fetch-duo-review.sh)  default empty
+#   state_review_seen <task>    the Duo round's seen set: "<thread>:<last note>,..."
+#                               (duo-round-lib.sh). A file from before #106 has
+#                               REVIEW_IDS (checksums) instead, read here too  default empty
 #   state_reviewed_sha <task>   commit the reviewer last reviewed default empty
 #
 #   state_init <task> <branch>             create the file (no-op if it exists)
@@ -29,7 +30,8 @@
 #   state_set_target_branch <task> <branch>
 #   state_set_adopted <task> mr|branch
 #   state_set_mr_iid <task> <iid>
-#   state_set_review <task> <round> <ids>  both review keys, always together
+#   state_set_review <task> <round> <seen>  the round and its seen set, always
+#                                           together; drops a REVIEW_IDS
 #   state_set_reviewed_sha <task> <sha>
 #
 # A reader prints the value on stdout. A missing file, or a missing or empty
@@ -82,7 +84,7 @@ state_mr_iid() {
   _state_required "$1" MR_IID "No MR for $1 yet (no MR_IID in $(_state_name "$1")). Run scripts/agent/create-mr.sh $1 first."
 }
 state_review_round() { _state_optional "$1" REVIEW_ROUND 0; }
-state_review_ids()   { _state_optional "$1" REVIEW_IDS ""; }
+state_review_seen()  { local v; v="$(_state_optional "$1" REVIEW_SEEN "")" || return 1; [ -n "$v" ] || v="$(_state_optional "$1" REVIEW_IDS "")" || return 1; printf '%s\n' "$v"; }
 state_reviewed_sha() { _state_optional "$1" REVIEWED_SHA ""; }
 state_clickup_id()   { _state_optional "$1" CLICKUP_ID ""; }
 state_target_branch() { _state_optional "$1" TARGET_BRANCH ""; }
@@ -100,6 +102,14 @@ _state_put() {
   local file tmp
   file="$(_state_file "$1")"; tmp="$file.tmp"
   { grep -v "^$2=" "$file" || true; printf '%s=%s\n' "$2" "$3"; } > "$tmp"
+  mv "$tmp" "$file"
+}
+
+# _state_drop <task> <KEY>: remove KEY's lines.
+_state_drop() {
+  local file tmp
+  file="$(_state_file "$1")"; tmp="$file.tmp"
+  { grep -v "^$2=" "$file" || true; } > "$tmp"
   mv "$tmp" "$file"
 }
 
@@ -135,8 +145,8 @@ state_set_mr_iid() {
   _state_put "$1" MR_IID "$2"
 }
 state_set_review() {
-  _state_require_file "$1" && _state_check "$1" REVIEW_ROUND "$2" && _state_check "$1" REVIEW_IDS "$3" || return 1
-  _state_put "$1" REVIEW_ROUND "$2" && _state_put "$1" REVIEW_IDS "$3"
+  _state_require_file "$1" && _state_check "$1" REVIEW_ROUND "$2" && _state_check "$1" REVIEW_SEEN "$3" || return 1
+  _state_put "$1" REVIEW_ROUND "$2" && _state_put "$1" REVIEW_SEEN "$3" && _state_drop "$1" REVIEW_IDS
 }
 state_set_reviewed_sha() {
   _state_require_file "$1" && _state_check "$1" REVIEWED_SHA "$2" || return 1

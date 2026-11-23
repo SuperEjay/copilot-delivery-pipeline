@@ -15,14 +15,14 @@ Two phases. Fixes are pushed only after the verifier has passed them.
    - **FIX**: correct, in scope, and cheap.
    - **PUSH BACK**: wrong, out of scope, or it contradicts requirements.md or plan.md. Give a one-sentence reason.
    - **ASK**: a judgement call for the user (design, product, scope).
-3. Write `.work/<task-id>/review-triage.md`: first a `Round: <n>` line with the round the fetch script printed, then a table (thread id, file:line, verdict, reason) and show it to the user. **Wait for their OK.**
+3. Write `.work/<task-id>/review-triage.md` from the **review-triage.md template** below: the `Round: <n>` line with the round the fetch script printed, then one table row per thread. Show it to the user. **Wait for their OK.**
 4. Make the FIX changes. When a FIX thread's body has a ```` ```suggestion ```` block, run `scripts/agent/apply-suggestion.sh <task-id> <thread-id>` for it instead of writing the fix yourself: it puts the suggested lines in place and commits nothing. Never use GitLab's **Apply suggestion** button: it commits on the remote and skips the tests. A suggestion doesn't make a thread FIX; triage it like any other.
    - Applied as it is: start that thread's reason cell with `Suggestion applied.`
    - Applied, then changed by you: start it with `Suggestion applied, then adjusted: <why>.`
    - Refused (exit 3: stale lines, several blocks, a removed line): fix it by hand, using the suggestion as a hint.
 
    Add a test when a fix changes behaviour. Run `scripts/agent/run-checks.sh <task-id> fast`.
-5. Commit with `fix(review): <summary> [<task-id>]`, and note each commit's short sha in the triage table. **Don't push**: the verifier runs first.
+5. Commit with `fix(review): <summary> [<task-id>]`, and note each commit's short sha in the triage table's Commit column. **Don't push**: the verifier runs first.
 6. If there were FIX items, stop here and hand over to the verifier. If there were none, go straight to "Push and reply" (nothing gets pushed).
 
 ## Push and reply ("Push and reply <task-id>", after the verifier passed)
@@ -34,6 +34,18 @@ Two phases. Fixes are pushed only after the verifier has passed them.
    - ASK: don't reply. Leave it for the user.
 3. Add a `Replied: yes` line under the `Round:` line in review-triage.md.
 4. Reply with the counts (fixed / pushed back / waiting on you) and the ASK items.
+
+## review-triage.md template
+~~~markdown
+# Duo review triage: <task-id>
+Round: <n>
+
+| Thread | File:line | Verdict | Reason | Commit |
+|---|---|---|---|---|
+| <thread id> | <file:line, or (general)> | <FIX, PUSH BACK or ASK> | <one sentence> | <short sha, once committed> |
+~~~
+- The Verdict cell is exactly `FIX`, `PUSH BACK` or `ASK`, without bold or anything else: `scripts/agent/next-stage.sh` reads it, and stops on anything else.
+- Keep the `Round:` line and the column headers as they are. "Push and reply" adds `Replied: yes` under the `Round:` line.
 
 ## Minimal code (ponytail)
 If the ponytail skill is installed, apply it to every piece of code you write: reuse what's already in the codebase, the standard library or the platform before writing anything new. Never let it drop validation, error handling, security checks or accessibility, and never let it shrink an AC's required behaviour.

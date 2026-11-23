@@ -19,6 +19,7 @@ set -euo pipefail
 source "$(dirname "$0")/config.sh"
 require glab jq
 source "$(dirname "$0")/forge-lib.sh"
+source "$(dirname "$0")/duo-round-lib.sh"
 
 TASK="${1:?usage: fetch-duo-review.sh <task-id> [--force]}"
 FORCE="${2:-}"
@@ -49,52 +50,26 @@ if state_is_review "$TASK"; then
   exit 0
 fi
 LAST_ROUND="$(state_review_round "$TASK")"
-LAST_IDS="$(state_review_ids "$TASK")"
+LAST_SEEN="$(state_review_seen "$TASK")"
 ME="$(forge_me)" || { echo "Can't look up your glab user (glab api user), so threads you already answered can't be skipped. Check glab auth status." >&2; exit 1; }
 
 OUT="$DIR/review.json"
-TMP="$OUT.tmp"; ALL="$OUT.all.tmp"; trap 'rm -f "$TMP" "$ALL"' EXIT
+TMP="$OUT.tmp"; trap 'rm -f "$TMP"' EXIT
 ALL_JSON="$(forge_discussions "$MR_IID")" || { echo "Can't read MR !$MR_IID's threads (see above)." >&2; exit 1; }
-jq --arg users "$DUO_USERNAMES" --arg me "$ME" '
-    . as $all
-    | ($users | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) as $u
-    | [ $all[]
-        | select(.notes[0].resolvable == true and (.notes[0].resolved | not))
-        | select(($u | length) == 0 or (.notes[0].author.username as $a | $u | index($a)))
-        | {
-            id,
-            author: .notes[0].author.username,
-            file: (.notes[0].position.new_path // .notes[0].position.old_path),
-            line: (.notes[0].position.new_line // .notes[0].position.old_line),
-            new_line: .notes[0].position.new_line,
-            head_sha: .notes[0].position.head_sha,
-            body: .notes[0].body,
-            replies: [ .notes[1:][] | {author: .author.username, body: (.body | .[0:400])} ],
-            _answered: (.notes[-1].author.username == $me),
-            _seen: "\(.id):\(.notes[-1].id)"
-          }
-      ]' <<<"$ALL_JSON" > "$ALL"
-jq '[ .[] | select(._answered | not) | del(._answered, ._seen) ]' "$ALL" > "$TMP"
-skipped="$(jq '[ .[] | select(._answered) ] | length' "$ALL")"
+ROUND_JSON="$(round_threads "$ALL_JSON" "$ME" "$DUO_USERNAMES")"
+jq '.review' <<<"$ROUND_JSON" > "$TMP"
+skipped="$(jq '.skipped' <<<"$ROUND_JSON")"
 
-# IDS: one checksum per open thread and its last note, so a new reply counts.
-IDS="$(jq -r '.[] | select(._answered | not) | ._seen' "$ALL" | while IFS= read -r t; do printf '%s' "$t" | cksum | cut -d' ' -f1; done | sort | paste -sd, -)"
-new=0
-for id in ${IDS//,/ }; do
-  case ",$LAST_IDS," in *",$id,"*) ;; *) new=1; break ;; esac
-done
-
-if [ "$new" = 0 ]; then
-  ROUND="$LAST_ROUND"; note=" (same threads as the last fetch, not a new round)"
-else
-  ROUND=$(( LAST_ROUND + 1 )); note=""
-  if [ "$ROUND" -gt "$MAX_REVIEW_ROUNDS" ] && [ "$FORCE" != "--force" ]; then
+read -r verdict ROUND seen <<<"$(round_decide "$LAST_ROUND" "$LAST_SEEN" "$(jq -r '.seen' <<<"$ROUND_JSON")" "$MAX_REVIEW_ROUNDS" $FORCE)"
+case "$verdict" in
+  same) new=0; note=" (same threads as the last fetch, not a new round)" ;;
+  new)  new=1; note=""; state_set_review "$TASK" "$ROUND" "$seen" ;;
+  over)
     echo "Review round $ROUND would exceed MAX_REVIEW_ROUNDS=$MAX_REVIEW_ROUNDS." >&2
     echo "Look at the remaining threads yourself, or re-run with --force." >&2
-    exit 3
-  fi
-  state_set_review "$TASK" "$ROUND" "$IDS"
-fi
+    exit 3 ;;
+  *) exit 1 ;;
+esac
 mv "$TMP" "$OUT"
 
 count="$(jq 'length' "$OUT")"
