@@ -54,13 +54,21 @@ gate() { bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate
 approve() { bash -c 'source scripts/agent/config.sh; source scripts/agent/evidence-lib.sh; approval_write T1 AC-1.md' > /dev/null; }
 mkdir -p $W/evidence; printf -- '- [x] AC-1 · `AC-1.md` · works\n' > $W/evidence/evidence.md; echo ok > $W/evidence/AC-1.md
 
+# verified <task>: the verified commit, as the ship gate tells the router (gate_verified).
+verified() { v="$(bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate.sh; gate_verified "$1"' _ "$1" 2> "$T/out.txt")"; vrc=$?; }
 echo two >> a.txt; git commit -qam "slice 1"
+verified T1
+check "gate_verified: no verified commit yet, nothing, status 0" '[ $vrc -eq 0 ] && [ -z "$v" ]'
 gate T1 push
 check "gate: push refused without a verified commit" '[ $? -ne 0 ] && grep -q "No verified commit" "$T/out.txt"'
 $S/run-checks.sh T1 all > /dev/null 2>&1
+verified T1
+check "gate_verified: the commit the full run verified" '[ $vrc -eq 0 ] && [ "$v" = "$(git rev-parse HEAD)" ]'
 gate T1 push
 check "gate: verified commit may be pushed" '[ $? -eq 0 ]'
 echo three >> a.txt; git commit -qam "unverified"
+verified T1
+check "gate_verified: still the verified commit, not HEAD, after a new commit" '[ "$v" = "$(git rev-parse HEAD~1)" ]'
 gate T1 push
 check "gate: push refused with commits after verification" '[ $? -ne 0 ] && grep -q "1 commit(s) since" "$T/out.txt"'
 $S/run-checks.sh T1 all > /dev/null 2>&1
@@ -191,6 +199,11 @@ $S/push-branch.sh T2 > "$T/out.txt" 2>&1
 check "a branch name with \$(...) isn't run by the scripts" '[ ! -e pwned ] && grep -q "No verified commit for T2" "$T/out.txt"'
 $S/fetch-duo-review.sh T2 > "$T/out.txt" 2>&1
 check "no MR yet: the shared message" '[ $? -eq 1 ] && grep -qx "No MR for T2 yet (no MR_IID in .work/T2/state.env). Run scripts/agent/create-mr.sh T2 first." "$T/out.txt"'
+
+# ---------- only the ship gate knows where the verified commit is kept ----------
+# The guard (hooks/) names the file only to protect it from agents.
+hits="$(cd "$ROOT/payload/scripts/agent" && grep -n "verified-head" *.sh | grep -v "^ship-gate.sh:" | grep -vE "^[^:]+:[0-9]+:[[:space:]]*#")"
+check "no script but ship-gate.sh reads verified-head (the router asks gate_verified)" '[ -z "$hits" ] || { echo "$hits" > "$T/out.txt"; false; }'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

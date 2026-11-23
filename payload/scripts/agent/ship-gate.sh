@@ -8,6 +8,9 @@
 #   gate_record_run <task> <0|1>  a full run-checks.sh run finished with this
 #                                 exit status: record HEAD as the verified commit
 #                                 (passed on a clean tree) or clear it
+#   gate_verified <task>          the verified commit, or nothing when there is
+#                                 none. The router asks this; only this file
+#                                 knows where the commit is kept.
 #
 # gate_require exits the calling script with the reason on stderr when the
 # commit may not ship (1), or when the action is unknown (2).
@@ -24,7 +27,7 @@ gate_require() {
   current="$(git branch --show-current)"
   [ "$current" = "$branch" ] || { echo "On branch ${current:-(detached)}, expected $branch. Not pushing." >&2; exit 1; }
 
-  v="$(cat "$(_gate_marker "$task")" 2>/dev/null || true)"; head="$(git rev-parse HEAD)"
+  v="$(gate_verified "$task")"; head="$(git rev-parse HEAD)"
   if [ -z "$v" ]; then
     echo "No verified commit for $task. The verifier must run run-checks.sh $task all on the final code." >&2; exit 1
   fi
@@ -37,6 +40,8 @@ gate_require() {
     approval_verify "$task" > /dev/null || exit 1
   fi
 }
+
+gate_verified() { cat "$(_gate_marker "$1")" 2>/dev/null || true; }
 
 gate_record_run() {
   local marker; marker="$(_gate_marker "$1")"
