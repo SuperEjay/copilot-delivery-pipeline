@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **UI acceptance criteria and evidence work without Playwright** (#114, ADR 0005). With e2e skipped, the verifier grades a UI AC whose logic is covered by unit or integration tests `PASS (gap)` instead of FAIL, and lists it under Gaps; an AC no test covers at all still fails. The pre-ship stop says how many gaps `verification.md` lists. `capture-evidence.sh` exits 3 without Playwright, and the evidence agent writes Text evidence for screenshot ACs; PNGs you save in `evidence/` yourself are listed and approved like any other file. The #113 spike found VS Code's browser tools aren't available to subagents, so there are no live browser checks.
+
 ## v2.3.0
 
 **No Playwright, no blocker.** A project without Playwright now gets through the full delivery pipeline: e2e is skipped and recorded as a gap instead of failing the verifier and blocking the push (ADR 0005). Local installs also keep every agent skill out of git, not just the two the installer adds.

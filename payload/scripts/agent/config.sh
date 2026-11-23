@@ -15,10 +15,13 @@ fi
 : "${TYPECHECK_CMD=npx tsc --noEmit}"
 : "${UNIT_CMD=npm run test:unit --silent}"
 : "${INTEGRATION_CMD=npm run test:integration --silent}"
+# has_playwright: the project has Playwright (@playwright/test in package.json).
+has_playwright() { grep -qs '"@playwright/test"' "$REPO_ROOT/package.json"; }
+
 # e2e runs Playwright only when the project has it; otherwise it's skipped, and
 # the verifier records the gap (ADR 0005). Setting E2E_CMD, even to empty, wins.
 if [ -z "${E2E_CMD+set}" ]; then
-  if grep -qs '"@playwright/test"' "$REPO_ROOT/package.json"; then
+  if has_playwright; then
     E2E_CMD="npx playwright test --reporter=line"
   else
     E2E_CMD=""

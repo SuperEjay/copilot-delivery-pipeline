@@ -313,6 +313,11 @@ check "evidence at HEAD, no mr.md: the shipper writes it without pushing" '[ "$o
 printf 'Export invoices\n## What & why\nx\n' > $W/mr.md
 next T1
 check "mr.md written: the one pre-ship stop" '[[ "$out" == "stop pre-ship "*"evidence.md"*"mr.md"*"auto-decisions.md"*"approve-evidence.sh"* ]]'
+check "no gaps in verification.md: the stop doesn't mention gaps (#114)" '[[ "$out" != *"gap"* ]]'
+cp $W/verification.md "$T/verification.keep"
+printf '## Gaps\n- e2e skipped: no @playwright/test in package.json\n- AC-2: the export dialog isn'"'"'t tested end to end\n' >> $W/verification.md; next T1
+check "verification.md lists gaps: the pre-ship stop says how many, and where (#114)" '[[ "$out" == "stop pre-ship "*"verification.md lists 2 gap(s)"*"Gaps section"* ]]'
+cp "$T/verification.keep" $W/verification.md; next T1
 next T1 approve
 check "approve refuses until the evidence is approved" '[ $rc -eq 1 ] && grep -q "approve-evidence.sh" "$T/out.txt"'
 sed -i 's/^- \[x\] AC-1/- [ ] AC-1/' $W/evidence/evidence.md; next T1

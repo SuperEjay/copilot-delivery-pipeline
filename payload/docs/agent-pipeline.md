@@ -152,7 +152,9 @@ admin policy that blocks MCP servers doesn't affect any of this.
    sessions don't load prompt files. If they're missing, check that VS Code is
    open on the project's root folder.
 10. **Evidence screenshots (Playwright, optional):** without Playwright, e2e is
-   skipped, but the evidence stage still needs it for screenshots (#114).
+   skipped, UI ACs tested only below e2e pass with a gap, and screenshot ACs
+   become text evidence. You can still add your own screenshots: see
+   [Evidence approval](#evidence-approval-you-before-shipping).
    - If the repo doesn't have it yet: `npm i -D @playwright/test && npx playwright install chromium`.
    - Set `EVIDENCE_BASE_URL` and `EVIDENCE_START_CMD` in `.agent.env`.
    - If pages need a login, save a **test account's** session once:
@@ -565,6 +567,10 @@ you delete it.
 The evidence agent captures a screenshot for each UI acceptance criterion (or a
 short text file for non-UI ones), then writes
 `.work/<id>/evidence/evidence.md` with every item **unticked**.
+
+No Playwright in the project? Screenshot ACs are text instead, and the manifest
+says so. To add your own screenshot, save the PNG in `.work/<id>/evidence/` and add
+a line for it, like the others: `` - [ ] AC-2 · `AC-2-dialog.png` · what it shows ``.
 
 1. Open `evidence.md` and press `Ctrl/Cmd+Shift+V` for the Markdown preview,
    which shows the screenshots inline.

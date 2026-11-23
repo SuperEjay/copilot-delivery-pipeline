@@ -302,7 +302,10 @@ decide() {
   if ! _approved pre-ship "$fp"; then
     local why
     why="$(approval_verify "$TASK" 2>&1 > /dev/null)" || APPROVE_BLOCK="$why"
-    _stop pre-ship "$fp" "Before the push: review $REL/evidence/evidence.md, $REL/mr.md and $REL/auto-decisions.md. Tick the evidence you approve and run scripts/agent/approve-evidence.sh $TASK in your own terminal. Approving this stop confirms the push."
+    local gaps gap_note=""
+    gaps="$(sed -n '/^## Gaps/,/^## /p' "$DIR/verification.md" 2>/dev/null | grep -c '^- ')" || true
+    [ "${gaps:-0}" -gt 0 ] && gap_note=" $REL/verification.md lists $gaps gap(s), such as checks that were skipped or ACs not tested end to end: read its Gaps section first."
+    _stop pre-ship "$fp" "Before the push: review $REL/evidence/evidence.md, $REL/mr.md and $REL/auto-decisions.md.$gap_note Tick the evidence you approve and run scripts/agent/approve-evidence.sh $TASK in your own terminal. Approving this stop confirms the push."
     return
   fi
   _run shipper "Ship $TASK. The user confirmed the push at the pre-ship stop."

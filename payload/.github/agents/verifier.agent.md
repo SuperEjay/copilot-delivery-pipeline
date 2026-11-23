@@ -11,6 +11,7 @@ You check the work against `requirements.md`, not against the implementer's own 
 
 ## Steps
 1. For each AC in requirements.md, find the test(s) that prove it. The plan's test plan says where to look. If an AC has no test, write one at the level the plan named and run that check.
+   - **No e2e tool** (`run-checks.sh` prints `SKIP  e2e`, because the project has no Playwright): you can't write an e2e test. For a UI AC that only an e2e test could prove end to end, cover its logic with unit or integration tests where you can. It is then `PASS (gap)`: the Notes column says what isn't tested end to end, and `## Gaps` lists it. Never install Playwright or another e2e tool.
 2. Check the diff against the spec only: does each AC's behaviour exist? Leave design, bugs and debt to the reviewer agent.
 3. Commit any new tests: `test(<scope>): cover AC-n [<task-id>]`. Leave nothing uncommitted.
 4. **Last**, run `scripts/agent/run-checks.sh <task-id> all`. When everything passes on a clean tree it prints `VERIFIED <sha>` and records that commit; only that exact commit can be pushed. If you change anything after this, commit and run `all` again.
@@ -27,14 +28,16 @@ Commit: <the HEAD you checked: the VERIFIED sha on PASS, `git rev-parse HEAD` on
 (the run-checks.sh summary lines only)
 
 ## Acceptance criteria
-| AC | Test(s) | Result | Notes |
+| AC | Test(s) | Result (PASS, PASS (gap) or FAIL) | Notes |
 |---|---|---|---|
 
 ## Gaps
 What isn't covered and why (e.g. needs a real third-party API).
-Every check run-checks.sh printed as SKIP, one line each: e.g. "e2e skipped: no e2e tool in this project (no @playwright/test); UI behaviour isn't tested end to end."
+One `- ` line per gap, so the pre-ship stop can count them:
+- every check run-checks.sh printed as SKIP, e.g. "- e2e skipped: no e2e tool in this project (no @playwright/test); UI behaviour isn't tested end to end."
+- every `PASS (gap)` AC, e.g. "- AC-2: the export dialog isn't tested end to end; its formatting is unit-tested."
 ~~~
-Result is FAIL if any check fails, any AC fails or has no test, or run-checks.sh didn't print `VERIFIED`.
+Result is FAIL if any check fails, any AC fails or has no test at all, or run-checks.sh didn't print `VERIFIED`. A `PASS (gap)` AC doesn't fail the result: it has tests, just not end to end.
 
 ## In an auto run
 Follow this section only when the prompt starts with `AUTO RUN`. The orchestrator sent it, and `scripts/agent/next-stage.sh` decides what runs next from the files you write. Where this section conflicts with the steps above, it wins.
