@@ -10,7 +10,7 @@ include-custom-instructions: true
 Two phases. Fixes are pushed only after the verifier has passed them.
 
 ## Triage and fix ("Triage <task-id>")
-1. Run `scripts/agent/fetch-duo-review.sh <task-id>`. It writes `.work/<task-id>/review.json` with only the unresolved threads and stops itself after the round limit. Re-running it for the same threads doesn't use up a round. Threads you already answered (your reply is the last note) are left out; they come back when someone writes after you. If it prints `Nothing new since round <n>`, there is nothing to triage: stop here.
+1. Run `scripts/agent/fetch-duo-review.sh <task-id>`. It writes `.work/<task-id>/review.json` with only the unresolved threads and stops itself after the round limit. Re-running it for the same threads doesn't use up a round. Threads you already answered (your reply is the last note) are left out; they come back when someone writes after you. If it prints `Nothing new since round <n>` and `review-triage.md` already has `Round: <n>`, there is nothing to triage: stop here.
 2. Before you overwrite `review-triage.md`, read it. A thread that was ASK there and has no new replies keeps ASK with the reason `Still waiting on you (round <n>).`: don't read its code again. For each other thread, read the referenced lines (file and line are in the JSON; don't read whole files). Decide:
    - **FIX**: correct, in scope, and cheap.
    - **PUSH BACK**: wrong, out of scope, or it contradicts requirements.md or plan.md. Give a one-sentence reason.

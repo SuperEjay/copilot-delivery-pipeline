@@ -57,6 +57,9 @@ ${F}suggestion:-1+0
 L4
 L5
 ${F}"
+thread longf a.txt 3 "${F}suggestion
+L3
+${F}\`"
 thread none  a.txt 3 "Just a remark, no code."
 thread noline a.txt null "${F}suggestion
 L3
@@ -111,6 +114,11 @@ check "a line that moved and appears twice: refused" '[ $rc -eq 3 ] && [ "$(cat 
 reset
 apply brace
 check "the same block at its own place: applied" '[ $rc -eq 0 ] && [ "$(cat b.txt | tr "\n" ,)" = "},x,};," ]'
+reset
+
+# ---------- a longer closing fence still closes the block (CommonMark) ----------
+apply longf
+check "a closing fence longer than the opening one: applied" '[ $rc -eq 0 ] && [ "$(sed -n 3p a.txt)" = L3 ]'
 reset
 
 # ---------- refusals ----------

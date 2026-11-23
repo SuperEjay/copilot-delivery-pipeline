@@ -40,6 +40,9 @@ git -C "$REPO_ROOT" cat-file -e "$SHA:$FILE" 2>/dev/null || refuse "commit $SHA 
 # ---------- the block: N, M and the new lines ----------
 # Every block is anchored on the commented line, so two blocks in one comment
 # always overlap: they are alternatives, and choosing one is a hand fix.
+# _ticks <line>: how many backticks the line starts with. A closing fence may be
+# longer than the opening one (CommonMark), never shorter.
+_ticks() { local t="${1%%[!\`]*}"; echo "${#t}"; }
 blocks=0; fence=""; N=0; M=0; NEW_TEXT=""; nl=$'\n'
 while IFS= read -r l || [ -n "$l" ]; do
   l="${l%$'\r'}"
@@ -47,7 +50,7 @@ while IFS= read -r l || [ -n "$l" ]; do
     if [[ "$l" =~ ^(\`{3,})suggestion(:-([0-9]+)\+([0-9]+))?[[:space:]]*$ ]]; then
       fence="${BASH_REMATCH[1]}"; N="${BASH_REMATCH[3]:-0}"; M="${BASH_REMATCH[4]:-0}"; blocks=$(( blocks + 1 ))
     fi
-  elif [[ "$l" =~ ^\`{3,}[[:space:]]*$ ]] && [ "${l%%[[:space:]]*}" = "$fence" ]; then
+  elif [[ "$l" =~ ^\`{3,}[[:space:]]*$ ]] && [ "$(_ticks "$l")" -ge "${#fence}" ]; then
     fence=""
   else
     NEW_TEXT+="$l$nl"
@@ -58,10 +61,14 @@ done <<< "$BODY"
 [ "$blocks" -eq 1 ] || refuse "it offers $blocks suggestion blocks, which are alternatives"
 
 # ---------- the file then (as the reviewer saw it) and now ----------
-mapfile -t OLD < <(git -C "$REPO_ROOT" show "$SHA:$FILE")
+# Plain read loops, not mapfile, and no "${array[@]}" on a possibly empty array:
+# the scripts run on macOS's bash 3.2, where both fail.
+OLD=(); n=0
+while IFS= read -r l || [ -n "$l" ]; do OLD[n]="$l"; n=$(( n + 1 )); done < <(git -C "$REPO_ROOT" show "$SHA:$FILE")
 CUR_RAW="$(cat "$REPO_ROOT/$FILE"; printf x)"; CUR_RAW="${CUR_RAW%x}"
 ENDS_NL=0; [ "${CUR_RAW: -1}" = $'\n' ] && ENDS_NL=1
-mapfile -t CUR < <(printf '%s' "$CUR_RAW")
+CUR=(); n=0
+while IFS= read -r l || [ -n "$l" ]; do CUR[n]="$l"; n=$(( n + 1 )); done < <(printf '%s' "$CUR_RAW")
 
 # same <cur-start> <old-start> <count>: the current lines from cur-start match
 # the old lines from old-start (all 0-based).
@@ -84,19 +91,21 @@ else
   [ "$hits" -eq 1 ] || refuse "the lines it replaces are stale (changed since the review, or found $hits times)"
 fi
 
-REPL=()
-[ -z "$NEW_TEXT" ] || mapfile -t REPL < <(printf '%s' "$NEW_TEXT")
-NEW=("${CUR[@]:0:AT}" "${REPL[@]}" "${CUR[@]:AT + CNT}")
+REPL=(); n=0
+if [ -n "$NEW_TEXT" ]; then
+  while IFS= read -r l || [ -n "$l" ]; do REPL[n]="$l"; n=$(( n + 1 )); done < <(printf '%s' "$NEW_TEXT")
+fi
 
 # Written in place, so the file keeps its mode; a file without a final
-# newline keeps it that way.
+# newline keeps it that way. out <line>: one line, with the newline before it.
+written=0
+out() { [ "$written" -eq 0 ] || printf '\n'; printf '%s' "$1"; written=$(( written + 1 )); }
 {
-  for i in "${!NEW[@]}"; do
-    [ "$i" -eq 0 ] || printf '\n'
-    printf '%s' "${NEW[i]}"
-  done
-  [ "${#NEW[@]}" -eq 0 ] || [ "$ENDS_NL" = 0 ] || printf '\n'
+  for (( i = 0; i < AT; i++ )); do out "${CUR[i]}"; done
+  for (( i = 0; i < ${#REPL[@]}; i++ )); do out "${REPL[i]}"; done
+  for (( i = AT + CNT; i < ${#CUR[@]}; i++ )); do out "${CUR[i]}"; done
+  [ "$written" -eq 0 ] || [ "$ENDS_NL" = 0 ] || printf '\n'
 } > "$REPO_ROOT/$FILE"
 
-where="$FILE:$(( AT + 1 ))"; [ "$CNT" -gt 1 ] && where+="-$(( AT + CNT ))"
+where="$FILE:$(( AT + 1 ))"; [ "$CNT" -gt 1 ] && where="$where-$(( AT + CNT ))"
 echo "Applied the suggestion of thread $THREAD to $where (not committed)."

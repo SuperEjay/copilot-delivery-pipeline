@@ -136,7 +136,11 @@ _head() { git -C "$HEAD_DIR" rev-parse "$@" HEAD; }
 DIR="$(task_dir "$TASK")"
 STATUS="$DIR/status.md"
 REL="${DIR#"$REPO_ROOT"/}"
-PLAN_UPDATE="Requirements for $TASK changed; update plan.md."   # the planner's prompt when requirements change
+# An adopted task (ADR 0004): every planner prompt says so, the first plan and
+# each update, so the planner keeps crediting the branch's existing commits.
+ADOPTED_NOTE=""
+[ -n "$(state_adopted "$TASK" 2>/dev/null || true)" ] && ADOPTED_NOTE=" The branch was adopted: tick the slices its existing commits already cover."
+PLAN_UPDATE="Requirements for $TASK changed; update plan.md.$ADOPTED_NOTE"   # the planner's prompt when requirements change
 
 # ---------- before deciding: can this task use an auto run at all? ----------
 # A stage agent without its "## In an auto run" section (a file you changed,
@@ -262,14 +266,7 @@ decide() {
   fi
 
   STAGE=plan
-  if [ ! -f "$DIR/plan.md" ]; then
-    if [ -n "$(state_adopted "$TASK")" ]; then
-      _run planner "Plan $TASK. The branch was adopted: tick the slices its existing commits already cover."
-    else
-      _run planner "Plan $TASK."
-    fi
-    return
-  fi
+  if [ ! -f "$DIR/plan.md" ]; then _run planner "Plan $TASK.$ADOPTED_NOTE"; return; fi
   check_plan "$fp" || return
 
   STAGE=build

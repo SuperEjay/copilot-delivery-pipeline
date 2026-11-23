@@ -19,7 +19,8 @@
 #   state_target_branch <task>  the branch an MR review's MR targets  default empty
 #   state_adopted <task>        mr or branch for an adopted task (ADR 0004)  default empty
 #   state_review_round <task>   Duo review rounds counted so far  default 0
-#   state_review_ids <task>     checksum of the last thread ids   default empty
+#   state_review_ids <task>     the round's open threads: one checksum per thread and
+#                               its last note, comma-separated (fetch-duo-review.sh)  default empty
 #   state_reviewed_sha <task>   commit the reviewer last reviewed default empty
 #
 #   state_init <task> <branch>             create the file (no-op if it exists)

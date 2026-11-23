@@ -34,6 +34,9 @@ case "$MODE" in
   *)        BRANCH="$BRANCH_PREFIX/$TASK-$MODE" ;;
 esac
 DIR="$(task_dir "$TASK")"
+MR_JSON=""
+# field <jq path>: one value of the MR read for --mr, empty when missing.
+field() { jq -r "$1 // empty" <<< "$MR_JSON"; }
 
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
   echo "You have uncommitted changes. Commit or stash them first." >&2
@@ -45,7 +48,6 @@ if [ "$ADOPT" = mr ]; then
   ME="$(glab api user | jq -r '.username // empty')" || ME=""
   [ -n "$ME" ] || { echo "Can't look up your glab user (glab api user). Check glab auth status." >&2; exit 1; }
   MR_JSON="$(glab api "projects/:id/merge_requests/$MR")" || { echo "Can't read MR !$MR (see above)." >&2; exit 1; }
-  field() { jq -r "$1 // empty" <<< "$MR_JSON"; }
   state="$(field .state)"; author="$(field .author.username)"; target="$(field .target_branch)"
   [ "$state" = opened ] || { echo "MR !$MR is $state, not open. Only an open MR can be adopted." >&2; exit 1; }
   if [ "$author" != "$ME" ]; then
@@ -59,7 +61,12 @@ if [ "$ADOPT" = mr ]; then
   BRANCH="$(field .source_branch)"
 fi
 
-if [ -f "$(task_dir "$TASK")/state.env" ]; then
+if [ "$BRANCH" = "$BASE_BRANCH" ]; then
+  echo "$BRANCH is the base branch (BASE_BRANCH). The pipeline never works on it directly: adopt your feature branch instead." >&2
+  exit 1
+fi
+
+if [ -f "$DIR/state.env" ]; then
   have="$(state_branch "$TASK" 2>/dev/null || true)"
   if [ -n "$have" ] && [ "$have" != "$BRANCH" ]; then
     echo "Task $TASK is already on branch $have. Run /start-task with that branch, or use a new task id." >&2
@@ -75,11 +82,15 @@ if [ -z "$ADOPT" ]; then
     git switch --quiet -c "$BRANCH" "origin/$BASE_BRANCH"
   fi
 else
-  remote=no
-  if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
-    git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" --quiet
-    remote=yes
-  fi
+  # ls-remote --exit-code: 0 found, 2 not on origin, anything else an error
+  # (network, auth), which must not pass for "only you have this branch".
+  remote=no; rc=0
+  git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null || rc=$?
+  case "$rc" in
+    0) git fetch origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH" --quiet; remote=yes ;;
+    2) ;;
+    *) echo "Can't ask origin about $BRANCH (git ls-remote exit $rc, see above). Check your connection and access, then run this again." >&2; exit 1 ;;
+  esac
   if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
     if [ "$remote" = yes ]; then
       if ! git merge-base --is-ancestor "$BRANCH" "origin/$BRANCH" && ! git merge-base --is-ancestor "origin/$BRANCH" "$BRANCH"; then

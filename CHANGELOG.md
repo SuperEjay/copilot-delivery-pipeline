@@ -8,6 +8,14 @@
 - **Replies are marked as the pipeline's** (#98). `reply-thread.sh` starts every reply it posts, on Duo threads and on `/review-mr` re-reviews, with `**[pipeline]**`, so teammates can tell it from one you wrote. Replies you type yourself are unchanged.
 - **Adopt your own branch or MR** (ADR 0004, #96). `/start-task <clickup-id> --mr <iid>` or `/start-task <clickup-id> --branch <branch>` starts a delivery task on work you began outside the pipeline, so the pipeline can review and fix it before your teammates look. The branch keeps its name and commits, and the whole route runs on top of them. The planner reads the new `adopted-commits.md` and ticks the slices your commits already cover. At ship, the shipper updates your MR instead of creating one, keeping your title and description above its own sections. `--mr` refuses a teammate's MR (use `/review-mr`), one that isn't open, a fork MR and one targeting a branch other than `BASE_BRANCH`. A branch that diverged from origin is refused; one behind origin is fast-forwarded; one behind `BASE_BRANCH` is only reported, never rebased. New task state: `ADOPTED` (`state_adopted`, `state_set_adopted`). New `tests/test-start-task.sh`.
 - `start-task.sh` now refuses to put a task on a different branch from the one it already has, instead of silently keeping the old one.
+- Fixes from a code review of the three changes above:
+  - `apply-suggestion.sh` runs on macOS's bash 3.2 again: it used `mapfile`, which bash 3.2 doesn't have. A new `tests/test-portability.sh` fails when any pipeline script uses a bash 4+ feature.
+  - `apply-suggestion.sh` accepts a closing fence longer than the opening one, as Markdown does.
+  - `/start-task <id> --branch <BASE_BRANCH>` is refused: the pipeline never works on the base branch.
+  - `start-task.sh` stops with a message when it can't reach origin to look up the branch, instead of treating the branch as one only you have.
+  - `/fetch-review` prints `Nothing new since round <n>` whenever no round starts, also when ASK threads are still waiting. The review-responder stops there if it has already triaged that round.
+  - The planner's "the branch was adopted" note is now in every planner prompt for an adopted task, not only the first plan.
+
 
 ## v2.1.0
 

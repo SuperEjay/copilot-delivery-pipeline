@@ -98,10 +98,11 @@ fi
 mv "$TMP" "$OUT"
 
 count="$(jq 'length' "$OUT")"
-if [ "$count" -eq 0 ] && [ "$new" = 0 ]; then
+# "Nothing new" whenever no round starts, also with open ASK threads still
+# waiting: the review-responder then has nothing to triage again.
+[ "$count" -eq 0 ] || echo "Round $ROUND: $count unresolved thread(s) in ${OUT#"$REPO_ROOT"/}$note"
+if [ "$new" = 0 ]; then
   if [ "$ROUND" -gt 0 ]; then echo "Nothing new since round $ROUND."; else echo "No unresolved threads to triage yet."; fi
-else
-  echo "Round $ROUND: $count unresolved thread(s) in ${OUT#"$REPO_ROOT"/}$note"
 fi
 [ "$skipped" -eq 0 ] || echo "$skipped thread(s) already answered by you, skipped."
 if [ "$count" -gt 0 ]; then
