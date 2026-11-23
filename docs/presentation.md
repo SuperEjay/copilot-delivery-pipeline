@@ -1,10 +1,10 @@
 # From ClickUp task to reviewed merge request
 
-How the Copilot delivery pipeline delivers work today (v2.0), and the MR review
-route coming in v2.1. This is the team presentation written out as a document,
-one section per slide. The speaker notes are under each slide's **Notes**.
+How the Copilot delivery pipeline delivers and reviews work, as of v2.3.0. This
+is the team presentation written out as a document, one section per slide. The
+speaker notes are under each slide's **Notes**.
 
-Status as of 2026-11-21.
+Status as of 2026-11-23.
 
 ---
 
@@ -33,7 +33,7 @@ terminal.
 
 ```mermaid
 flowchart TD
-    A["1 · You start<br/><b>/start-task</b><br/>Branch, work folder, ClickUp task"]
+    A["1 · You start<br/><b>/start-task</b><br/>Branch, work folder, ClickUp task,<br/>or adopt your own MR"]
     B["2 · Can stop<br/><b>requirements</b><br/>Writes the requirements and open questions"]
     C["3 · Can stop<br/><b>planner</b><br/>Small slices, with the files each one touches"]
     D["4 · Runs on its own<br/><b>implementer ⇄ verifier</b><br/>One slice per run, then lint, types and tests"]
@@ -41,7 +41,7 @@ flowchart TD
     F["6 · Runs on its own<br/><b>evidence</b><br/>A screenshot or note per criterion"]
     G["7 · Can stop<br/><b>shipper</b><br/>You approve evidence; it pushes and opens the MR"]
     H["8 · It ends<br/><b>MR open</b><br/>Merging is yours, never the pipeline's"]
-    I["After Duo reviews: <b>/fetch-review</b><br/>review-responder fixes, verifier re-verifies,<br/>then it pushes and replies"]
+    I["After Duo reviews: <b>/fetch-review</b><br/>review-responder fixes (Duo suggestions applied as written),<br/>verifier re-verifies, then it pushes and replies"]
 
     A --> B --> C --> D --> E --> F --> G --> H --> I
     D -- "fail" --> D
@@ -60,11 +60,12 @@ Orange boxes **can stop** and wait for you; green boxes **run on their own**.
 
 <details><summary>Notes</summary>
 
-You pick the pipeline agent and run `/start-task` with the ClickUp id.
-Requirements reads the whole task, including comments and attachments, and lists
+You pick the pipeline agent and run `/start-task` with the ClickUp id, or
+`/start-task <id> --mr <iid>` to adopt an MR you started by hand. Requirements reads the whole task, including comments and attachments, and lists
 open questions. The planner cuts the work into small slices. The implementer
 builds one slice per run and the verifier runs our own lint, type check and
-tests; failures loop back. The reviewer does an in-depth review, and for each
+tests; failures loop back. A project without Playwright skips e2e and records
+it as a gap. The reviewer does an in-depth review, and for each
 finding you decide: fix it, park it as tech debt, or skip it. Evidence captures
 a screenshot per acceptance criterion. The shipper writes the MR description,
 and once you approve the evidence it pushes and opens the MR. After Duo reviews
@@ -151,7 +152,7 @@ priority mode (several times the cost).
 
 ---
 
-## 7. New in v2.1: review a teammate's MR with one command
+## 7. Added in v2.1: review a teammate's MR with one command
 
 ```mermaid
 flowchart TD
@@ -207,31 +208,55 @@ The design is in [ADR 0003](adr/0003-mr-review-a-second-route.md).
 
 ---
 
-## 9. How it's built: test-first, decided in the open
+## 9. New since v2.1: fewer blockers, less rework
 
-| 1,193 | 3 | 6 |
+| | |
+|---|---|
+| **Adopt your own work** (v2.2) | `/start-task <id> --mr <iid>` or `--branch <branch>` runs an MR you started by hand through the whole route ([ADR 0004](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md)). |
+| **Duo suggestions applied, not rewritten** (v2.2) | A script applies a Duo `suggestion` block exactly as written, and refuses if the lines changed. |
+| **No Playwright, no blocker** (v2.3) | Without Playwright, e2e is skipped and recorded as a gap instead of blocking the push ([ADR 0005](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md)). |
+| **Local installs stay local** (v2.3) | `--local` now keeps every agent skill in `.agents/` out of git, not just two. |
+
+<details><summary>Notes</summary>
+
+Four changes since v2.1. You can hand the pipeline work you began yourself: it
+adopts your branch or MR, credits the commits already there, and fixes the rest.
+Duo's suggestion blocks are applied by a script, which saves tokens and lands
+exactly what the reviewer asked for. Projects without Playwright no longer get
+stuck at verification: e2e is skipped, written down as a gap, and the push goes
+ahead. A live browser check never counts as a test, so the ship gate still only
+trusts repeatable checks. And a local install keeps all your agent skills out of
+git.
+
+</details>
+
+---
+
+## 10. How it's built: test-first, decided in the open
+
+| 1,436 | 5 | 9 |
 |---|---|---|
-| automated checks across 11 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), and [MR review](adr/0003-mr-review-a-second-route.md) | releases so far, from v1.0.0 to v2.0.0, each tagged on GitHub |
+| automated checks across 16 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), [MR review](adr/0003-mr-review-a-second-route.md), [adopting a branch or MR](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md), and [live checks never feed the ship gate](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md) | releases so far, from v1.0.0 to v2.3.0, each tagged on GitHub |
 
 Every change lands on its own branch, test first, with each new test proven to
 fail before the fix.
 
 ---
 
-## 10. Where it stands: MR review is built; v2.1.0 is next
+## 11. Where it stands: v2.3.0 is out; browser checks are next
 
 | Status | What |
 |---|---|
-| ✅ **Done** | MR review merged to main with its fixes and refactors. Its issues are closed. |
-| 🔶 **In progress** | Trying it on a real GitLab MR. So far tested against stubs. Least proven: placing threads on diff lines. |
-| ➡️ **Next** | Release v2.1.0 after the trial's fixes. Then a check of pinned models on paid plans (#67). |
+| ✅ **Done** | v2.1.0 to v2.3.0 released: MR review, adopting your own work, applied suggestions, and no Playwright needed. |
+| 🔶 **In progress** | A spike on VS Code's built-in browser tools (#113): do they work for subagents, on WSL2 and on Copilot Free? |
+| ➡️ **Next** | Live browser checks for UI criteria and text evidence without Playwright (#114). Still unproven: a real GitLab run, and pinned models on paid plans (#67). |
 
 ---
 
-## 11. What I'd like from the team: help prove it on real work
+## 12. What I'd like from the team: help prove it on real work
 
 1. **An MR to review.** Volunteer an open MR so `/review-mr` runs on real GitLab, not stubs.
-2. **A small task.** Run one ticket through the delivery route and note where it stopped.
+2. **A small task.** Run one ticket through the delivery route, ideally in a project without Playwright, and note where it stopped.
 3. **Your feedback.** Which stops are worth keeping, and which can go.
 
 Questions?

@@ -16,15 +16,20 @@ stopping only where a decision is yours:
    the requirements, with open questions for you to answer.
 2. **Plan** the work in small slices, listing the files each one touches.
 3. **Build** one slice at a time, then **verify** it with your project's own
-   lint, type check and tests.
+   lint, type check and tests. No Playwright in the project? e2e is skipped and
+   recorded as a gap, not a failure (ADR 0005).
 4. **Review** the code in depth. For each finding you decide: fix it, park it as
    tech debt (kept on your machine) or skip it.
-5. **Capture evidence:** a screenshot (or a short note) for each acceptance
-   criterion, which you check and approve.
+5. **Capture evidence:** a screenshot (with Playwright) or a short note for
+   each acceptance criterion, which you check and approve.
 6. **Ship:** push the verified commit, open the MR, and attach the approved
    evidence to the ClickUp task.
-7. **Answer GitLab Duo's review:** triage its comments, fix, re-verify, push and
-   reply.
+7. **Answer GitLab Duo's review:** triage its comments, fix (a Duo
+   `suggestion` block is applied exactly as written), re-verify, push and reply.
+
+Already started the work by hand? `/start-task <id> --mr <iid>` (your own open
+MR) or `--branch <branch>` adopts it and runs it through the same stages
+(ADR 0004).
 
 It never merges the MR: that stays with you and your team. When an auto run
 can't be used (say, a VS Code update breaks subagents), fall back to
@@ -79,7 +84,7 @@ into your project as [`docs/agent-pipeline.md`](payload/docs/agent-pipeline.md).
 | `glab`, logged in to your GitLab | MRs, the GitLab Duo review loop and MR reviews |
 | `jq` | The hook guard (on every agent tool call), ClickUp and GitLab data |
 | `curl` | The ClickUp API, and the one-line install |
-| Node.js (current LTS) with `npx` | Playwright screenshots for evidence, and the optional skills |
+| Node.js (current LTS) with `npx` | The optional skills, and Playwright if your project uses it (e2e tests and evidence screenshots). Without Playwright, e2e is skipped. |
 | Optional: `pdftotext` (Poppler) and `pandoc` | ClickUp PDF and Word attachments saved as text the agents can read |
 | Optional: `jscpd` in your project | Duplication signals for the reviewer |
 
@@ -219,7 +224,9 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    - `export CLICKUP_API_TOKEN="pk_..."` in your shell profile (`~/.zshrc` on
      macOS, `~/.bashrc` on Linux, WSL and Git Bash), never in the repo
    - `CLICKUP_TEAM_ID` and `DUO_USERNAMES` in `.agent.env`
-   - Playwright and the evidence settings, for screenshots
+   - optional: Playwright and the evidence settings, for screenshots. Without
+     Playwright in the project, e2e is skipped and listed as a gap; leave
+     `E2E_CMD` out of `.agent.env` to get that default
 5. Check that the model names in `.github/agents/*.agent.md` match your Copilot
    model picker. See
    [Models](payload/docs/agent-pipeline.md#models-pinned-per-agent).
