@@ -15,7 +15,9 @@ check() { if eval "$2"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "
 read -r -a AGENTS <<< "$(sed -n 's/^STAGE_AGENTS="\(.*\)"$/\1/p' "$NS")"
 check "next-stage.sh sets STAGE_AGENTS once" '[ "$(grep -c "^STAGE_AGENTS=" "$NS")" -eq 1 ] && [ "${#AGENTS[@]}" -gt 0 ]'
 check "the router checks the agents in STAGE_AGENTS" 'grep -q "^for _agent in \$STAGE_AGENTS; do" "$NS"'
-check "STAGE_AGENTS names every agent file but the orchestrator, no more" '[ "$(printf "%s\n" "${AGENTS[@]}" | sort | tr "\n" " ")" = "$(cd "$A" && ls *.agent.md | sed "s/\.agent\.md$//" | grep -vx pipeline | sort | tr "\n" " ")" ]'
+# Agents the user picks themselves, never run as stages: the orchestrator, and gap-checker (#123).
+USER_AGENTS="pipeline gap-checker"
+check "STAGE_AGENTS names every agent file but the user-picked ones, no more" '[ "$(printf "%s\n" "${AGENTS[@]}" | sort | tr "\n" " ")" = "$(cd "$A" && ls *.agent.md | sed "s/\.agent\.md$//" | grep -vxF -f <(printf "%s\n" $USER_AGENTS) | sort | tr "\n" " ")" ]'
 
 # frontmatter <agent>: the lines between the file's first two "---" lines.
 frontmatter() { awk 'NR == 1 && $0 == "---" { on = 1; next } on && $0 == "---" { exit } on' "$A/$1.agent.md"; }
@@ -133,6 +135,19 @@ check "verifier: each failing check with its failing lines, for the reviewer" 'm
 check "verifier: read-only: no tests added, nothing changed or committed" 'mr verifier "[Nn]ever change, add or commit anything"'
 check "verifier: failures are findings, not fixes" 'mr verifier "finding, not a fix"'
 check "verifier: ACs are left to the reviewer" 'mr verifier "reviewer grades the acceptance criteria"'
+
+# ---------- gap-checker: the user picks it at the pre-ship stop (#123) ----------
+G="$A/gap-checker.agent.md"
+check "gap-checker: exists, pinned to Claude Sonnet 5.5" '[ -f "$G" ] && frontmatter gap-checker | grep -qx "model: '"'"'Claude Sonnet 5.5'"'"'"'
+has_tools() { local t; for t in "$@"; do frontmatter gap-checker | grep -q "^tools:.*'$t'" || return 1; done; }
+check "gap-checker: the browser tools by name, read, search, edit" 'has_tools read search edit openBrowserPage navigatePage readPage screenshotPage clickElement hoverElement typeInPage handleDialog'
+check "gap-checker: no execute and no agent tool" '! frontmatter gap-checker | grep -qE "^tools:.*'"'"'(execute|agent)'"'"'"'
+check "gap-checker: not a stage agent" '! printf "%s\n" "${AGENTS[@]}" | grep -qx gap-checker'
+check "gap-checker: reads the Gaps section and EVIDENCE_BASE_URL" 'grep -q "## Gaps" "$G" && grep -q "EVIDENCE_BASE_URL" "$G"'
+check "gap-checker: stops when the app is not running" 'grep -qi "isn.t running" "$G"'
+check "gap-checker: writes gap-checks.md with the three verdicts" 'grep -q "gap-checks.md" "$G" && grep -q "looks right" "$G" && grep -q "looks wrong" "$G" && grep -q "couldn.t check" "$G"'
+check "gap-checker: changes nothing else, never approves" 'grep -q "approve-evidence.sh" "$G" && grep -qi "never" "$G" && grep -q "verification.md" "$G"'
+check "gap-checker: never counts toward VERIFIED (ADR 0005)" 'grep -q "VERIFIED" "$G" && grep -q "ADR 0005" "$G"'
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

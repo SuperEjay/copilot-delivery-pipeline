@@ -176,6 +176,7 @@ Each agent file has a `model:` line, using only the models your admins allow:
 | shipper | GPT-6 Luna | Mostly mechanical; the cheapest model |
 | review-responder | Grok 4.7 | Triage and small fixes, cheap output. Trial it here before considering it for the implementer |
 | pipeline | GPT-6 Luna | The orchestrator only follows `next-stage.sh` and calls the stages; the cheapest model |
+| gap-checker | Claude Sonnet 5.5 | Optional, picked by you at the pre-ship stop: walks the UI like the evidence agent checks screenshots |
 
 **Check the names once.** `model:` must match the name in your Copilot model
 picker exactly. If a name differs (say `Claude Opus 5.5` vs `Opus 5.5`), fix
@@ -571,6 +572,17 @@ short text file for non-UI ones), then writes
 No Playwright in the project? Screenshot ACs are text instead, and the manifest
 says so. To add your own screenshot, save the PNG in `.work/<id>/evidence/` and add
 a line for it, like the others: `` - [ ] AC-2 · `AC-2-dialog.png` · what it shows ``.
+
+**Checking the gaps yourself (no Playwright).** When `verification.md` lists
+ACs as `PASS (gap)` (their logic is tested, but nothing tested them end to end),
+the pre-ship stop points to the **gap-checker** agent. Start your app, pick
+**gap-checker** yourself and say "Check the gaps for <id>". It walks each gap AC
+in VS Code's built-in browser (no Playwright needed) and writes
+`.work/<id>/gap-checks.md`: per AC, `looks right`, `looks wrong` or
+`couldn't check`, with what it saw. It changes nothing else, and it never counts
+toward `VERIFIED` (ADR 0005). It can't run inside the auto run: VS Code doesn't
+give subagents the browser tools. Its screenshots stay in the chat; to keep one
+as evidence, save it into `evidence/` yourself.
 
 1. Open `evidence.md` and press `Ctrl/Cmd+Shift+V` for the Markdown preview,
    which shows the screenshots inline.
