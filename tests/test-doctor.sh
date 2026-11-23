@@ -40,7 +40,7 @@ git add -A; git commit -qm init
 # doc [env...]: run doctor.sh with the allowed PATH and a token exported, unless
 # the case says otherwise. Output in $T/out.txt, exit code in $rc.
 doc() {
-  env -i HOME="$T" PATH="$T/fake:$T/sys" CLICKUP_API_TOKEN="pk_test_123" "$@" \
+  env -i HOME="$T" PATH="$T/fake:$T/sys" FAKE_FORGE="${FAKE_FORGE:-}" CLICKUP_API_TOKEN="pk_test_123" "$@" \
     bash scripts/agent/doctor.sh > "$T/out.txt" 2>&1; rc=$?
 }
 line() { grep -E "^$1 +$2" "$T/out.txt"; }   # line <PASS|WARN|FAIL|INFO> <ERE>: a result line
@@ -103,27 +103,23 @@ check "Windows with Git Bash: FAIL, unsupported, use WSL" '[ $rc -eq 1 ] && line
 unfake uname
 
 # ---------- review worktrees of finished MRs (ADR 0003, #87) ----------
-# glab answers the MR's state from $T/mr-<iid>; auth status is logged in.
-cat > "$T/fake/glab" <<EOF
-#!/bin/sh
-case "\$*" in
-  "auth status") echo "Logged in to gitlab.com" ;;
-  "api projects/:id/merge_requests/"*) cat "$T/mr-\${2##*/}" 2>/dev/null || exit 1 ;;
-  *) exit 1 ;;
-esac
-EOF
-chmod +x "$T/fake/glab"
+# The shared fake glab (tests/lib/fake-glab) answers from $T/forge: logged in,
+# and each MR from mr-<iid>.json.
+export FAKE_FORGE="$T/forge"; mkdir -p "$FAKE_FORGE"; echo me > "$FAKE_FORGE/me"
+cp "$ROOT/tests/lib/fake-glab/glab" "$T/fake/glab"
+# mrstate <iid> <state>: the MR as the fake forge has it.
+mrstate() { jq -n --argjson i "$1" --arg s "$2" '{iid: $i, state: $s, target_branch: "main"}' > "$FAKE_FORGE/mr-$1.json"; }
 doc
 check "no review worktrees: no line about them" '! grep -q "review worktree" "$T/out.txt"'
 # review_wt <task>: where config.sh puts the review worktree, so doctor is checked against it.
 review_wt() { bash -c 'source scripts/agent/config.sh; review_worktree "$1"' _ "$1"; }
 for i in 5 6 8; do git worktree add -q --detach "$(review_wt mr-$i)" HEAD; done
-echo '{"state":"merged"}' > "$T/mr-5"; echo '{"state":"closed"}' > "$T/mr-6"; echo '{"state":"opened"}' > "$T/mr-8"
+mrstate 5 merged; mrstate 6 closed; mrstate 8 opened
 doc
 check "a merged MR's review worktree: WARN with the --done command" '[ $rc -eq 0 ] && line WARN "review worktree of MR !5 is still here, and the MR is merged" && grep -q "/review-mr 5 --done" "$T/out.txt"'
 check "a closed MR's: WARN too" 'line WARN "review worktree of MR !6 is still here, and the MR is closed" && grep -q "/review-mr 6 --done" "$T/out.txt"'
 check "an open MR's worktree is fine: no WARN" '! grep -q "MR !8" "$T/out.txt"'
-rm "$T/mr-6"; doc
+rm "$FAKE_FORGE/mr-6.json"; doc
 check "an MR glab can't read: INFO, not a guess" 'line INFO "can.t tell whether MR !6 is still open"'
 fake glab 1; doc
 check "glab not logged in: no MR states asked for, an INFO" 'line INFO "review worktrees: 3" && ! grep -q "is merged" "$T/out.txt"'

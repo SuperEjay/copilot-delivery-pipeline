@@ -16,6 +16,7 @@
   - `/fetch-review` prints `Nothing new since round <n>` whenever no round starts, also when ASK threads are still waiting. The review-responder stops there if it has already triaged that round.
   - The planner's "the branch was adopted" note is now in every planner prompt for an adopted task, not only the first plan.
 
+- **One forge module reads GitLab** (#103, first half). The new `scripts/agent/forge-lib.sh` is the only code that reads merge requests through `glab`: who you are, an MR's facts, its summary for `/review-mr`, its threads, and whether it can be reviewed or adopted. `start-review.sh`, `start-task.sh --mr`, `fetch-duo-review.sh` and `doctor.sh` use it. Their behaviour and messages are unchanged, except that `/review-mr` and `--mr` now also refuse an MR GitLab gives without a state or target branch. The tests share one fake glab (`tests/lib/fake-glab/glab`) that answers from files, in place of three of their own stubs. New `tests/test-forge.sh`.
 
 ## v2.1.0
 

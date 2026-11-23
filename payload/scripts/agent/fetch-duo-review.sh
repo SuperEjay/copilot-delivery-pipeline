@@ -18,6 +18,7 @@
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 require glab jq
+source "$(dirname "$0")/forge-lib.sh"
 
 TASK="${1:?usage: fetch-duo-review.sh <task-id> [--force]}"
 FORCE="${2:-}"
@@ -38,25 +39,24 @@ TRIM='{
 if state_is_review "$TASK"; then
   OUT="$DIR/threads.json"
   TMP="$OUT.tmp"; trap 'rm -f "$TMP"' EXIT
-  glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=100" \
-  | jq -s "[ (add // [])[]
+  ALL_JSON="$(forge_discussions "$MR_IID")" || { echo "Can't read MR !$MR_IID's threads (see above)." >&2; exit 1; }
+  jq "[ .[]
             | select((.notes[0].system == true) | not)
             | select(if .notes[0].resolvable == true then (.notes[0].resolved | not) else true end)
-            | $TRIM ]" > "$TMP"
+            | $TRIM ]" <<<"$ALL_JSON" > "$TMP"
   mv "$TMP" "$OUT"
   echo "$(jq 'length' "$OUT") open thread(s) from every author in ${OUT#"$REPO_ROOT"/}"
   exit 0
 fi
 LAST_ROUND="$(state_review_round "$TASK")"
 LAST_IDS="$(state_review_ids "$TASK")"
-ME="$(glab api user | jq -r '.username // empty')" || ME=""
-[ -n "$ME" ] || { echo "Can't look up your glab user (glab api user), so threads you already answered can't be skipped. Check glab auth status." >&2; exit 1; }
+ME="$(forge_me)" || { echo "Can't look up your glab user (glab api user), so threads you already answered can't be skipped. Check glab auth status." >&2; exit 1; }
 
 OUT="$DIR/review.json"
 TMP="$OUT.tmp"; ALL="$OUT.all.tmp"; trap 'rm -f "$TMP" "$ALL"' EXIT
-glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=100" \
-| jq -s --arg users "$DUO_USERNAMES" --arg me "$ME" '
-    (add // []) as $all
+ALL_JSON="$(forge_discussions "$MR_IID")" || { echo "Can't read MR !$MR_IID's threads (see above)." >&2; exit 1; }
+jq --arg users "$DUO_USERNAMES" --arg me "$ME" '
+    . as $all
     | ($users | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))) as $u
     | [ $all[]
         | select(.notes[0].resolvable == true and (.notes[0].resolved | not))
@@ -73,7 +73,7 @@ glab api --paginate "projects/:id/merge_requests/$MR_IID/discussions?per_page=10
             _answered: (.notes[-1].author.username == $me),
             _seen: "\(.id):\(.notes[-1].id)"
           }
-      ]' > "$ALL"
+      ]' <<<"$ALL_JSON" > "$ALL"
 jq '[ .[] | select(._answered | not) | del(._answered, ._seen) ]' "$ALL" > "$TMP"
 skipped="$(jq '[ .[] | select(._answered) ] | length' "$ALL")"
 

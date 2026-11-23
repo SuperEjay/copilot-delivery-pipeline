@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests scripts/agent/start-task.sh, including adopting an existing branch or
 # your own open MR (#96, ADR 0004), in a scratch repo with a local remote and
-# a stub glab ("me" is the glab user).
+# the shared fake glab ("me" is the glab user).
 # Usage: tests/test-start-task.sh     (exit 0 = all passed)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -10,18 +10,9 @@ pass=0; fail=0
 check() { if eval "$2"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $1"; sed 's/^/      /' "$T/out.txt" 2>/dev/null; fi; }
 S=scripts/agent
 
-# ---------- stub glab: the MR from $STUB/mr-<iid>.json ----------
-export STUB="$T/stub"; mkdir -p "$STUB"
-cat > "$STUB/glab" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  "api user") echo '{"username":"me"}' ;;
-  "api projects/:id/merge_requests/"*)
-    a="$*"; f="$STUB/mr-${a##*/}.json"; [ -f "$f" ] && cat "$f" || { echo "404 Not Found" >&2; exit 1; } ;;
-  *) echo "stub glab: unexpected $*" >&2; exit 1 ;;
-esac
-EOF
-chmod +x "$STUB/glab"; export PATH="$STUB:$PATH"
+# ---------- the shared fake glab (tests/lib/fake-glab): the MR from $STUB/mr-<iid>.json ----------
+export STUB="$T/stub"; mkdir -p "$STUB"; echo me > "$STUB/me"
+export FAKE_FORGE="$STUB" PATH="$ROOT/tests/lib/fake-glab:$PATH"
 # mr <iid> <branch> [state] [author] [target] [source project]: the stub MR.
 mr() {
   jq -n --argjson i "$1" --arg b "$2" --arg s "${3:-opened}" --arg a "${4:-me}" --arg t "${5:-main}" --argjson sp "${6:-1}" \
@@ -129,6 +120,8 @@ start T11 --mr 11
 check "--mr from a fork: refused" '[ $rc -ne 0 ] && grep -qi fork "$T/out.txt" && [ ! -f .work/T11/state.env ]'
 start T12 --mr 404
 check "--mr that doesn't exist: refused" '[ $rc -ne 0 ] && [ ! -f .work/T12/state.env ]'
+rm "$STUB/me"; start T14 --mr 7; echo me > "$STUB/me"
+check "--mr when the glab user can't be looked up: refused, says to check glab auth" '[ $rc -ne 0 ] && grep -q "glab auth status" "$T/out.txt" && [ ! -f .work/T14/state.env ]'
 start T13 --mr abc
 check "--mr with a non-number: refused" '[ $rc -ne 0 ] && grep -q "number" "$T/out.txt"'
 start T14 --mr

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests the start of an MR review (scripts/agent/start-review.sh, ADR 0003) in
-# a scratch repo with a local bare remote and a stub glab: which MRs it accepts,
+# a scratch repo with a local bare remote and the shared fake glab: which MRs it accepts,
 # the review worktree at the MR's head (fork MRs too, through
 # refs/merge-requests/<iid>/head), and that the user's own checkout is never
 # touched.
@@ -12,21 +12,10 @@ pass=0; fail=0
 check() { if eval "$2"; then pass=$((pass + 1)); else fail=$((fail + 1)); echo "FAIL: $1"; sed 's/^/      /' "$T/out.txt" 2>/dev/null; fi; }
 S=scripts/agent
 
-# ---------- stub glab: the MR's state comes from $STUB/mr-<iid>.json ----------
+# ---------- the shared fake glab (tests/lib/fake-glab): the forge's state in $STUB ----------
 export STUB="$T/stub"; mkdir -p "$STUB"
-cat > "$STUB/glab" <<'EOF'
-#!/usr/bin/env bash
-case "$*" in
-  "api --paginate projects/:id/merge_requests/"*/commits*)
-    i="${3#projects/:id/merge_requests/}"; i="${i%%/*}"
-    cat "$STUB/commits-$i.json" 2>/dev/null || echo '[]' ;;
-  "api projects/:id/merge_requests/"*)
-    f="$STUB/mr-${2##*/}.json"
-    if [ -f "$f" ]; then cat "$f"; else echo '{"message":"404 Not found"}'; echo "glab: 404 Not Found" >&2; exit 1; fi ;;
-  *) echo "stub glab: unexpected $*" >&2; exit 1 ;;
-esac
-EOF
-chmod +x "$STUB/glab"; export PATH="$STUB:$PATH"
+NO_GLAB_PATH="$STUB:$PATH"                      # stubs only: as if glab weren't installed
+export FAKE_FORGE="$STUB" PATH="$STUB:$ROOT/tests/lib/fake-glab:$PATH"
 mr() { printf '{"iid":%s,"state":"%s","draft":%s,"target_branch":"%s","source_branch":"feature/86abc-export","title":"Export invoices","description":"Closes CU-86abc","web_url":"https://gitlab.test/mr/%s","author":{"username":"ann"}}\n' "$1" "$2" "${3:-false}" "${4:-main}" "$1" > "$STUB/mr-$1.json"; }
 printf '[{"id":"c1","title":"feat: export","message":"feat: export\\n\\nRefs #86xyz"}]' > "$STUB/commits-7.json"
 
@@ -59,6 +48,10 @@ mr 7 merged; review 7
 check "a merged MR is refused, nothing created" '[ $rc -eq 1 ] && grep -q "MR !7 is merged" "$T/out.txt" && [ ! -e .work/mr-7 ] && [ ! -e "$WT/mr-7" ]'
 mr 7 closed; review 7
 check "a closed MR is refused, nothing created" '[ $rc -eq 1 ] && grep -q "MR !7 is closed" "$T/out.txt" && [ ! -e .work/mr-7 ] && [ ! -e "$WT/mr-7" ]'
+mr 7 locked; review 7
+check "a locked MR is refused: only open MRs" '[ $rc -eq 1 ] && grep -q "MR !7 is locked: only open MRs" "$T/out.txt" && [ ! -e .work/mr-7 ]'
+jq 'del(.target_branch)' "$STUB/mr-7.json" > "$T/m" && mv "$T/m" "$STUB/mr-7.json"; review 7
+check "an MR without a target branch is refused, nothing created" '[ $rc -eq 1 ] && grep -q "Could not read MR !7" "$T/out.txt" && grep -q "no target branch" "$T/out.txt" && [ ! -e .work/mr-7 ]'
 review 99
 check "an MR glab can't find is refused, with glab's message" '[ $rc -eq 1 ] && grep -q "Could not read MR !99" "$T/out.txt" && grep -q "404" "$T/out.txt" && [ ! -e .work/mr-99 ]'
 review
@@ -193,7 +186,6 @@ $S/run-checks.sh T1 lint > "$T/out.txt" 2>&1
 check "a delivery task's checks still run in the main checkout" '[ "$(cat "$STUB/lint-dir")" = "$PWD" ]'
 
 # ---------- --done: the worktree goes, the text files stay (#87) ----------
-glab_calls_before="$(ls "$STUB" | wc -l)"
 review 11 --done
 wts="$(git worktree list)"
 check "--done removes the review worktree" '[ $rc -eq 0 ] && [ ! -e "$WT/mr-11" ] && ! grep -q "$WTS/mr-11" <<<"$wts"'
@@ -204,7 +196,7 @@ review 7 --done
 check "--done never touches the main checkout's node_modules (the worktree linked to it)" '[ $rc -eq 0 ] && [ "$(cat node_modules/dep/index.js)" = main ]'
 review 11 --done
 check "--done again: nothing to remove, still exit 0" '[ $rc -eq 0 ] && grep -q "No review worktree for !11" "$T/out.txt"'
-mv "$STUB/glab" "$STUB/glab.off"; review 7 --done; mv "$STUB/glab.off" "$STUB/glab"
+PATH="$NO_GLAB_PATH" $S/start-review.sh 7 --done > "$T/out.txt" 2>&1; rc=$?
 check "--done works without glab (after the MR is merged, offline)" '[ $rc -eq 0 ]'
 review 7 --keep
 check "an unknown option is refused" '[ $rc -eq 1 ] && grep -q "usage" "$T/out.txt"'

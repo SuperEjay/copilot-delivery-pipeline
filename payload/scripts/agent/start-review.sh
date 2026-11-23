@@ -42,21 +42,17 @@ case "$CLICKUP_ID" in
   -*) echo "$USAGE" >&2; exit 1 ;;
 esac
 require git glab jq
+source "$(dirname "$0")/forge-lib.sh"
 
-if ! MR_JSON="$(glab api "projects/:id/merge_requests/$IID" 2>&1)"; then
-  echo "Could not read MR !$IID with glab:" >&2
-  printf '%s\n' "$MR_JSON" >&2
+MR_LINE="$(forge_mr "$IID")" || { echo "Could not read MR !$IID with glab (see above)." >&2; exit 1; }
+IFS=$'\037' read -r _ MR_STATE _ _ TARGET _ <<<"$MR_LINE"
+if ! why="$(forge_eligible review "$MR_LINE")"; then
+  case "$why" in
+    merged|closed) echo "MR !$IID is $MR_STATE: there's nothing to review." >&2 ;;
+    *) echo "MR !$IID is $MR_STATE: only open MRs (drafts too) can be reviewed." >&2 ;;
+  esac
   exit 1
 fi
-MR_STATE="$(jq -r '.state // empty' <<<"$MR_JSON")"
-case "$MR_STATE" in
-  opened) ;;
-  merged|closed) echo "MR !$IID is $MR_STATE: there's nothing to review." >&2; exit 1 ;;
-  *) echo "MR !$IID is ${MR_STATE:-in an unknown state}: only open MRs (drafts too) can be reviewed." >&2; exit 1 ;;
-esac
-
-TARGET="$(jq -r '.target_branch // empty' <<<"$MR_JSON")"
-[ -n "$TARGET" ] || { echo "glab gave no target branch for MR !$IID." >&2; exit 1; }
 
 # The MR's head through GitLab's own ref, so a fork MR works too. The target
 # branch, fetched too, is what the router counts the MR's changes against.
@@ -75,10 +71,8 @@ fi
 state_init_review "$TASK" "$IID"
 # The MR's details and commit messages, where the requirements agent looks
 # for the ClickUp task (ADR 0003): branch, title and description, then commits.
-COMMITS_JSON="$(glab api --paginate "projects/:id/merge_requests/$IID/commits?per_page=100" | jq -s 'add // []')"
-jq --argjson commits "$COMMITS_JSON" '{iid, title, description, source_branch, target_branch, web_url,
-    author: .author.username, draft: (.draft // false),
-    commits: [ $commits[] | {id, title, message} ]}' <<<"$MR_JSON" > "$DIR/mr.json"
+forge_mr_summary "$IID" > "$DIR/mr.json.tmp" || { rm -f "$DIR/mr.json.tmp"; echo "Could not read MR !$IID's details with glab (see above)." >&2; exit 1; }
+mv "$DIR/mr.json.tmp" "$DIR/mr.json"
 state_set_target_branch "$TASK" "$TARGET"
 [ -z "$CLICKUP_ID" ] || state_set_clickup_id "$TASK" "$CLICKUP_ID"
 
@@ -118,6 +112,6 @@ else
   DEPS="installed with INSTALL_CMD (the MR changes a lockfile)"
 fi
 
-DRAFT=""; [ "$(jq -r '.draft // false' <<<"$MR_JSON")" = true ] && DRAFT=" (draft)"
+DRAFT=""; [ "$(jq -r '.draft' "$DIR/mr.json")" = true ] && DRAFT=" (draft)"
 echo "MR !$IID$DRAFT at ${HEAD_SHA:0:12}. Review worktree: $WT. Work folder: ${DIR#"$REPO_ROOT"/}"
 echo "Dependencies: $DEPS"
