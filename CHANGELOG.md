@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **e2e is skipped, not failed, when the project has no Playwright** (#112, ADR 0005). `E2E_CMD` now defaults to Playwright only when `package.json` has `@playwright/test`; otherwise `run-checks.sh` prints `SKIP  e2e`, `all` can still print `VERIFIED`, and the verifier lists the skip under Gaps. An explicit `E2E_CMD` (even empty) still wins. `.agent.env.example` no longer sets `E2E_CMD`. `doctor.sh` reports when e2e will be skipped, and warns when `E2E_CMD` runs Playwright in a project without it: remove that line from your `.agent.env` to get the new default.
+
 ## v2.2.0
 
 **Adopt your own work, and fewer Duo round-trips.** `/start-task <clickup-id> --mr <iid>` or `--branch <branch>` puts work you began outside the pipeline through the whole delivery route (ADR 0004). A Duo `suggestion` block is applied by a script instead of being rewritten. Threads you already answered aren't triaged again, and the pipeline's replies are tagged `**[pipeline]**`. Under the hood, one module now owns GitLab (`forge-lib.sh`) and one owns a Duo round's formats (`duo-round-lib.sh`). The review-responder writes `review-triage.md` from a template, and the router reads it strictly.

@@ -119,6 +119,10 @@ admin policy that blocks MCP servers doesn't affect any of this.
    file. Put project-specific settings in `.agent.env` instead.
 4. **Configure:** open `.agent.env` (the installer created it) and set your real lint,
    typecheck, unit, integration and e2e commands. Leave a command empty to skip it.
+   e2e defaults to Playwright only when `package.json` has `@playwright/test`;
+   without it, e2e is skipped (`SKIP` in `run-checks.sh`) and the verifier lists
+   it under Gaps, so nothing blocks the push (ADR 0005). Set `E2E_CMD` to use
+   another runner, or `E2E_CMD=` to always skip it.
 5. **Install and log in to the CLIs:** `glab auth login` (point it at your GitLab
    host if it's self-managed), `jq` and `curl`. Optional: `pdftotext` (poppler)
    and `pandoc`, so PDF and Word attachments are also saved as text the agents
@@ -147,7 +151,8 @@ admin policy that blocks MCP servers doesn't affect any of this.
    They're agent skills, not prompt files, because Copilot (Agent Host)
    sessions don't load prompt files. If they're missing, check that VS Code is
    open on the project's root folder.
-10. **Evidence screenshots (Playwright):**
+10. **Evidence screenshots (Playwright, optional):** without Playwright, e2e is
+   skipped, but the evidence stage still needs it for screenshots (#114).
    - If the repo doesn't have it yet: `npm i -D @playwright/test && npx playwright install chromium`.
    - Set `EVIDENCE_BASE_URL` and `EVIDENCE_START_CMD` in `.agent.env`.
    - If pages need a login, save a **test account's** session once:

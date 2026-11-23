@@ -65,6 +65,16 @@ elif [ -f .agent.env.example ]; then
   else result PASS ".agent.env sets every setting in .agent.env.example"; fi
 fi
 
+# ---------- e2e without Playwright (ADR 0005) ----------
+has_playwright=false
+grep -qs '"@playwright/test"' package.json && has_playwright=true
+e2e="$(bash -c 'source scripts/agent/config.sh >/dev/null 2>&1; printf "%s" "$E2E_CMD"' 2>/dev/null)"
+if [ -z "$e2e" ]; then
+  result INFO "e2e: skipped (E2E_CMD is empty, or package.json has no @playwright/test). run-checks.sh prints SKIP and the verifier records it as a gap"
+elif ! $has_playwright && printf '%s' "$e2e" | grep -q 'playwright'; then
+  result WARN "E2E_CMD runs Playwright, but package.json has no @playwright/test, so e2e will fail and block the push. Remove the E2E_CMD line from .agent.env, or set E2E_CMD= to skip e2e"
+fi
+
 # ---------- line endings ----------
 crlf="$(find scripts/agent -name '*.sh' -type f 2>/dev/null | sort | while read -r f; do
   grep -q $'\r' "$f" && printf '%s ' "$f"; done)"

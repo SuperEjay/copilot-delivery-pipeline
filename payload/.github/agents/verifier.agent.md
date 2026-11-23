@@ -32,6 +32,7 @@ Commit: <the HEAD you checked: the VERIFIED sha on PASS, `git rev-parse HEAD` on
 
 ## Gaps
 What isn't covered and why (e.g. needs a real third-party API).
+Every check run-checks.sh printed as SKIP, one line each: e.g. "e2e skipped: no e2e tool in this project (no @playwright/test); UI behaviour isn't tested end to end."
 ~~~
 Result is FAIL if any check fails, any AC fails or has no test, or run-checks.sh didn't print `VERIFIED`.
 
