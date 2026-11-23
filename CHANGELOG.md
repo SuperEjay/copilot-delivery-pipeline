@@ -1,6 +1,25 @@
 # Changelog
 
-## Unreleased
+## v2.2.0
+
+**Adopt your own work, and fewer Duo round-trips.** `/start-task <clickup-id> --mr <iid>` or `--branch <branch>` puts work you began outside the pipeline through the whole delivery route (ADR 0004). A Duo `suggestion` block is applied by a script instead of being rewritten. Threads you already answered aren't triaged again, and the pipeline's replies are tagged `**[pipeline]**`. Under the hood, one module now owns GitLab (`forge-lib.sh`) and one owns a Duo round's formats (`duo-round-lib.sh`). The review-responder writes `review-triage.md` from a template, and the router reads it strictly.
+
+**Not yet tried for real:**
+- Everything that talks to GitLab has run only against a fake `glab`: `/start-task --mr`, `create-mr.sh`, replies and resolves, `/review-mr`'s posted threads, and `/fetch-review`.
+- A Duo round in an auto run with a real model. Check that the review-responder's `review-triage.md` follows the template: a verdict like `**FIX**` or `Fix` stops the run until the file is fixed.
+- `apply-suggestion.sh` on macOS's own bash 3.2 (only checked statically).
+- Pinned models are still unverified on a paid plan (#67).
+
+### Upgrading to v2.2.0
+
+1. From v2.1.0 (or v2.0.0, or any v1.2.x, see "Upgrading to v2" first), run `install.sh --update` from v2.2.0: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.2.0/install.sh | bash -s -- --update`.
+2. Merge each `<file>.new` it reports. **`review-responder.agent.md` matters most:** its new `review-triage.md template` is what the router now reads, and without it a Duo round stops as unreadable. The planner, shipper and reviewer agents and the `start-task` skill changed too (adopting a branch or MR).
+3. No new `.agent.env` settings.
+4. Commit the updated pipeline files (with `--local`, there's nothing to commit), fully quit and reopen VS Code.
+
+Tasks in progress carry on. A task in the middle of a Duo round keeps its round as long as its open Duo threads are the same ones as at its last fetch. Its next round records `REVIEW_SEEN` in place of `REVIEW_IDS`.
+
+### Changes
 
 - **Suggestions are applied, not rewritten** (#95). When a review thread the review-responder triages FIX carries a GitLab ```` ```suggestion ```` block, it runs the new `scripts/agent/apply-suggestion.sh <task-id> <thread-id>` instead of writing its own fix. It saves tokens and lands exactly what the reviewer asked for. The script puts the lines in place in the working tree and commits nothing; the checks, the verifier and the push gate run as before. It applies the block where the reviewer's lines still are, at the same line numbers or, if they moved, where they appear exactly once. It refuses (exit 3, nothing written) when they changed, when the comment offers several blocks (alternatives), or when the thread is on a removed line. Then the fix is made by hand. Threads applied as they are get the reply "Applied the suggestion in <sha>." Triage is unchanged: a suggestion doesn't make a thread FIX. Never use GitLab's **Apply suggestion** button: it commits on the remote and skips the tests.
 - `review.json` now keeps each thread's `new_line` and `head_sha` (the commit the comment was made on).
@@ -16,11 +35,12 @@
   - `/fetch-review` prints `Nothing new since round <n>` whenever no round starts, also when ASK threads are still waiting. The review-responder stops there if it has already triaged that round.
   - The planner's "the branch was adopted" note is now in every planner prompt for an adopted task, not only the first plan.
 
-- The router asks the ship gate for the verified commit (`gate_verified`) instead of reading `.work/<id>/verified-head` itself, so only `ship-gate.sh` knows where that commit is kept. `tests/test-gates.sh` fails when another script reads the file. Behaviour is unchanged.
-- Follow-ups to the forge module (below):
+### Under the hood
+
+- **One forge module talks to GitLab** (#103). The new `scripts/agent/forge-lib.sh` is the only code that runs `glab`, apart from `doctor.sh`'s `glab auth status`. It covers who you are, an MR's facts and summary, its threads, whether it can be reviewed or adopted, and the writes: create or update an MR, reply, resolve and post a thread. `start-review.sh`, `start-task.sh --mr`, `fetch-duo-review.sh`, `doctor.sh`, `create-mr.sh`, `reply-thread.sh` and `post-review-thread.sh` use it. Behaviour and messages are unchanged, with two exceptions: `/review-mr` and `--mr` now also refuse an MR GitLab returns without a state or target branch, and a failed GitLab write now says which step failed. `tests/test-portability.sh` fails when another script runs `glab`, and `tests/test-guard.sh` checks that sourcing the library is denied. The tests share one fake glab (`tests/lib/fake-glab/glab`) that answers from files and logs each write, in place of their own argv-matching stubs. New `tests/test-forge.sh`.
+- Follow-ups to the forge module:
   - `/start-task <id> --mr <iid>` asks GitLab twice (who you are, and the MR with its title and description) instead of four times, using the new `forge_mr <iid> --with-text`.
   - `tests/test-portability.sh` now also catches a `glab` call on the same line as a message, such as `x="$(glab api …)"; echo done` or `echo "$(glab api …)"`. Before, it skipped any line containing `echo`, `printf` or `result`.
-- **One forge module talks to GitLab** (#103). The new `scripts/agent/forge-lib.sh` is the only code that runs `glab`, apart from `doctor.sh`'s `glab auth status`. It covers who you are, an MR's facts and summary, its threads, whether it can be reviewed or adopted, and the writes: create or update an MR, reply, resolve and post a thread. `start-review.sh`, `start-task.sh --mr`, `fetch-duo-review.sh`, `doctor.sh`, `create-mr.sh`, `reply-thread.sh` and `post-review-thread.sh` use it. Behaviour and messages are unchanged, with two exceptions: `/review-mr` and `--mr` now also refuse an MR GitLab returns without a state or target branch, and a failed GitLab write now says which step failed. `tests/test-portability.sh` fails when another script runs `glab`, and `tests/test-guard.sh` checks that sourcing the library is denied. The tests share one fake glab (`tests/lib/fake-glab/glab`) that answers from files and logs each write, in place of their own argv-matching stubs. New `tests/test-forge.sh`.
 - **One Duo round module** (#106). The new `scripts/agent/duo-round-lib.sh` is the only code that knows a Duo round's formats:
   - which threads go into `review.json`
   - the round rule and its seen set
@@ -32,6 +52,7 @@
   - Task state keeps the round's seen set readably, as `REVIEW_SEEN=<thread>:<last note>,…`, in place of `REVIEW_IDS` checksums. A task already in a Duo round on v2.1.0 keeps its round when you upgrade, as long as its open Duo threads are the same ones as at its last fetch (any other set counts as a new round, as v2.1.0 counted it).
   - `fetch-duo-review.sh` refuses an option other than `--force`.
   - New `tests/test-duo-round.sh`.
+- The router asks the ship gate for the verified commit (`gate_verified`) instead of reading `.work/<id>/verified-head` itself, so only `ship-gate.sh` knows where that commit is kept. `tests/test-gates.sh` fails when another script reads the file. Behaviour is unchanged.
 
 ## v2.1.0
 
