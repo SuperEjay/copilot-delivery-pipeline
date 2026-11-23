@@ -390,6 +390,7 @@ tests/test-apply-suggestion.sh  # checks applying a review thread's suggestion b
 tests/test-start-task.sh    # checks starting a task, and adopting your own branch or MR (--branch, --mr)
 tests/test-portability.sh   # checks the scripts use nothing newer than macOS's bash 3.2
 tests/test-forge.sh         # checks forge-lib.sh, the only code that runs glab, against the shared fake glab (tests/lib/fake-glab)
+tests/test-duo-round.sh     # checks duo-round-lib.sh: review.json, the round rule, and review-triage.md against the review-responder's template
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release

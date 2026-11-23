@@ -146,9 +146,18 @@ check "... and with --force it is round 4" '[ $? -eq 0 ] && grep -q "^Round 4: 1
 discs d4:duo,me,duo d6:duo,me
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
 check "an unanswered thread with no new note, plus an answered one: same round, nothing new" '[ $? -eq 0 ] && grep -q "^Round 4: 1 .*not a new round" "$T/out.txt" && grep -q "^Nothing new since round 4" "$T/out.txt" && grep -q "^1 thread(s) already answered" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
+check "the seen set is recorded readably: each thread and its last note" 'grep -qx "REVIEW_SEEN=d4:d4-n2" $W/state.env'
+# A task in a Duo round before #106 recorded REVIEW_IDS (one cksum per thread and
+# last note): upgrading must not make the same threads a new round.
+grep -v "^REVIEW_SEEN=" $W/state.env > "$T/s"; echo "REVIEW_IDS=$(printf '%s' d4:d4-n2 | cksum | cut -d' ' -f1)" >> "$T/s"; mv "$T/s" $W/state.env
+$S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
+check "upgraded from REVIEW_IDS: the same threads are no new round (#106)" '[ $? -eq 0 ] && grep -q "^Nothing new since round 4" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
+discs d4:duo,me,duo,duo
+$S/fetch-duo-review.sh T1 --force > "$T/out.txt" 2>&1
+check "... and the next round writes REVIEW_SEEN and drops REVIEW_IDS" '[ $? -eq 0 ] && grep -q "^Round 5: 1 " "$T/out.txt" && grep -qx "REVIEW_SEEN=d4:d4-n3" $W/state.env && ! grep -q "^REVIEW_IDS=" $W/state.env'
 mv "$STUB/me" "$STUB/me.off"
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1; rc=$?
-check "the glab user can't be looked up: the fetch fails (not a round-limit exit), the round is untouched" '[ $rc -ne 0 ] && [ $rc -ne 3 ] && grep -qi "glab user" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
+check "the glab user can't be looked up: the fetch fails (not a round-limit exit), the round is untouched" '[ $rc -ne 0 ] && [ $rc -ne 3 ] && grep -qi "glab user" "$T/out.txt" && grep -q "^REVIEW_ROUND=5$" $W/state.env'
 mv "$STUB/me.off" "$STUB/me"
 # ---------- an MR review's threads: every author, no round (ADR 0003) ----------
 # Discussions from Duo, a person, a resolved one, a system note and a plain

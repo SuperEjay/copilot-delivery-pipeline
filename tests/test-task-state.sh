@@ -28,19 +28,19 @@ state TASK=T1 BRANCH=feature/T1-gate REVIEW_ROUND=2 MR_IID=7 REVIEW_IDS=123 REVI
 st state_branch T1;       check "reads BRANCH from a v1.1.0 file" '[ $? -eq 0 ] && out feature/T1-gate'
 st state_mr_iid T1;       check "reads MR_IID"                    '[ $? -eq 0 ] && out 7'
 st state_review_round T1; check "reads REVIEW_ROUND"              '[ $? -eq 0 ] && out 2'
-st state_review_ids T1;   check "reads REVIEW_IDS"                '[ $? -eq 0 ] && out 123'
+st state_review_seen T1;  check "reads REVIEW_IDS (before #106) as the seen set" '[ $? -eq 0 ] && out 123'
 st state_reviewed_sha T1; check "reads REVIEWED_SHA"              '[ $? -eq 0 ] && out abc'
 
 state TASK=T1 BRANCH=feature/T1-gate
 st state_review_round T1; check "REVIEW_ROUND defaults to 0"      '[ $? -eq 0 ] && out 0'
-st state_review_ids T1;   check "REVIEW_IDS defaults to empty"    '[ $? -eq 0 ] && out ""'
+st state_review_seen T1;  check "the seen set defaults to empty"  '[ $? -eq 0 ] && out ""'
 st state_reviewed_sha T1; check "REVIEWED_SHA defaults to empty"  '[ $? -eq 0 ] && out ""'
 
 state BRANCH=feature/T1-old MR_IID=5 BRANCH=feature/T1-new MR_IID=6
 st state_branch T1;       check "the last line wins for a repeated key" 'out feature/T1-new'
 state BRANCH=b XMR_IID=9 MR_IID_OLD=8 REVIEW_IDS=a=b
 st state_mr_iid T1;       check "only an exact key matches" '[ $? -ne 0 ] && out ""'
-st state_review_ids T1;   check "a value may contain =" 'out a=b'
+st state_review_seen T1;  check "a value may contain =" 'out a=b'
 
 # ---------- the file is data, never run ----------
 state 'BRANCH=feature/T1-$(touch pwned)' 'MR_IID=`touch pwned2`'
@@ -59,7 +59,7 @@ st state_mr_iid T1;       check "an empty MR_IID counts as missing" '[ $? -eq 1 
 state TASK=T1 MR_IID=7
 st state_branch T1
 check "no BRANCH: one message, status 1" '[ $? -eq 1 ] && out "" && err "No BRANCH in .work/T1/state.env. start-task.sh writes it, so the file was changed by hand or is damaged."'
-for r in state_branch state_mr_iid state_review_round state_review_ids state_reviewed_sha; do
+for r in state_branch state_mr_iid state_review_round state_review_seen state_reviewed_sha; do
   st $r T9
   check "$r: no task state is an error" '[ $? -eq 1 ] && out "" && err "No .work/T9/state.env. Run scripts/agent/start-task.sh first."'
 done
@@ -72,9 +72,15 @@ st state_init T2 feature/T2-other
 check "state_init leaves an existing file alone" '[ $? -eq 0 ] && grep -qx BRANCH=feature/T2-x $W2/state.env && ! grep -q other $W2/state.env'
 st state_set_mr_iid T2 7; st state_set_mr_iid T2 8; st state_mr_iid T2
 check "state_set_mr_iid replaces the value, one line per key" 'out 8 && [ "$(grep -c "^MR_IID=" $W2/state.env)" -eq 1 ]'
-st state_set_review T2 1 999; st state_review_round T2
+st state_set_review T2 1 d1:11,d2:21; st state_review_round T2
 check "state_set_review writes the round" 'out 1'
-st state_review_ids T2;       check "state_set_review writes the thread ids" 'out 999'
+st state_review_seen T2;      check "state_set_review writes the seen set" 'out d1:11,d2:21'
+check "state_set_review writes REVIEW_SEEN" 'grep -qx "REVIEW_SEEN=d1:11,d2:21" $W2/state.env'
+printf 'REVIEW_IDS=123,456\n' >> $W2/state.env; st state_review_seen T2
+check "REVIEW_SEEN wins over a REVIEW_IDS left from before #106" 'out d1:11,d2:21'
+st state_set_review T2 1 d1:12; st state_review_seen T2
+check "recording a round drops REVIEW_IDS (before #106)" 'out d1:12 && ! grep -q "^REVIEW_IDS=" $W2/state.env'
+st state_set_review T2 1 d1:11,d2:21
 st state_set_reviewed_sha T2 abc123; st state_reviewed_sha T2
 check "state_set_reviewed_sha writes the commit" 'out abc123'
 st state_branch T2;           check "setters keep the other keys" 'out feature/T2-x'
@@ -86,7 +92,7 @@ cp $W2/state.env "$T/before"
 st state_set_mr_iid T2 $'9\nBASE_BRANCH=x'
 check "a value with a newline is refused" '[ $? -eq 1 ] && err "Not writing MR_IID to .work/T2/state.env: the value contains a newline." && cmp -s $W2/state.env "$T/before"'
 st state_set_review T2 2 $'1\n2'
-check "state_set_review writes neither key when one has a newline" '[ $? -eq 1 ] && grep -q "Not writing REVIEW_IDS" "$T/err.txt" && cmp -s $W2/state.env "$T/before"'
+check "state_set_review writes neither key when one has a newline" '[ $? -eq 1 ] && grep -q "Not writing REVIEW_SEEN" "$T/err.txt" && cmp -s $W2/state.env "$T/before"'
 st state_init T3 $'feature/T3\nMR_IID=1'
 check "state_init refuses a branch with a newline" '[ $? -eq 1 ] && [ ! -e .work/T3/state.env ]'
 for w in "state_set_mr_iid T9 1" "state_set_review T9 1 2" "state_set_reviewed_sha T9 abc"; do

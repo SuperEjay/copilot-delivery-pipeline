@@ -18,20 +18,18 @@
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 require git jq
+source "$(dirname "$0")/duo-round-lib.sh"
 
 TASK="${1:?usage: apply-suggestion.sh <task-id> <thread-id>}"
 THREAD="${2:?usage: apply-suggestion.sh <task-id> <thread-id>}"
 JSON="$(task_dir "$TASK")/review.json"
 [ -f "$JSON" ] || { echo "No ${JSON#"$REPO_ROOT"/}. Run fetch-duo-review.sh $TASK first." >&2; exit 1; }
-T="$(jq -c --arg id "$THREAD" 'map(select(.id == $id)) | .[0] // empty' "$JSON")"
-[ -n "$T" ] || { echo "No thread $THREAD in ${JSON#"$REPO_ROOT"/}." >&2; exit 1; }
+T="$(round_thread "$JSON" "$THREAD")" || exit 1
 
 refuse() { echo "Can't apply the suggestion of thread $THREAD: $1. Make the fix by hand." >&2; exit 3; }
 
-FILE="$(jq -r '.file // empty' <<< "$T")"
-LINE="$(jq -r '.new_line // empty' <<< "$T")"
-SHA="$(jq -r '.head_sha // empty' <<< "$T")"
-BODY="$(jq -r '.body // ""' <<< "$T")"
+IFS=$'\037' read -r FILE LINE SHA <<< "$(head -n1 <<< "$T")"
+BODY="$(tail -n +2 <<< "$T")"
 [ -n "$FILE" ] && [ -n "$LINE" ] || refuse "it isn't on a line of the new code"
 [ -n "$SHA" ] || refuse "review.json has no head_sha for it (fetch the review again)"
 [ -f "$REPO_ROOT/$FILE" ] || refuse "$FILE doesn't exist in the working tree"

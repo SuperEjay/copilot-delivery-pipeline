@@ -17,6 +17,17 @@
   - The planner's "the branch was adopted" note is now in every planner prompt for an adopted task, not only the first plan.
 
 - **One forge module talks to GitLab** (#103). The new `scripts/agent/forge-lib.sh` is the only code that runs `glab`, apart from `doctor.sh`'s `glab auth status`. It covers who you are, an MR's facts and summary, its threads, whether it can be reviewed or adopted, and the writes: create or update an MR, reply, resolve and post a thread. `start-review.sh`, `start-task.sh --mr`, `fetch-duo-review.sh`, `doctor.sh`, `create-mr.sh`, `reply-thread.sh` and `post-review-thread.sh` use it. Behaviour and messages are unchanged, with two exceptions: `/review-mr` and `--mr` now also refuse an MR GitLab returns without a state or target branch, and a failed GitLab write now says which step failed. `tests/test-portability.sh` fails when another script runs `glab`, and `tests/test-guard.sh` checks that sourcing the library is denied. The tests share one fake glab (`tests/lib/fake-glab/glab`) that answers from files and logs each write, in place of their own argv-matching stubs. New `tests/test-forge.sh`.
+- **One Duo round module** (#106). The new `scripts/agent/duo-round-lib.sh` is the only code that knows a Duo round's formats:
+  - which threads go into `review.json`
+  - the round rule and its seen set
+  - `review-triage.md`
+
+  `fetch-duo-review.sh`, the router and `apply-suggestion.sh` use it.
+  - The review-responder now writes `review-triage.md` from a template in its instructions: a `Round:` line and a `| Thread | File:line | Verdict | Reason | Commit |` table.
+  - The router reads ASK threads from the Verdict column only. It stops with a message when a verdict isn't exactly `FIX`, `PUSH BACK` or `ASK`, or when `Round:` is missing. It used to count an `ASK` in any column and ignore an unknown verdict.
+  - Task state keeps the round's seen set readably, as `REVIEW_SEEN=<thread>:<last note>,…`, in place of `REVIEW_IDS` checksums. A task already in a Duo round keeps its round when you upgrade, and its next round switches it to `REVIEW_SEEN`.
+  - `fetch-duo-review.sh` refuses an option other than `--force`.
+  - New `tests/test-duo-round.sh`.
 
 ## v2.1.0
 
