@@ -320,11 +320,13 @@ MAX_AUTO_FIX_ROUNDS=2
 Each stage should run on its pinned model (see "Models (pinned per agent)"):
 the orchestrator names the stage's model on every subagent call.
 
-**This is unverified.** The spike behind ADR 0001 ran on Copilot Free, where
-Auto is the only option in Agent Host. It found that a `model:` line the plan
-can't use is ignored without any error, and that a model named on the subagent
-call is applied. Whether the pinned models hold on a paid plan still needs
-checking. On Copilot Free, the run works, but not on the pinned models.
+**Confirmed on a paid plan** (#67): with a model other than Auto picked, each
+stage runs on its pinned model. Check it in the chat's subagent details. Two
+limits remain:
+- **Auto cancels the pins.** With Auto picked, every stage runs on Auto.
+- **Copilot Free offers only Auto** in Agent Host, so there the run works, but
+  not on the pinned models. A `model:` line the plan can't use is ignored
+  without any error.
 
 ### Optional settings (alerts)
 

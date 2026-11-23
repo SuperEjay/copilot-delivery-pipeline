@@ -1,5 +1,5 @@
 ---
-status: accepted (2026-11-18, after the subagent spike in issue #2; the pinned-model check is still unverified, see Consequences)
+status: accepted (2026-11-18, after the subagent spike in issue #2; pinned models confirmed on a paid plan 2026-11-23, #67, see Consequences)
 ---
 
 # Auto run through an orchestrator and subagents
@@ -43,6 +43,7 @@ We want a task to move through the pipeline without the user picking the next ag
   1. **The guard's deny fires inside a subagent.** A subagent's `git push` returned `Denied by preToolUse hook: …`. This was the make-or-break check.
   2. **A guard ask inside a subagent shows the user a confirm prompt**, so publishing scripts can stay in the shipper and review-responder. The approval can be remembered for the rest of the session, which is why the push confirmation is a stop (see Stop rules).
   3. **Pinned models: unverified.** Copilot Free offers only Auto, and a `model:` line the Copilot plan can't use was ignored without any error. A model named on the subagent call was applied. This needs re-checking on a paid plan.
+     **Confirmed 2026-11-23 (#67):** on a paid Copilot plan, with a model other than Auto picked, each stage of a real auto run ran on its pinned model, as the chat's subagent details showed. The per-stage model design holds. Auto still cancels the pins.
   4. **`copilot-instructions.md` reached a subagent only with `include-custom-instructions: true`.** The two subagents compared ran on different models, so this result is indicative, not clean.
   5. **The hook input names subagents, not the top-level agent.** A subagent's call carries `agentId`, `agentType` and `parentAgentId`; a top-level call carries none of them.
   6. **Alerts: unverified.**
