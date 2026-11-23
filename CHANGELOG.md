@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **e2e is skipped, not failed, when the project has no Playwright** (#112, ADR 0005). `E2E_CMD` now defaults to Playwright only when `package.json` has `@playwright/test`; otherwise `run-checks.sh` prints `SKIP  e2e`, `all` can still print `VERIFIED`, and the verifier lists the skip under Gaps. An explicit `E2E_CMD` (even empty) still wins. `.agent.env.example` no longer sets `E2E_CMD`. `doctor.sh` reports when e2e will be skipped, and warns when `E2E_CMD` runs Playwright in a project without it: remove that line from your `.agent.env` to get the new default.
 - **`--local` keeps the whole `.agents/` folder out of git** (#115). It used to ignore only the ponytail and caveman skills, so any other skill added with `npx skills add` showed up as untracked. `--update` replaces the old lines. If skills under `.agents/` are already committed, the installer says they stay tracked and how to untrack them. Shared installs are unchanged.
 
 ## v2.2.0

@@ -122,6 +122,7 @@ check "reviewer: never resolves threads, never changes the MR" 'mr reviewer "[Nn
 check "reviewer: re-review: each posted finding verified or still open" 'mr reviewer "[Rr]e-review" && mr reviewer "Status:\*\* verified" && mr reviewer "Status:\*\* open"'
 check "reviewer: re-review: new code gets new CR numbers, decisions aren't reopened" 'mr reviewer "new CR numbers" && mr reviewer "[Dd]on.t reopen"'
 check "reviewer: the reply prompt: reply-thread.sh, never --resolve, record Replied" 'mr reviewer "Reply on the threads of the findings verified for mr-<iid>" && mr reviewer "reply-thread.sh mr-<iid> <thread-id>" && mr reviewer "never with .--resolve." && mr reviewer "Replied:\*\* yes" && mr reviewer "Replied:\*\* declined"'
+check "verifier: each SKIP check is a gap, e.g. e2e with no Playwright (ADR 0005)" 'grep -q "printed as SKIP" "$A/verifier.agent.md" && grep -q "no @playwright/test" "$A/verifier.agent.md"'
 check "verifier: in an MR review, the router's prompt starts it" 'mr verifier "Run the checks for mr-<iid> in its review worktree"'
 check "verifier: runs every check once through run-checks.sh" 'mr verifier "scripts/agent/run-checks.sh mr-<iid> all" && mr verifier "once"'
 check "verifier: Commit is the CHECKED sha, not your HEAD" 'mr verifier "CHECKED <sha>" && mr verifier "Commit:.*CHECKED"'
