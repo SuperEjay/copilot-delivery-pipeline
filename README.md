@@ -354,8 +354,9 @@ history, install with `--local`:
 Through curl: `curl -fsSL <install.sh URL> | bash -s -- --local`.
 
 - **Ignored on your machine only:** every pipeline file (`scripts/agent/`, the
-  pipeline's files in `.github/`, `docs/agent-pipeline.md`, the manifest, the
-  optional skills) plus `.work/`, `.agent.env` and the rest go in a
+  pipeline's files in `.github/`, `docs/agent-pipeline.md`, the manifest) plus
+  the whole `.agents/` folder, where `npx skills add` puts every skill, and
+  `skills-lock.json`, `.work/`, `.agent.env` and the rest go in a
   `BEGIN/END agent-pipeline` block in `.git/info/exclude`. It works like
   `.gitignore` but is never committed. Only the pipeline's exact paths are
   ignored, so your project's own files in `scripts/` or `.github/` stay tracked.
@@ -369,6 +370,7 @@ Through curl: `curl -fsSL <install.sh URL> | bash -s -- --local`.
 - **Switching a shared install to local:** run `install.sh --update --local .`.
   Ignoring doesn't untrack committed files, so the installer prints the
   `git rm --cached` command that takes them out of git (they stay on disk). It
+  does the same for skills already committed under `.agents/`, and
   also says if `copilot-instructions.md` still has the pipeline block for you to
   remove.
 

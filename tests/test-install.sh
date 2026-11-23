@@ -138,8 +138,13 @@ check "local: the ignores are in .git/info/exclude, once" '[ "$(grep -c "BEGIN a
 check "local: the project's own scripts/ files aren't ignored" '! git check-ignore -q scripts/new.sh && ! git check-ignore -q .github/agents/ours.agent.md'
 check "local: the manifest records local mode" 'grep -qx "# local" .github/agent-pipeline.manifest'
 check "local: the next steps don't say to commit the pipeline" 'grep -q "kept out of git" "$T/out.txt"'
+mkdir -p .agents/skills/grilling; echo x > .agents/skills/grilling/SKILL.md
+check "local: the whole .agents/ is excluded, so any other skill stays out of git (#115)" 'grep -qx "/.agents/" "$EXCLUDE" && ! grep -q "ponytail" "$EXCLUDE" && [ -z "$(git status --porcelain)" ]'
+# An install from before #115 excluded only the ponytail and caveman folders.
+sed -i 's#^/\.agents/$#/.agents/skills/ponytail*/\n/.agents/skills/caveman*/#' "$EXCLUDE"
 "$ROOT/install.sh" --yes --update . > "$T/out.txt" 2>&1
 check "local: --update stays local without the flag" '[ -z "$(git status --porcelain)" ] && [ "$(grep -c "BEGIN agent-pipeline" "$EXCLUDE")" -eq 1 ] && grep -qx "# local" .github/agent-pipeline.manifest'
+check "local: --update replaces the old ponytail/caveman lines with /.agents/" 'grep -qx "/.agents/" "$EXCLUDE" && ! grep -q "ponytail" "$EXCLUDE"'
 "$ROOT/install.sh" --yes --uninstall . > "$T/out.txt" 2>&1
 check "local: uninstall removes the rules file and the exclude block" '[ ! -f "$LOCAL_RULES" ] && ! grep -q "agent-pipeline" "$EXCLUDE"'
 check "local: uninstall leaves the tracked files as they were" 'git diff --quiet HEAD'
@@ -149,7 +154,10 @@ check "local: uninstall leaves the tracked files as they were" 'git diff --quiet
 git init -q -b main "$T/sw"; cd "$T/sw"; git config user.email t@t; git config user.name t
 git commit -q --allow-empty -m init
 "$ROOT/install.sh" --yes . > /dev/null 2>&1; git add -A; git commit -qm pipeline
+check "shared install: .gitignore doesn't ignore .agents/ (#115)" '! grep -q "agents" .gitignore'
+mkdir -p .agents/skills/team; echo x > .agents/skills/team/SKILL.md; git add -A; git commit -qm "team skill"
 "$ROOT/install.sh" --yes --update --local . > "$T/out.txt" 2>&1
+check "switch to local: warns that committed .agents/ files stay tracked" 'grep -q "under .agents/ are committed" "$T/out.txt"'
 check "switch to local: says how to untrack the committed pipeline files" 'grep -q "git rm -r --cached" "$T/out.txt"'
 check "switch to local: says the old rules block is still in copilot-instructions.md" 'grep -q "copilot-instructions.md still has the pipeline block" "$T/out.txt"'
 cd "$T/proj"

@@ -274,13 +274,17 @@ if $LOCAL; then
   # Every pipeline path, anchored, so your own files in scripts/ or .github/ stay tracked.
   { printf '/%s\n' "$MANIFEST" "$LOCAL_RULES"
     grep -v '^#' "$MANIFEST" | cut -f2 | sed 's#^#/#'
-    printf '%s\n' '/.agents/skills/ponytail*/' '/.agents/skills/caveman*/' '/skills-lock.json'
+    # Every skill folder, not just the ones --with-skills adds: `skills add` puts them all here.
+    printf '%s\n' '/.agents/' '/skills-lock.json'
   } >> "$gi_lines_file"
   put_block "$(git rev-parse --git-path info/exclude)" "$gi_lines_file"
   # Ignoring doesn't untrack: pipeline files committed by a shared install stay in git.
   if [ -n "$(git ls-files -- "$MANIFEST" $(grep -v '^#' "$MANIFEST" | cut -f2))" ]; then
     warn "pipeline files are committed here, and ignoring them doesn't untrack them. To take them out of git (they stay on disk), run:"
     say  "      git rm -r --cached --quiet --ignore-unmatch -- $MANIFEST \$(grep -v '^#' $MANIFEST | cut -f2) && git commit -m 'Keep the agent pipeline out of git'"
+  fi
+  if [ -n "$(git ls-files -- .agents)" ]; then
+    warn "files under .agents/ are committed here, so they stay tracked: only new, untracked skills are kept out of git. To take them out too, run:  git rm -r --cached --quiet .agents && git commit -m 'Keep agent skills out of git'"
   fi
 else
   # On update, replace the block's lines, so an older install gets the ones added since.
