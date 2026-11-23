@@ -127,6 +127,18 @@ check "glab not logged in: no MR states asked for, an INFO" 'line INFO "review w
 glab_on
 for i in 5 6 8; do git worktree remove --force "$(review_wt mr-$i)"; done
 
+# ---------- e2e without Playwright (#112) ----------
+doc
+check "no @playwright/test, E2E_CMD not set: INFO, e2e is skipped" '[ $rc -eq 0 ] && line INFO "e2e: skipped"'
+echo '{"devDependencies":{"@playwright/test":"^1.50.0"}}' > package.json; doc
+check "@playwright/test in package.json: no skip line" '! grep -q "e2e" "$T/out.txt"'
+rm package.json
+echo 'E2E_CMD="npx playwright test --reporter=line"' >> .agent.env; doc
+check "E2E_CMD runs Playwright, but no @playwright/test: WARN, says how to skip" '[ $rc -eq 0 ] && line WARN "E2E_CMD runs Playwright" && grep -q "E2E_CMD=" "$T/out.txt"'
+sed -i '/^E2E_CMD=/d' .agent.env; echo 'E2E_CMD="npm run e2e"' >> .agent.env; doc
+check "E2E_CMD set to something else: no e2e line" '! grep -q "e2e" "$T/out.txt"'
+sed -i '/^E2E_CMD=/d' .agent.env
+
 # ---------- it's a pipeline script ----------
 check "installed as a pipeline file, executable in git" '[ "$(git -C "$ROOT" ls-files -s payload/scripts/agent/doctor.sh | cut -d" " -f1)" = 100755 ]'
 check "runs on bash 3.2: no bash 4 features" '! grep -nE "(declare|local) -A|mapfile|readarray|\$\{[A-Za-z_]+(,,|\^\^)\}" "$ROOT/payload/scripts/agent/doctor.sh"'

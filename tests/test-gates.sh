@@ -49,6 +49,23 @@ $S/run-checks.sh T1 all > "$T/out.txt" 2>&1
 check "failing full run clears it" '[ ! -f $W/verified-head ]'
 env_with true
 
+# ---------- e2e without Playwright is skipped, not failed (#112, ADR 0005) ----------
+# e2e_cmd: E2E_CMD as config.sh resolves it here; "<unset>" if it isn't set at all.
+e2e_cmd() { bash -c 'source scripts/agent/config.sh; printf "%s" "${E2E_CMD-<unset>}"'; }
+printf 'LINT_CMD=true\nTYPECHECK_CMD=true\nUNIT_CMD=true\nINTEGRATION_CMD=\n' > .agent.env
+check "no package.json, E2E_CMD not set: empty" '[ -z "$(e2e_cmd)" ]'
+echo '{"devDependencies":{"vitest":"^3.0.0"}}' > package.json
+check "package.json without @playwright/test: empty" '[ -z "$(e2e_cmd)" ]'
+$S/run-checks.sh T1 all > "$T/out.txt" 2>&1
+check "run-checks all without Playwright: SKIP e2e, VERIFIED" '[ $? -eq 0 ] && grep -q "^SKIP  e2e" "$T/out.txt" && grep -q "^VERIFIED" "$T/out.txt"'
+echo '{"devDependencies":{"@playwright/test":"^1.50.0"}}' > package.json
+check "package.json with @playwright/test: Playwright" '[ "$(e2e_cmd)" = "npx playwright test --reporter=line" ]'
+echo 'E2E_CMD="npm run e2e"' >> .agent.env
+check "an explicit E2E_CMD wins" '[ "$(e2e_cmd)" = "npm run e2e" ]'
+sed -i '/^E2E_CMD=/d' .agent.env; echo 'E2E_CMD=' >> .agent.env
+check "an explicit empty E2E_CMD wins over @playwright/test" '[ -z "$(e2e_cmd)" ]'
+rm package.json; rm -f $W/verified-head; env_with true
+
 # ---------- ship gate: the rules, called directly ----------
 gate() { bash -c 'source scripts/agent/config.sh; source scripts/agent/ship-gate.sh; gate_require "$@"' _ "$@" > "$T/out.txt" 2>&1; }
 approve() { bash -c 'source scripts/agent/config.sh; source scripts/agent/evidence-lib.sh; approval_write T1 AC-1.md' > /dev/null; }
