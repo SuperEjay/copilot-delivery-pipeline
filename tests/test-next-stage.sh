@@ -200,7 +200,12 @@ check "and records the auto-decision under the Plan rule" '[ "$(grep -c "Plan ac
 next T1
 check "the auto-decision is recorded once per plan" '[ "$(grep -c "Plan accepted without a stop" $W/auto-decisions.md)" -eq 1 ]'
 echo "- AC-4: w" >> $W/requirements.md
-next T1; next T1 approve; next T1
+next T1; next T1 approve
+cp $W/state.env "$T/state.keep"; bash -c 'source scripts/agent/config.sh; state_set_adopted T1 branch'
+next T1
+check "an adopted task's re-plan still says the branch was adopted" '[ "$out" = "run planner AUTO RUN. Requirements for T1 changed; update plan.md. The branch was adopted: tick the slices its existing commits already cover." ]'
+cp "$T/state.keep" $W/state.env
+next T1
 check "requirements changed after the plan: run the planner to update it" '[ "$out" = "run planner AUTO RUN. Requirements for T1 changed; update plan.md." ]'
 next T1
 check "the planner changed nothing for the new requirements: stop stalled, offering to keep the plan" '[[ "$out" == "stop stalled planner "*"keep plan.md as it is"* ]]'

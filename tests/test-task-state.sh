@@ -120,6 +120,11 @@ st state_clickup_id mr-7; check "CLICKUP_ID defaults to empty" '[ $? -eq 0 ] && 
 st state_set_clickup_id mr-7 86abc; st state_set_clickup_id mr-7 86def; st state_clickup_id mr-7
 check "state_set_clickup_id replaces the value, one line per key" 'out 86def && [ "$(grep -c "^CLICKUP_ID=" .work/mr-7/state.env)" -eq 1 ]'
 st state_kind mr-7;       check "setting the ClickUp id keeps the kind" 'out MR_REVIEW'
+st state_init T5 feat/x; st state_adopted T5; check "ADOPTED defaults to empty (ADR 0004)" '[ $? -eq 0 ] && out ""'
+st state_set_adopted T5 mr; st state_adopted T5; check "state_set_adopted writes mr" 'out mr'
+st state_set_adopted T5 branch; st state_adopted T5; check "state_set_adopted replaces it, one line" 'out branch && [ "$(grep -c "^ADOPTED=" .work/T5/state.env)" -eq 1 ]'
+st state_set_adopted T5 yes; check "state_set_adopted refuses anything but mr or branch" '[ $? -eq 1 ] && grep -qx ADOPTED=branch .work/T5/state.env'
+st state_set_adopted T8 mr; check "state_set_adopted needs a task state" '[ $? -eq 1 ] && [ ! -e .work/T8/state.env ]'
 st state_set_clickup_id mr-7 $'1\nKIND=DELIVERY'
 check "state_set_clickup_id refuses a newline" '[ $? -eq 1 ] && grep -q "Not writing CLICKUP_ID" "$T/err.txt" && grep -qx CLICKUP_ID=86def .work/mr-7/state.env'
 st state_set_clickup_id T9 1

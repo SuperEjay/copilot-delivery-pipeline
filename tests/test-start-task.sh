@@ -93,6 +93,15 @@ home
 start T5 --branch feat/nowhere
 check "a branch that exists nowhere: refused, no state" '[ $rc -ne 0 ] && [ ! -f .work/T5/state.env ]'
 
+start T15 --branch main
+check "--branch BASE_BRANCH: refused, the pipeline never works on the base branch" '[ $rc -ne 0 ] && grep -q "base branch" "$T/out.txt" && [ ! -f .work/T15/state.env ] && [ "$(git branch --show-current)" = main ]'
+
+# git ls-remote fails (network, auth): an error, not "the branch isn't on origin"
+mkdir -p "$T/gitfail"; REAL_GIT="$(command -v git)"
+printf '#!/usr/bin/env bash\n[ "$1" = ls-remote ] && { echo "fatal: could not read from remote" >&2; exit 128; }\nexec "%s" "$@"\n' "$REAL_GIT" > "$T/gitfail/git"; chmod +x "$T/gitfail/git"
+PATH="$T/gitfail:$PATH" $S/start-task.sh T16 --branch feat/local > "$T/out.txt" 2>&1; rc=$?
+check "origin can't be asked about the branch: refused, says so, no state" '[ $rc -ne 0 ] && grep -qi "origin" "$T/out.txt" && [ ! -f .work/T16/state.env ] && [ "$(git branch --show-current)" = main ]'
+
 echo dirty >> a.txt
 start T6 --branch feat/mine
 check "uncommitted changes: refused" '[ $rc -ne 0 ] && grep -q "uncommitted changes" "$T/out.txt" && [ ! -f .work/T6/state.env ]'

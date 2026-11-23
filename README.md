@@ -388,6 +388,7 @@ tests/test-post-review.sh   # checks posting an MR review's findings (diff or ge
 tests/test-findings.sh      # checks reading and changing code-review.md findings, against the reviewer agent's own templates
 tests/test-apply-suggestion.sh  # checks applying a review thread's suggestion block: moved lines, stale lines, refusals
 tests/test-start-task.sh    # checks starting a task, and adopting your own branch or MR (--branch, --mr)
+tests/test-portability.sh   # checks the scripts use nothing newer than macOS's bash 3.2
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release

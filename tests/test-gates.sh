@@ -155,10 +155,10 @@ $S/fetch-duo-review.sh T1 --force > "$T/out.txt" 2>&1
 check "... and with --force it is round 4" '[ $? -eq 0 ] && grep -q "^Round 4: 1 " "$T/out.txt" && jq -e "map(.id) == [\"d4\"]" $W/review.json >/dev/null'
 discs d4:duo,me,duo d6:duo,me
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
-check "an unanswered thread with no new note, plus an answered one: same round" '[ $? -eq 0 ] && grep -q "^Round 4: 1 .*not a new round" "$T/out.txt" && grep -q "^1 thread(s) already answered" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
+check "an unanswered thread with no new note, plus an answered one: same round, nothing new" '[ $? -eq 0 ] && grep -q "^Round 4: 1 .*not a new round" "$T/out.txt" && grep -q "^Nothing new since round 4" "$T/out.txt" && grep -q "^1 thread(s) already answered" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
 touch "$STUB/no-user"
-$S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1
-check "the glab user can't be looked up: the fetch fails, the round is untouched" '[ $? -ne 0 ] && [ $? -ne 3 ] && grep -qi "glab user" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
+$S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1; rc=$?
+check "the glab user can't be looked up: the fetch fails (not a round-limit exit), the round is untouched" '[ $rc -ne 0 ] && [ $rc -ne 3 ] && grep -qi "glab user" "$T/out.txt" && grep -q "^REVIEW_ROUND=4$" $W/state.env'
 rm -f "$STUB/no-user"
 # ---------- an MR review's threads: every author, no round (ADR 0003) ----------
 # Discussions from Duo, a person, a resolved one, a system note and a plain
