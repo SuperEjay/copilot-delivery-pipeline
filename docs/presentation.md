@@ -1,6 +1,6 @@
 # From ClickUp task to reviewed merge request
 
-How the Copilot delivery pipeline delivers and reviews work, as of v2.3.0. This
+How the Copilot delivery pipeline delivers and reviews work, as of v2.4.0. This
 is the team presentation written out as a document, one section per slide. The
 speaker notes are under each slide's **Notes**.
 
@@ -143,7 +143,7 @@ A hook runs before every agent tool call.
 | requirements, planner | Claude Opus 5.5 | Misreading the ticket or the design is the costliest mistake |
 | implementer | Claude Sonnet 5.5 | Most tokens are spent here: solid work at mid price |
 | verifier, reviewer | GPT-6 Sol | Another model family grades the code more independently |
-| evidence | Claude Sonnet 5.5 | Reliable Playwright specs and screenshot checks |
+| evidence, gap-checker | Claude Sonnet 5.5 | UI work: Playwright specs, screenshots, browser checks |
 | review-responder | Grok 4.7 | Triage and small fixes, cheap output |
 | shipper, pipeline | GPT-6 Luna | Mechanical work: the cheapest model |
 
@@ -208,25 +208,29 @@ The design is in [ADR 0003](adr/0003-mr-review-a-second-route.md).
 
 ---
 
-## 9. New since v2.1: fewer blockers, less rework
+## 9. New in v2.2 to v2.4: fewer blockers, less rework
 
 | | |
 |---|---|
 | **Adopt your own work** (v2.2) | `/start-task <id> --mr <iid>` or `--branch <branch>` runs an MR you started by hand through the whole route ([ADR 0004](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md)). |
 | **Duo suggestions applied, not rewritten** (v2.2) | A script applies a Duo `suggestion` block exactly as written, and refuses if the lines changed. |
-| **No Playwright, no blocker** (v2.3) | Without Playwright, e2e is skipped and recorded as a gap instead of blocking the push ([ADR 0005](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md)). |
-| **Local installs stay local** (v2.3) | `--local` now keeps every agent skill in `.agents/` out of git, not just two. |
+| **No Playwright, no blocker** (v2.3, v2.4) | Without Playwright, e2e is skipped, and a UI criterion whose logic is unit- or integration-tested passes with a recorded gap; evidence falls back to text ([ADR 0005](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md)). |
+| **Check the gaps** (v2.4) | Pick the **gap-checker** agent at the pre-ship stop: it walks those criteria in VS Code's built-in browser and writes down what it saw. |
 
 <details><summary>Notes</summary>
 
-Four changes since v2.1. You can hand the pipeline work you began yourself: it
+Changes since v2.1. You can hand the pipeline work you began yourself: it
 adopts your branch or MR, credits the commits already there, and fixes the rest.
 Duo's suggestion blocks are applied by a script, which saves tokens and lands
 exactly what the reviewer asked for. Projects without Playwright no longer get
-stuck at verification: e2e is skipped, written down as a gap, and the push goes
-ahead. A live browser check never counts as a test, so the ship gate still only
-trusts repeatable checks. And a local install keeps all your agent skills out of
-git.
+stuck: e2e is skipped, a UI criterion whose logic is tested below e2e passes with
+a recorded gap, evidence falls back to text plus any screenshots you save, and
+the pre-ship stop says how many gaps there are. Before approving, you can pick
+the gap-checker agent to walk those criteria in VS Code's browser. It has to be
+an agent you pick: we tested it, and VS Code doesn't give subagents the browser
+tools. A browser check never counts as a test, so the ship gate still only
+trusts repeatable checks. Smaller: a local install keeps all your agent skills
+out of git.
 
 </details>
 
@@ -234,29 +238,29 @@ git.
 
 ## 10. How it's built: test-first, decided in the open
 
-| 1,436 | 5 | 9 |
+| 1,456 | 5 | 10 |
 |---|---|---|
-| automated checks across 16 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), [MR review](adr/0003-mr-review-a-second-route.md), [adopting a branch or MR](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md), and [live checks never feed the ship gate](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md) | releases so far, from v1.0.0 to v2.3.0, each tagged on GitHub |
+| automated checks across 16 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), [MR review](adr/0003-mr-review-a-second-route.md), [adopting a branch or MR](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md), and [live checks never feed the ship gate](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md) | releases so far, from v1.0.0 to v2.4.0, each tagged on GitHub |
 
 Every change lands on its own branch, test first, with each new test proven to
 fail before the fix.
 
 ---
 
-## 11. Where it stands: v2.3.0 is out; browser checks are next
+## 11. Where it stands: v2.4.0 is out; real runs are next
 
 | Status | What |
 |---|---|
-| ✅ **Done** | v2.1.0 to v2.3.0 released: MR review, adopting your own work, applied suggestions, and no Playwright needed. |
-| 🔶 **In progress** | A spike on VS Code's built-in browser tools (#113): do they work for subagents, on WSL2 and on Copilot Free? |
-| ➡️ **Next** | Live browser checks for UI criteria and text evidence without Playwright (#114). Still unproven: a real GitLab run, and pinned models on paid plans (#67). |
+| ✅ **Done** | v2.1.0 to v2.4.0 released: MR review, adopting your own work, applied suggestions, UI work without Playwright, and gap checks. The browser-tools spike (#113) is settled: subagents don't get the tools, so the gap check is an agent you pick. |
+| 🔶 **In progress** | First real runs: a task in a project without Playwright, and gap-checker in VS Code. |
+| ➡️ **Next** | A run against real GitLab instead of stubs, then pinned models on paid plans (#67). |
 
 ---
 
 ## 12. What I'd like from the team: help prove it on real work
 
 1. **An MR to review.** Volunteer an open MR so `/review-mr` runs on real GitLab, not stubs.
-2. **A small task.** Run one ticket through the delivery route, ideally in a project without Playwright, and note where it stopped.
+2. **A small task.** Run one ticket through the delivery route, ideally in a project without Playwright, try the gap-checker agent at the pre-ship stop, and note where it stopped.
 3. **Your feedback.** Which stops are worth keeping, and which can go.
 
 Questions?
