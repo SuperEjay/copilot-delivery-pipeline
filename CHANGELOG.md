@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **No open questions, no early stop** (#130, ADR 0006). When requirements.md has no list items under `## Open questions`, an auto run no longer stops after the requirements agent: it goes on to the planner, and the `plan` stop then shows requirements.md and plan.md together. Approving it approves both. With a question open, the `requirements` stop comes first as before. A requirements.md without the `## Open questions` section is a stop no approval passes. Feedback at the `plan` stop about the acceptance criteria, scope or assumptions goes to the requirements agent; anything else to the planner. `next-stage.sh`, `pipeline.agent.md` and `requirements.agent.md` changed.
+
 - **Pinned models are confirmed on a paid plan** (#67). On a paid Copilot plan, with a model other than Auto picked, each stage of a real auto run ran on its pinned model. The guide's "Pinned models in an auto run", ADR 0001 and ADR 0002 now say so. Docs only.
 
 ## v2.4.0

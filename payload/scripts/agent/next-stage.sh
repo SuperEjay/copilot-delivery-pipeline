@@ -11,8 +11,8 @@
 #                                     pre-ship duo; in an MR review, spec focus
 #                                     findings stalled. A file missing a line it
 #                                     reads is a stop no approval passes, under
-#                                     the stage's id: plan review duo verify
-#                                     evidence spec focus
+#                                     the stage's id: requirements plan review
+#                                     duo verify evidence spec focus
 #       end <reason>                  the run is over until Duo reviews: the MR
 #                                     is open, or a Duo round is answered. In an
 #                                     MR review: the findings are posted
@@ -26,13 +26,17 @@
 # a review finding has no decision, or the evidence isn't approved at HEAD.
 #
 # It walks the pipeline in order and the first unfinished step decides:
-#   requirements.md   missing: run requirements. Not approved as it is now: stop.
+#   requirements.md   missing: run requirements. Not approved as it is now: an
+#                     open question under "## Open questions" stops (requirements);
+#                     none open, it goes on, and the plan stop below approves it
+#                     too (ADR 0006).
 #   plan.md           missing: run planner (an adopted task, ADR 0004: told to
 #                     tick what the branch's commits cover). Requirements changed since the plan
 #                     was accepted: run planner. A Stop flag "yes" or more than
-#                     MAX_PLAN_SLICES S slices: stop (once approved, it goes
-#                     on); otherwise it goes on and adds an auto-decision to
-#                     auto-decisions.md.
+#                     MAX_PLAN_SLICES S slices, or requirements not yet approved:
+#                     stop (once approved, it goes on; approving it then approves
+#                     the requirements as well); otherwise it goes on and adds an
+#                     auto-decision to auto-decisions.md.
 #   slices            any "- [ ] S<n>:" or "- [ ] R<n>:" line: run implementer.
 #   (MR open)         the Duo round below instead of the next four steps.
 #   verified          verification.md "Result: PASS" with "Commit:" = HEAD, and
@@ -72,6 +76,8 @@
 #
 # Lines it reads, which the agents' templates write (anything missing or
 # unreadable is a stop no approval can pass):
+#   requirements.md        "## Open questions", its list items the open questions
+#                          (read only while the requirements aren't approved)
 #   plan.md                "## Stop flags" with "- Requirement gaps: yes|no",
 #                          "- Migration: …", "- Feature flag: …", "- Other team: …"
 #   verification.md        "Result: PASS|FAIL", "Commit: <HEAD it checked>"
@@ -225,6 +231,14 @@ _fix_run() { FIX_KEY="$1"; _run implementer "$2"; }
 # _unreadable <stop-id> <reason>: a stop no approval can pass; the file needs fixing.
 _unreadable() { VERB=stop; WHAT="$1"; STOP_FP=""; TEXT="$2"; }
 
+# _open_questions: the number of list items ("- ", "* " or "1. ") under
+# "## Open questions" in requirements.md, or "missing" without that heading.
+_open_questions() {
+  awk '/^## / { on = ($0 == "## Open questions"); if (on) seen = 1; next }
+    on && /^[[:space:]]*([-*]|[0-9]+\.)[[:space:]]+[^[:space:]]/ { n++ }
+    END { if (seen) print n + 0; else print "missing" }' "$DIR/requirements.md"
+}
+
 # _plan_flag <name>: yes or no from "- <name>: yes|no" under "## Stop flags".
 _plan_flag() {
   _last_value "$DIR/plan.md" "- $1:" "Stop flags" | tr -d ' \t' | tr '[:upper:]' '[:lower:]'
@@ -232,13 +246,15 @@ _plan_flag() {
 
 # check_plan <requirements fp>: decide whether the plan may go on (sets PLAN_ACCEPTED
 # and AUTO_PLAN), or set a run/stop. Returns 1 when it set a decision.
+# With DEFERRED_RFP set (requirements not approved, nothing open: ADR 0006), the
+# plan always stops, and that stop is the requirements stop too.
 check_plan() {
   local rfp="$1" pfp acc name flag n reasons=() sfp
   pfp="$(_checksum @unticked:plan.md)"; acc="$(_status_value "Plan accepted")"
   if [ -n "$acc" ] && [ "${acc% *}" = "$pfp" ] && [ "${acc#* }" != "$rfp" ]; then
     _run planner "$PLAN_UPDATE"; return 1
   fi
-  [ "$acc" = "$pfp $rfp" ] && return 0
+  [ -z "$DEFERRED_RFP" ] && [ "$acc" = "$pfp $rfp" ] && return 0
 
   for name in "Requirement gaps" "Migration" "Feature flag" "Other team"; do
     flag="$(_plan_flag "$name")"
@@ -251,11 +267,15 @@ check_plan() {
   n="$(grep -cE '^- \[[ xX]\] S[0-9]+:' "$DIR/plan.md")"
   [ "$n" -gt "$MAX_PLAN_SLICES" ] && reasons+=("$n slices (more than $MAX_PLAN_SLICES)")
 
-  if [ "${#reasons[@]}" -gt 0 ]; then
-    sfp="$(_checksum @unticked:plan.md requirements.md)"
-    if ! _approved plan "$sfp"; then
-      local IFS=,; _stop plan "$sfp" "Review $REL/plan.md: it flags ${reasons[*]}."; return 1
-    fi
+  sfp="$(_checksum @unticked:plan.md requirements.md)"
+  if _approved plan "$sfp"; then
+    :   # the user approved this plan for these requirements
+  elif [ -n "$DEFERRED_RFP" ]; then
+    local flags=""
+    [ "${#reasons[@]}" -gt 0 ] && { local IFS=,; flags=" plan.md flags ${reasons[*]}."; }
+    _stop plan "$sfp" "Review $REL/requirements.md (acceptance criteria, assumptions) and $REL/plan.md, then approve both: requirements.md has no open questions, so this is its stop too.$flags"; return 1
+  elif [ "${#reasons[@]}" -gt 0 ]; then
+    local IFS=,; _stop plan "$sfp" "Review $REL/plan.md: it flags ${reasons[*]}."; return 1
   else
     AUTO_PLAN="$n"
   fi
@@ -265,9 +285,15 @@ check_plan() {
 decide() {
   STAGE=requirements
   if [ ! -f "$DIR/requirements.md" ]; then _run requirements "Analyse $TASK."; return; fi
-  local fp; fp="$(_checksum requirements.md)"
+  local fp oq; fp="$(_checksum requirements.md)"
   if ! _approved requirements "$fp"; then
-    _stop requirements "$fp" "Review $REL/requirements.md: answer its open questions here, or approve it."; return
+    oq="$(_open_questions)"
+    if [ "$oq" = missing ]; then
+      _unreadable requirements "$REL/requirements.md has no '## Open questions' section. The requirements agent must write it, with no list items when nothing is open."; return
+    elif [ "$oq" -gt 0 ]; then
+      _stop requirements "$fp" "Review $REL/requirements.md: answer its open questions here, or approve it."; return
+    fi
+    DEFERRED_RFP="$fp"   # nothing open: the requirements are approved at the plan stop (ADR 0006)
   fi
 
   STAGE=plan
@@ -612,7 +638,7 @@ APPROVALS="$(grep '^Approved [a-z-]*: ' "$STATUS" 2>/dev/null | sed 's/^Approved
 _drop_approval() { APPROVALS="$(grep -v "^$1: " <<<"$APPROVALS")"; }
 _set_approval() { _drop_approval "$1"; APPROVALS="${APPROVALS:+$APPROVALS$'\n'}$1: $2"; }
 
-PLAN_ACCEPTED=""; AUTO_PLAN=""; FIX_KEY=""; LAST_RUN=""; LAST_RUN_FP=""; RESET_ROUNDS=""; APPROVE_BLOCK=""
+DEFERRED_RFP=""; PLAN_ACCEPTED=""; AUTO_PLAN=""; FIX_KEY=""; LAST_RUN=""; LAST_RUN_FP=""; RESET_ROUNDS=""; APPROVE_BLOCK=""
 if [ "$KIND" = MR_REVIEW ]; then decide_review; else decide; fi
 apply_fix_round
 check_stall
@@ -631,6 +657,8 @@ if [ "$CMD" = approve ]; then
     exit 1
   fi
   _set_approval "$WHAT" "$STOP_FP"
+  # The combined plan stop approves the requirements it showed too (ADR 0006).
+  [ "$WHAT" = plan ] && [ -n "$DEFERRED_RFP" ] && _set_approval requirements "$DEFERRED_RFP"
   case "$WHAT" in fix-limit|review) NEW_ROUND=0 ;; esac   # more rounds allowed, or the findings were decided: the count starts over
   PLAN_ACCEPTED=""
   if [ "$WHAT" = stalled ] && _plan_update_stalled; then
