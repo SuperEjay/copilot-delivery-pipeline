@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Test tooling per stack** (#131). `doctor.sh`, and so the end of every install and `--update`, prints a "test tooling" section: ready-to-paste `.agent.env` lines for each check of a Node or Laravel project, and the tool to install where one is missing (Laravel: Pest, else PHPUnit, Pint, Larastan, and the Pest browser plugin for e2e with Playwright as the alternative). It only recommends: nothing is written to `.agent.env` or installed. A command `.agent.env` sets to other than the example's value wins. The stacks are one table in `scripts/agent/stacks.sh`; another stack gets a one-line "set the commands by hand".
 - **Pinned models are confirmed on a paid plan** (#67). On a paid Copilot plan, with a model other than Auto picked, each stage of a real auto run ran on its pinned model. The guide's "Pinned models in an auto run", ADR 0001 and ADR 0002 now say so. Docs only.
 
 ## v2.4.0

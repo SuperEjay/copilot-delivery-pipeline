@@ -321,7 +321,8 @@ fi
 
 # ---------- check the setup ----------
 # doctor.sh checks the tools, glab login, the token, .agent.env, line endings,
-# the hook guard and VS Code, and changes nothing. A FAIL doesn't fail the
+# the hook guard and VS Code, and prints the test tooling for the project's stack
+# (stacks.sh). It changes nothing and installs nothing. A FAIL doesn't fail the
 # install: the files are in place, and the setup steps below fix most FAILs.
 say ""
 say "Checking the setup (scripts/agent/doctor.sh):"
@@ -331,7 +332,7 @@ bash scripts/agent/doctor.sh </dev/null || doctor_failed=true
 say ""
 say "Done. Next steps:"
 $LOCAL && say "  (The pipeline is kept out of git, in .git/info/exclude: there's nothing to commit.)"
-say "  1. Fill in .agent.env (test commands, Duo username, ClickUp workspace ID)."
+say "  1. Fill in .agent.env (test commands, Duo username, ClickUp workspace ID). The test tooling lines above give your stack's commands, and the tools to install."
 say "  2. Export CLICKUP_API_TOKEN in your shell profile, and run 'glab auth login'."
 say "  3. Check the model names in .github/agents/*.agent.md match your Copilot model picker."
 say "  4. Fully quit and reopen VS Code, pick the pipeline agent, then type in Copilot Chat:  /start-task <clickup-id> <short-slug>"

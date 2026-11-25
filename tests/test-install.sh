@@ -33,14 +33,19 @@ check "guard smoke test passed" 'grep -q "hook guard works" "$T/out.txt"'
 check "the installer ends by running doctor.sh" 'grep -q "^Checking the setup (scripts/agent/doctor.sh)" "$T/out.txt" && grep -qE "^(PASS|WARN|FAIL|INFO) " "$T/out.txt"'
 check "a FAIL from doctor.sh doesn't fail the install, and says to run it again" 'grep -q "^FAIL " "$T/out.txt" && grep -q "run scripts/agent/doctor.sh again" "$T/out.txt"'
 check "the installer has no guard test of its own (doctor.sh does it)" '! grep -q "permissionDecision" "$ROOT/install.sh"'
+check "a fresh install shows doctor's test tooling section, and step 1 points at it (#131)" 'grep -q "^INFO  test tooling: unknown stack" "$T/out.txt" && grep -q "1\. Fill in \.agent\.env.*test tooling" "$T/out.txt"'
 
 # 2. second install refused
 run; check "reinstall refused" 'grep -q "already installed" "$T/out.txt"'
 
 # 3. update with no changes
 echo 'MY_SETTING=1' >> .agent.env
+echo '{}' > composer.json; touch artisan; cp .agent.env "$T/env.before"
 run --update; check "update ok" 'grep -q "0 written" "$T/out.txt"'
-check ".agent.env untouched" 'grep -q MY_SETTING .agent.env'
+check ".agent.env untouched" 'grep -q MY_SETTING .agent.env && cmp -s .agent.env "$T/env.before"'
+check "--update shows the test tooling section for the stack (#131)" 'grep -q "^INFO  test tooling: Laravel" "$T/out.txt" && grep -q "1\. Fill in \.agent\.env.*test tooling" "$T/out.txt"'
+check "--update installs nothing the section recommends (#131)" '[ ! -e vendor ] && [ ! -e node_modules ] && [ ! -e composer.lock ]'
+rm composer.json artisan
 check "rules block not duplicated" '[ "$(grep -c "BEGIN agent-pipeline" .github/copilot-instructions.md)" -eq 1 ]'
 check "gitignore block not duplicated" '[ "$(grep -c "BEGIN agent-pipeline" .gitignore)" -eq 1 ]'
 

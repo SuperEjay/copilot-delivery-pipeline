@@ -220,7 +220,10 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    `scripts/agent/doctor.sh` again after setup, until it shows no FAIL.
 4. Configure the pipeline, following steps 4 to 10 of the guide's
    [Setup](payload/docs/agent-pipeline.md#setup-about-15-minutes):
-   - your test commands in `.agent.env` (the installer created it)
+   - your test commands in `.agent.env` (the installer created it). The
+     installer's "test tooling" lines give them for a Node or Laravel project,
+     and name the test tools to install where one is missing: copy the ones you
+     want. Nothing is written or installed for you.
    - `export CLICKUP_API_TOKEN="pk_..."` in your shell profile (`~/.zshrc` on
      macOS, `~/.bashrc` on Linux, WSL and Git Bash), never in the repo
    - `CLICKUP_TEAM_ID` and `DUO_USERNAMES` in `.agent.env`
@@ -391,7 +394,7 @@ tests/test-task-state.sh  # checks that .work/<id>/state.env is read as data and
 tests/test-next-stage.sh  # checks the auto run's router: the next stage or stop for fixture .work/ folders
 tests/test-agents.sh      # checks the stage agents: subagent frontmatter, no handoffs, the "In an auto run" sections
 tests/test-orchestrator.sh  # checks the orchestrator (pipeline agent) against the router's verbs and stop ids
-tests/test-doctor.sh      # checks doctor.sh: each PASS, WARN and FAIL, with fake tools on PATH, and that it changes nothing
+tests/test-doctor.sh      # checks doctor.sh: each PASS, WARN and FAIL, with fake tools on PATH, the test tooling per stack, and that it changes nothing
 tests/test-start-review.sh  # checks the start of an MR review: which MRs, the review worktree, dependencies, ClickUp, --done
 tests/test-post-review.sh   # checks posting an MR review's findings (diff or general threads), replies and review signals
 tests/test-findings.sh      # checks reading and changing code-review.md findings, against the reviewer agent's own templates
