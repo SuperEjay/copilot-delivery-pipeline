@@ -21,6 +21,8 @@
 #   ask   anything that publishes: create-mr, push-branch, upload-evidence, ClickUp writes,
 #         post-review-thread (a finding posted on someone else's MR), and a reply on
 #         an MR review's thread (never --resolve)
+#   ask   a cleanup (cleanup-task.sh, start-review.sh <iid> --done): it deletes a task's
+#         local branch, work folder or review worktree
 #
 # Every decision other than allow is logged to .work/hooks.log.
 # To switch the guard off for a session, start VS Code with PIPELINE_GUARD=off.
@@ -272,6 +274,9 @@ if $is_shell; then
   fi
   if has 'post-review-thread\.sh'; then
     decide ask "This posts a review finding as a thread on the MR, under your GitLab account. Approve only if you marked it post."
+  fi
+  if has 'scripts/agent/cleanup-task\.sh|start-review\.sh[[:space:]]+[^[:space:]]+[[:space:]]+--done'; then
+    decide ask "This deletes a finished task's local branch, work folder or review worktree. Approve only if you asked for the cleanup."
   fi
   if has 'clickup\.sh[[:space:]]+(comment|status|attach)'; then
     decide ask "This writes to the ClickUp task (comment, status or attachment)."

@@ -18,6 +18,7 @@ git add -A; git commit -qm init
 
 # 1. fresh install
 run; check "install exits 0" '[ $? -eq 0 ]'
+check "the /cleanup skill and its script are installed, in the manifest (#132)" '[ -f .github/skills/cleanup/SKILL.md ] && [ -x scripts/agent/cleanup-task.sh ] && grep -q ".github/skills/cleanup/SKILL.md" .github/agent-pipeline.manifest'
 check "agents copied" '[ -f .github/agents/reviewer.agent.md ]'
 check "orchestrator copied" '[ -f .github/agents/pipeline.agent.md ]'
 check "gap-checker copied, listed in the manifest (#123)" '[ -f .github/agents/gap-checker.agent.md ] && grep -q ".github/agents/gap-checker.agent.md" .github/agent-pipeline.manifest'

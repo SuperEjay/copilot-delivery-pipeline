@@ -400,6 +400,7 @@ tests/test-start-task.sh    # checks starting a task, and adopting your own bran
 tests/test-portability.sh   # checks the scripts use nothing newer than macOS's bash 3.2
 tests/test-forge.sh         # checks forge-lib.sh, the only code that runs glab, against the shared fake glab (tests/lib/fake-glab)
 tests/test-duo-round.sh     # checks duo-round-lib.sh: review.json, the round rule, and review-triage.md against the review-responder's template
+tests/test-cleanup-task.sh  # checks cleaning up a finished task: merged, closed, refusals, parked debt, MR reviews, --finished
 ```
 
 The pipeline itself lives in `payload/`. Bump `VERSION`, tag a release

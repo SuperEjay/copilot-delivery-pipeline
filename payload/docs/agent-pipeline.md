@@ -92,9 +92,10 @@ its reply with a **Next:** line naming the agent to pick and what to say, e.g.
 | `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>` (or `--mr <iid>` / `--branch <branch>` to adopt your own work): branch, work folder, ClickUp fetch, then starts the auto run when **pipeline** is picked (the **requirements** agent goes on with its analysis; any other agent points you to the **pipeline** agent) |
 | `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then resumes the auto run when **pipeline** is picked (the **review-responder** agent goes on with its triage; any other agent points you to the **pipeline** agent) |
 | `.github/skills/review-mr/SKILL.md` | `/review-mr <iid> [clickup-id]`: check out an existing MR for a read-only review and start its auto run when **pipeline** is picked; `/review-mr <iid> --done` cleans up (see "MR review (a teammate's MR)") |
+| `.github/skills/cleanup/SKILL.md` | `/cleanup <id>` or `/cleanup --finished`: once a task's MR is merged or closed, removes its branch (merged only), its `.work/` folder and, for an MR review, its worktree (see "Cleanup" under "Daily use: auto run") |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
 | `.github/copilot-instructions.md` | Six short rules every agent follows (kept short on purpose: it's sent with every request) |
-| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, applying a thread's suggestion block (`apply-suggestion.sh`), thread reply/resolve, MR review setup and posting (`start-review.sh`, `set-review-spec.sh`, `post-review-thread.sh`), and `doctor.sh`, which checks your setup |
+| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, applying a thread's suggestion block (`apply-suggestion.sh`), thread reply/resolve, MR review setup and posting (`start-review.sh`, `set-review-spec.sh`, `post-review-thread.sh`), cleaning up finished tasks (`cleanup-task.sh`), and `doctor.sh`, which checks your setup |
 | `.agent.env.example` | Your test commands, Duo username, round limit, ClickUp workspace and status, and the MR review settings |
 
 **No MCP needed.** ClickUp goes through its REST API (`scripts/agent/clickup.sh`)
@@ -317,6 +318,29 @@ MAX_AUTO_FIX_ROUNDS=2
   to go on.
 - **In a new chat, or after a break:** pick **pipeline** and say
   `Continue 86c1abcde` (or `Run 86c1abcde`).
+- **The MR is merged or closed:** `/fetch-review` says so and points you to
+  `/cleanup`.
+
+### Cleanup
+
+A task leaves its branch and `.work/<id>/` behind. Once its MR is merged or
+closed, run `/cleanup <id>` (any agent):
+
+- **Merged:** deletes the local branch (even after a squash merge) and
+  `.work/<id>/`.
+- **Closed:** deletes `.work/<id>/` and keeps the branch, printing the
+  `git branch -D` command for when you're sure.
+- It never touches the remote. For a closed MR whose remote branch is still
+  there, it says so.
+- It refuses, and changes nothing, while the MR is open, when the task has no
+  MR, when glab can't tell the MR's state, when you're on the task's branch or
+  have uncommitted changes, and when `tech-debt.md` still has parked debt (it
+  lists it: copy it somewhere, then add `--drop-debt`). A task you abandoned
+  before it got an MR: `/cleanup <id> --force` (the branch is kept).
+- `/cleanup --finished` cleans every finished task, skips what it can't clean
+  yet, and ends with a summary.
+- `scripts/agent/doctor.sh` lists every finished task with its `/cleanup`
+  command. The guard asks before an agent runs a cleanup.
 
 ### Pinned models in an auto run
 
@@ -437,10 +461,12 @@ rules)".
 
 ### Cleanup
 
-The worktree is kept for re-reviews. When you're done (the MR is merged or
-closed), run `/review-mr <iid> --done`. It removes the worktree and keeps the
-text files in `.work/mr-<iid>/`. `scripts/agent/doctor.sh` warns about review
-worktrees whose MR is merged or closed, with the `--done` command for each.
+The worktree is kept for re-reviews. When the MR is merged or closed, run
+`/review-mr <iid> --done` (or `/cleanup mr-<iid>`, the same thing). It removes
+the worktree and `.work/mr-<iid>/`; parked debt in its tech-debt.md is listed
+first, as for any task. To drop a review of an MR that's still open, run
+`/cleanup mr-<iid> --force`. `scripts/agent/doctor.sh` lists MR reviews whose MR
+is merged or closed, with the `/cleanup` command for each.
 
 ### Settings
 
@@ -493,7 +519,7 @@ instructions into enforcement:
 
 | Decision | What |
 |---|---|
-| **Ask you** | Anything that publishes: `create-mr.sh`, `push-branch.sh`, `upload-evidence.sh`, and `clickup.sh comment / status / attach`. In an MR review: each `post-review-thread.sh` (a finding posted on the MR) and each `reply-thread.sh mr-<iid>` reply. VS Code shows a confirm prompt, which is your final go-ahead. |
+| **Ask you** | Anything that publishes: `create-mr.sh`, `push-branch.sh`, `upload-evidence.sh`, and `clickup.sh comment / status / attach`. In an MR review: each `post-review-thread.sh` (a finding posted on the MR) and each `reply-thread.sh mr-<iid>` reply. Cleaning up (`cleanup-task.sh`, `start-review.sh <iid> --done`), which deletes a task's branch, work folder or review worktree. VS Code shows a confirm prompt, which is your final go-ahead. |
 | **Deny** | Running `approve-evidence.sh`, or touching `evidence/APPROVED`, `evidence/UPLOADED` or `verified-head` |
 | **Deny** | Running `next-stage.sh` from a subagent, however it's spelled (quoted, through a variable or a glob, piped into a shell). Only the orchestrator runs the auto run's router, so a stage agent can't approve a stop itself. Reading it with `cat`, `grep` or `git diff` is fine. |
 | **Deny** | Changing `.work/<id>/state.env` (the task state), `.work/<id>/status.md` (the auto run's record, including stop approvals) or `.work/<id>/run.log` (the run log) through edit tools or the shell. Agents may read them; only the scripts write them. |

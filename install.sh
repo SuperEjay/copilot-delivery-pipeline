@@ -122,7 +122,7 @@ if [ "$MODE" = uninstall ]; then
     remove_block .gitignore "$GI_BEGIN" "$GI_END"
     ok "removed the pipeline block from .gitignore"
   fi
-  find .github/agents .github/instructions .github/prompts .github/skills/start-task .github/skills/fetch-review .github/skills/review-mr .github/skills .github/hooks scripts/agent/hooks scripts/agent docs -type d -empty -delete 2>/dev/null || true
+  find .github/agents .github/instructions .github/prompts .github/skills/start-task .github/skills/fetch-review .github/skills/review-mr .github/skills/cleanup .github/skills .github/hooks scripts/agent/hooks scripts/agent docs -type d -empty -delete 2>/dev/null || true
   say ""
   say "Done. Kept: .agent.env (your settings) and .work/ (task folders). Delete them yourself if you no longer need them."
   exit 0
@@ -233,7 +233,7 @@ while IFS=$'\t' read -r h p; do
   if [ -f "$p" ] && [ "$(sha256 "$p")" = "$h" ]; then rm -f "$p"; ok "removed $p (no longer part of the pipeline)"; fi
 done < "$OLD_MANIFEST"
 rm -f "$OLD_MANIFEST"
-for d in .github/prompts .github/skills/start-task .github/skills/fetch-review .github/skills/review-mr; do
+for d in .github/prompts .github/skills/start-task .github/skills/fetch-review .github/skills/review-mr .github/skills/cleanup; do
   [ -d "$d" ] && [ -z "$(ls -A "$d")" ] && rmdir "$d" 2>/dev/null || true
 done
 mkdir -p "$(dirname "$MANIFEST")"; mv "$NEW_MANIFEST" "$MANIFEST"
