@@ -8,7 +8,7 @@ We want a task to move through the pipeline without the user picking the next ag
 
 ## Stop rules
 
-- **Requirements:** always stops. Misreading the ticket is the costliest mistake.
+- **Requirements:** always stops. Misreading the ticket is the costliest mistake. (Amended by ADR 0006: with no open questions, the run goes on to the planner, and the requirements are approved together with the plan at one stop.)
 - **Plan:** stops only on requirement gaps, a migration, a feature flag, work for another team, or more than 6 slices.
 - **Code review:** reviewer recommendations are accepted automatically and recorded as **auto-decisions**. It stops only for findings routed to `requirements` or `re-plan`, with no clear recommendation, or for a blocker recommended debt or skip.
 - **Fix loops:** verifier→implementer and quick-fix→delta-review loops stop after `MAX_AUTO_FIX_ROUNDS` (default 2).

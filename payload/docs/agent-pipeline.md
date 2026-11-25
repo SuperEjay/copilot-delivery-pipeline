@@ -8,11 +8,11 @@ from its "Next:" line.
               /start-task <id> <slug>
                     │
                     ▼
-              requirements ······················ ⏸ requirements: answer it, or approve
+              requirements ······················ ⏸ requirements: an open question
                     │
                     ▼
-              planner ··························· ⏸ plan: a Stop flag, or over 6 slices
-                    │
+              planner ··························· ⏸ plan: with requirements, if nothing was
+                    │                               open; or a Stop flag, over 6 slices
                     ▼
   ┌──────┬───► implementer (one slice per run)
   │      │          │
@@ -238,8 +238,8 @@ afterwards, the stop comes back.
 
 | Stop | When | What to do |
 |---|---|---|
-| `requirements` | Always, once requirements.md is written | Answer its open questions, or approve it |
-| `plan` | A Stop flag in plan.md (requirement gaps, migration, feature flag, other team) or more than 6 slices | Review plan.md, then approve or say what to change |
+| `requirements` | requirements.md has open questions (list items under `## Open questions`) | Answer them here, or approve it |
+| `plan` | Requirements not yet approved (nothing was open, so the run went straight on to the planner: ADR 0006), a Stop flag in plan.md (requirement gaps, migration, feature flag, other team) or more than 6 slices | Review plan.md, and requirements.md when the reason names it, then approve (that approves both) or say what to change |
 | `review` | A finding without a clear decision (including a blocker recommended debt or skip), or a fix routed to requirements or re-plan | Decide those findings in code-review.md |
 | `fix-limit` | `MAX_AUTO_FIX_ROUNDS` fix rounds used and the work still needs fixing | Approve for more rounds, or say how to go on |
 | `stalled` | A stage ran and changed nothing | Read its **Result:** line in the block. Approve to run it once more, or say how to go on. When it's the planner updating plan.md for changed requirements, approving keeps the plan as it is |
@@ -248,7 +248,7 @@ afterwards, the stop comes back.
 | `spec` | MR review: no ClickUp task found for the MR | Reply with a ClickUp task id or the acceptance criteria, or approve reviewing against the MR description alone (the report says the spec check was weak) |
 | `focus` | MR review: the MR changes more than `MR_REVIEW_MAX_FILES` files (lockfiles and generated files don't count) | Reply with what to review, or approve to review the files with the most churn |
 | `findings` | MR review: always, once the review is written | Mark each finding in code-review.md post, debt or skip, then approve. Each post asks for your confirmation |
-| `plan`, `review`, `duo`, `verify`, `evidence`, `spec`, `focus` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:` or a Verdict other than `FIX`, `PUSH BACK` or `ASK`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:`, requirements.md's `Spec source:` in an MR review. Or, for `focus`, the MR's target branch can't be read: run `/review-mr <iid>` again | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
+| `requirements`, `plan`, `review`, `duo`, `verify`, `evidence`, `spec`, `focus` | The reason says a file is missing a line the router reads: requirements.md's `## Open questions` section, plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:` or a Verdict other than `FIX`, `PUSH BACK` or `ASK`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:`, requirements.md's `Spec source:` in an MR review. Or, for `focus`, the MR's target branch can't be read: run `/review-mr <iid>` again | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
 
 The run ends when the MR is open, and again each time a Duo round is answered: run `/fetch-review <id>` after Duo's next review. An MR review ends once its findings are posted.
 
@@ -262,7 +262,9 @@ starts with `AUTO RUN`. Run by hand, the agents work as before. In an auto run:
 - **A stage that can't finish** returns `**Result:** blocked: <why>`, and the
   run stops (`stalled`).
 - **Requirements** leaves open questions in requirements.md for the
-  `requirements` stop.
+  `requirements` stop. With none open, it leaves `## Open questions` without
+  list items, the run goes on to the planner, and you approve requirements.md
+  and plan.md together at the `plan` stop (ADR 0006).
 - **The planner** writes blocking questions as Requirement gaps under
   `## Stop flags`, instead of stopping.
 - **The reviewer** sets each finding's decision to its recommendation and logs
