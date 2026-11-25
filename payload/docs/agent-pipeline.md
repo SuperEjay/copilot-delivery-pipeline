@@ -89,8 +89,8 @@ its reply with a **Next:** line naming the agent to pick and what to say, e.g.
 | Path | What it is |
 |---|---|
 | `.github/agents/*.agent.md` | The eight stage agents (requirements, planner, implementer, verifier, reviewer, evidence, shipper, review-responder) and `pipeline`, the orchestrator of an auto run |
-| `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>` (or `--mr <iid>` / `--branch <branch>` to adopt your own work): branch, work folder, ClickUp fetch, then on to requirements, or starts the auto run when **pipeline** is picked |
-| `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then on to review-responder, or resumes the auto run when **pipeline** is picked |
+| `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>` (or `--mr <iid>` / `--branch <branch>` to adopt your own work): branch, work folder, ClickUp fetch, then starts the auto run when **pipeline** is picked (the **requirements** agent goes on with its analysis; any other agent points you to the **pipeline** agent) |
+| `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then resumes the auto run when **pipeline** is picked (the **review-responder** agent goes on with its triage; any other agent points you to the **pipeline** agent) |
 | `.github/skills/review-mr/SKILL.md` | `/review-mr <iid> [clickup-id]`: check out an existing MR for a read-only review and start its auto run when **pipeline** is picked; `/review-mr <iid> --done` cleans up (see "MR review (a teammate's MR)") |
 | `.github/skills/cleanup/SKILL.md` | `/cleanup <id>` or `/cleanup --finished`: once a task's MR is merged or closed, removes its branch (merged only), its `.work/` folder and, for an MR review, its worktree (see "Cleanup" under "Daily use: auto run") |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
@@ -484,21 +484,22 @@ and a re-review looks only at new commits.
 Use manual mode when an auto run can't be used: say a VS Code update breaks
 subagents or pinned models, or you want to drive one stage closely. You pick
 each stage agent yourself and follow the **Next:** line at the end of its
-reply. The usual path:
+reply. Pick the stage agent *before* running a skill: `/start-task` and
+`/fetch-review` go on in the **requirements** and **review-responder** agents.
+In any other agent, they set up or fetch, then point you to the **pipeline**
+agent for an auto run. The usual path:
 
 | Step | Pick agent / run | Say |
 |---|---|---|
-| 1 | `/start-task 86c1abcde invoice-export` | (sets up, then tells you to pick requirements) |
-| 2 | **requirements** | `Analyse 86c1abcde`. Answer its questions, then say "approved". |
-| 3 | **planner** | `Plan 86c1abcde`, then review `plan.md` |
-| 4 | **implementer** | `Build 86c1abcde`, then `Next slice` until all slices are done |
-| 5 | **verifier** | `Verify 86c1abcde`. FAIL goes back to the implementer. |
-| 6 | **reviewer** | `Review 86c1abcde`. Decide per finding; fixes loop back (see "Code review and tech debt"). |
-| 7 | **evidence** | `Capture evidence for 86c1abcde`, then review, tick and run `approve-evidence.sh` |
-| 8 | **shipper** | `Ship 86c1abcde`. Confirm the push when VS Code asks. |
-| 9 | `/fetch-review 86c1abcde` | When Duo has reviewed: hands over to review-responder |
-| 10 | **review-responder** | `Triage 86c1abcde`, then approve the table. It commits the fixes without pushing. |
-| 11 | **verifier**, then **review-responder** | `Re-verify 86c1abcde`, then `Push and reply 86c1abcde`. Confirm the push. |
+| 1 | **requirements**, then `/start-task 86c1abcde invoice-export` | (sets up and fetches the task, then analyses it). Answer its questions, then say "approved". |
+| 2 | **planner** | `Plan 86c1abcde`, then review `plan.md` |
+| 3 | **implementer** | `Build 86c1abcde`, then `Next slice` until all slices are done |
+| 4 | **verifier** | `Verify 86c1abcde`. FAIL goes back to the implementer. |
+| 5 | **reviewer** | `Review 86c1abcde`. Decide per finding; fixes loop back (see "Code review and tech debt"). |
+| 6 | **evidence** | `Capture evidence for 86c1abcde`, then review, tick and run `approve-evidence.sh` |
+| 7 | **shipper** | `Ship 86c1abcde`. Confirm the push when VS Code asks. |
+| 8 | **review-responder**, then `/fetch-review 86c1abcde` | When Duo has reviewed: (fetches the threads, then triages them). Approve the table. It commits the fixes without pushing. |
+| 9 | **verifier**, then **review-responder** | `Re-verify 86c1abcde`, then `Push and reply 86c1abcde`. Confirm the push. |
 
 After `MAX_REVIEW_ROUNDS` Duo rounds, the fetch script stops and leaves the
 rest to you. Fetching the same set of threads again doesn't count as a new round. Picking a later agent too early is safe: each one checks that the
