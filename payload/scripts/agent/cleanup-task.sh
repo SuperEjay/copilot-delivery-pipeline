@@ -29,18 +29,7 @@ set -uo pipefail
 source "$(dirname "$0")/config.sh"
 
 USAGE="usage: cleanup-task.sh <task-id | mr-<iid>> [--force] [--drop-debt] | cleanup-task.sh --finished"
-FORGE_LOADED=""
-has() { command -v "$1" >/dev/null 2>&1; }
-
-# _forge_state <iid>: the MR's state from the forge, or nothing when it can't
-# be read (no glab, not logged in, no such MR).
-_forge_state() {
-  has glab && has jq || return 0
-  if [ -z "$FORGE_LOADED" ]; then source "$(dirname "$0")/forge-lib.sh"; FORGE_LOADED=1; fi
-  local line st=""
-  line="$(forge_mr "$1" 2>/dev/null)" && IFS=$'\037' read -r _ st _ <<<"$line"
-  printf '%s\n' "$st"
-}
+source "$(dirname "$0")/forge-lib.sh"
 
 # clean_one <task> <force yes|no> <drop-debt yes|no>: clean one task up. Prints
 # what it did, or the refusal; returns 0 cleaned, 1 refused (its reason in
@@ -65,7 +54,7 @@ clean_one() {
       echo "$task has no MR yet, so there's nothing finished to clean up. If you abandoned it, run cleanup-task.sh $task --force (the branch is kept)." >&2
       return 2
     fi
-    state="$(_forge_state "$iid")"
+    state="$(forge_mr_state "$iid" 2>/dev/null)" || state=""   # no glab, not logged in, no such MR
     case "$state" in
       merged|closed) ;;
       '') WHY="can't tell the MR's state"

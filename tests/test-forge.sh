@@ -59,6 +59,22 @@ check "forge_mr --with-text: no title or description, nothing after the fact lin
 lib forge_mr 11 --text
 check "forge_mr: an unknown option is refused before glab" '[ $rc -ne 0 ] && [ -z "$out" ] && grep -q "unknown option" "$T/out.txt"'
 
+# ---------- forge_mr_state ----------
+for s in opened merged closed locked; do
+  jq --arg s "$s" '.state = $s' "$FAKE_FORGE/mr-7.json" > "$FAKE_FORGE/mr-13.json"; lib forge_mr_state 13
+  check "forge_mr_state: an MR that is $s" '[ $rc -eq 0 ] && [ "$out" = "$s" ]'
+done
+lib forge_mr_state 99
+check "forge_mr_state: an MR glab can't find, non-zero and nothing on stdout" '[ $rc -ne 0 ] && [ -z "$out" ]'
+: > "$FAKE_FORGE/calls.log"; lib forge_mr_state x
+check "forge_mr_state: a non-number iid, non-zero before glab" '[ $rc -ne 0 ] && [ -z "$out" ] && [ ! -s "$FAKE_FORGE/calls.log" ]'
+# nobin <tool...>: a PATH holding bash and the given tools only (no glab, or no jq).
+nobin() { local d="$T/bin-$*"; d="${d// /-}"; mkdir -p "$d"; local t; for t in bash "$@"; do ln -sf "$(command -v "$t")" "$d/$t"; done; echo "$d"; }
+PATH="$(nobin jq)" lib forge_mr_state 7
+check "forge_mr_state: no glab, non-zero and nothing on stdout" '[ $rc -ne 0 ] && [ -z "$out" ]'
+PATH="$(nobin glab)" lib forge_mr_state 7
+check "forge_mr_state: no jq, non-zero and nothing on stdout" '[ $rc -ne 0 ] && [ -z "$out" ]'
+
 # ---------- forge_mr_summary ----------
 jq '. + {title: "Export", description: "Closes CU-86abc", web_url: "https://gitlab.test/mr/7", draft: true}' "$FAKE_FORGE/mr-7.json" > "$T/m" && mv "$T/m" "$FAKE_FORGE/mr-7.json"
 printf '[{"id":"c1","title":"feat: export","message":"feat: export\\n\\nRefs #86xyz","author_name":"ann"}]' > "$FAKE_FORGE/commits-7.json"

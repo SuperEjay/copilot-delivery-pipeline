@@ -17,6 +17,9 @@
 #                                 IFS=$'\037' read -r iid state author … <<<"$line"
 #   forge_mr <iid> --with-text  the same line, then the title on one line, then
 #                               the description: one call for --mr adoption
+#   forge_mr_state <iid>        the MR's state alone: opened, merged, closed or
+#                               locked. Non-zero with nothing on stdout when glab
+#                               or jq is missing, glab fails, or <iid> isn't a number
 #   forge_mr_summary <iid>      JSON: iid title description source_branch
 #                               target_branch web_url author draft commits[id title message]
 #   forge_discussions <iid>     JSON: every discussion, all pages, unfiltered
@@ -85,6 +88,13 @@ forge_mr() {
          .diff_refs.head_sha, .diff_refs.base_sha, .diff_refs.start_sha ]
        | map(. // "" | tostring) | join($us)),
       (if $text == "yes" then (.title // "" | gsub("\n"; " ")), (.description // "") else empty end)' <<<"$json"
+}
+
+forge_mr_state() {
+  local line st
+  line="$(forge_mr "$1")" || return 1
+  IFS="$FORGE_US" read -r _ st _ <<<"$line"
+  printf '%s\n' "$st"
 }
 
 forge_mr_summary() {

@@ -52,7 +52,7 @@ if state_is_review "$TASK"; then
   exit 0
 fi
 # A merged or closed MR has no review to answer: the task is finished (#132).
-MR_STATE=""; MR_LINE="$(forge_mr "$MR_IID")" && IFS=$'\037' read -r _ MR_STATE _ <<<"$MR_LINE"
+MR_STATE="$(forge_mr_state "$MR_IID")" || MR_STATE=""
 case "$MR_STATE" in
   merged|closed) echo "MR !$MR_IID is $MR_STATE: there's no review to fetch. To remove the task's branch and work folder, run /cleanup $TASK." >&2; exit 1 ;;
 esac
