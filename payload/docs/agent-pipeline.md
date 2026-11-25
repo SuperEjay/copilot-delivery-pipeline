@@ -95,7 +95,7 @@ its reply with a **Next:** line naming the agent to pick and what to say, e.g.
 | `.github/skills/cleanup/SKILL.md` | `/cleanup <id>` or `/cleanup --finished`: once a task's MR is merged or closed, removes its branch (merged only), its `.work/` folder and, for an MR review, its worktree (see "Cleanup" under "Daily use: auto run") |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
 | `.github/copilot-instructions.md` | Six short rules every agent follows (kept short on purpose: it's sent with every request) |
-| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, applying a thread's suggestion block (`apply-suggestion.sh`), thread reply/resolve, MR review setup and posting (`start-review.sh`, `set-review-spec.sh`, `post-review-thread.sh`), cleaning up finished tasks (`cleanup-task.sh`), and `doctor.sh`, which checks your setup |
+| `scripts/agent/` | Deterministic steps: branch/folder setup, ClickUp fetch/comment/status/attach, condensed test runner, review signals, evidence capture/approve/upload, MR create/update, Duo fetch, applying a thread's suggestion block (`apply-suggestion.sh`), thread reply/resolve, MR review setup and posting (`start-review.sh`, `set-review-spec.sh`, `post-review-thread.sh`), cleaning up finished tasks (`cleanup-task.sh`), `doctor.sh`, which checks your setup, and `stacks.sh`, its test tooling per stack |
 | `.agent.env.example` | Your test commands, Duo username, round limit, ClickUp workspace and status, and the MR review settings |
 
 **No MCP needed.** ClickUp goes through its REST API (`scripts/agent/clickup.sh`)
@@ -124,6 +124,21 @@ admin policy that blocks MCP servers doesn't affect any of this.
    without it, e2e is skipped (`SKIP` in `run-checks.sh`) and the verifier lists
    it under Gaps, so nothing blocks the push (ADR 0005). Set `E2E_CMD` to use
    another runner, or `E2E_CMD=` to always skip it.
+   - **Which commands:** `doctor.sh` (step 8, and the end of the installer's
+     output) prints a "test tooling" section for your project's stack: an
+     `.agent.env` line per check, and the tool to install where one is missing.
+     It covers **Node** (`package.json`) and **Laravel** (`composer.json` and
+     `artisan`): Pest, else PHPUnit, for unit and integration (Pest
+     recommended), Pint for lint, Larastan for types, and the Pest browser
+     plugin for e2e, with Playwright as the alternative. It only advises:
+     it never writes `.agent.env` or installs anything. A check whose
+     `.agent.env` line differs from `.agent.env.example` shows your command
+     instead. Another stack gets "set the commands in `.agent.env` by hand".
+   - A Pest browser-test `E2E_CMD` is yours to set: only Playwright is found by
+     itself, because Pest has no documented way to run only its browser tests.
+     Without Playwright specs, evidence falls back to text (ADR 0005).
+   - The stacks are one table in `scripts/agent/stacks.sh`; adding a stack is a
+     row per check, described at the top of that file.
 5. **Install and log in to the CLIs:** `glab auth login` (point it at your GitLab
    host if it's self-managed), `jq` and `curl`. Optional: `pdftotext` (poppler)
    and `pandoc`, so PDF and Word attachments are also saved as text the agents
@@ -145,7 +160,8 @@ admin policy that blocks MCP servers doesn't affect any of this.
 8. **Check the setup:** run `scripts/agent/doctor.sh`. It checks the tools,
    your `glab` login, that `CLICKUP_API_TOKEN` is exported (and in no file),
    settings `.agent.env` doesn't set, line endings, the hook guard and your VS
-   Code version, one line each, and changes nothing. Fix every FAIL. Run it again
+   Code version, one line each, then prints the test tooling for your stack
+   (step 4), and changes nothing. Fix every FAIL. Run it again
    whenever something acts up, or when a teammate sets up.
 9. **Fully quit and reopen VS Code.** The agents appear in the Copilot Chat
    agent picker, and `/start-task`, `/fetch-review` and `/review-mr` appear when you type `/`.

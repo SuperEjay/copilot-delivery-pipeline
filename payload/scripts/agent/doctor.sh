@@ -145,6 +145,11 @@ if [ "${#finished_tasks[@]}" -gt 0 ]; then
   fi
 fi
 
+# ---------- test tooling per stack (stacks.sh) ----------
+# The commands for this project's stack, or the tools to install: advice only.
+source "$(dirname "$0")/stacks.sh"
+while IFS= read -r l; do result INFO "$l"; done < <(stack_tooling)
+
 # ---------- to check by hand ----------
 result INFO "pinned models: a script can't check them. In an auto run, pick a model other than Auto, then check each stage's model in the chat's subagent details (see Pinned models in docs/agent-pipeline.md)"
 
