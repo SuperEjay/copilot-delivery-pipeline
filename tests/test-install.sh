@@ -172,11 +172,16 @@ cd "$T/proj"
 # ---------- 8. updates accept v1.2.x and later only (ADR 0002) ----------
 version="$(cat "$ROOT/VERSION")"
 # old_install <tag> <dir>: a real install of that release, by its own installer.
+# Old installers add skills by default through `npx skills add`, which would
+# fetch from npm and GitHub (#133): a fake npx stands in, reading stdin as the
+# real one can and logging each call to $T/old-npx.log.
+mkdir -p "$T/oldbin"
+printf '#!/bin/sh\necho "$*" >> "%s"\ncat > /dev/null\nexit 0\n' "$T/old-npx.log" > "$T/oldbin/npx"; chmod +x "$T/oldbin/npx"
 old_install() {
   mkdir -p "$T/src-$1"; git -C "$ROOT" archive "$1" install.sh VERSION payload | tar -x -C "$T/src-$1"
   git init -q -b main "$2"; git -C "$2" config user.email t@t; git -C "$2" config user.name t
   printf 'node_modules/\n' > "$2/.gitignore"; git -C "$2" add -A; git -C "$2" commit -qm init
-  "$T/src-$1/install.sh" --yes "$2" > "$T/out.txt" 2>&1
+  PATH="$T/oldbin:$PATH" "$T/src-$1/install.sh" --yes "$2" > "$T/out.txt" 2>&1
 }
 # snapshot <dir>: every file and its content, to check nothing changed.
 snapshot() { (cd "$1" && find . -path ./.git -prune -o -type f -print | sort | xargs sha256sum); }
@@ -234,6 +239,7 @@ if tags_present v1.1.0 v1.2.0 v1.2.1 v1.2.2; then
   check "--force replaces the changed agent" 'cmp -s .github/agents/planner.agent.md "$ROOT/payload/.github/agents/planner.agent.md"'
   check "--force deletes the .new" '[ ! -f .github/agents/planner.agent.md.new ]'
   cd "$T/proj"
+  check "the old installers added skills through the fake npx, never npm or GitHub (#133)" 'grep -q "skills add" "$T/old-npx.log"'
 else
   echo "skip: update-floor tests (the v1.1.0-v1.2.2 tags aren't in this clone, e.g. a shallow one)"
 fi
