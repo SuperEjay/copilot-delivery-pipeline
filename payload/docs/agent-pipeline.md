@@ -148,8 +148,9 @@ admin policy that blocks MCP servers doesn't affect any of this.
    whenever something acts up, or when a teammate sets up.
 9. **Fully quit and reopen VS Code.** The agents appear in the Copilot Chat
    agent picker, and `/start-task`, `/fetch-review` and `/review-mr` appear when you type `/`.
-   They're agent skills, not prompt files, because Copilot (Agent Host)
-   sessions don't load prompt files. If they're missing, check that VS Code is
+   They're agent skills, not prompt files, because prompt files only load in
+   the Local harness; Copilot harness sessions, including Agent Host, use
+   skills. If they're missing, check that VS Code is
    open on the project's root folder.
 10. **Evidence screenshots (Playwright, optional):** without Playwright, e2e is
    skipped, UI ACs tested only below e2e pass with a gap, and screenshot ACs
