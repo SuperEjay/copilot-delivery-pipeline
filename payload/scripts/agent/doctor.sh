@@ -133,7 +133,7 @@ if [ "${#finished_tasks[@]}" -gt 0 ]; then
     source "$(dirname "$0")/forge-lib.sh"
     for entry in "${finished_tasks[@]}"; do
       task="${entry% *}"; iid="${entry#* }"
-      st=""; line="$(forge_mr "$iid" 2>/dev/null)" && IFS=$'\037' read -r _ st _ <<<"$line"
+      st="$(forge_mr_state "$iid" 2>/dev/null)" || st=""
       case "$st" in
         merged|closed) result WARN "$task is finished: MR !$iid is $st. Run /cleanup $task to remove its branch, work folder or review worktree" ;;
         opened|locked) ;;
