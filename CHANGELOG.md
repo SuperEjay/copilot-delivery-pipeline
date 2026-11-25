@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **`/cleanup` removes what a finished task leaves behind** (#132). Once a task's MR is merged or closed, `/cleanup <id>` (new skill, new `scripts/agent/cleanup-task.sh`) deletes its `.work/<id>/` folder and, when merged, its local branch (even after a squash merge); a closed MR's branch is kept, with the `git branch -D` command printed. The remote is never touched. It refuses while the MR is open, without an MR (`--force` for a task you abandoned), when glab can't tell the MR's state, on the task's branch, with uncommitted changes, or while `tech-debt.md` has parked debt (listed; `--drop-debt` goes ahead). `/cleanup --finished` sweeps every finished task and prints a summary. `doctor.sh` now lists every finished task (not only review worktrees) with its `/cleanup` command, `/fetch-review` on a merged or closed MR points to `/cleanup`, and the guard asks before an agent runs a cleanup.
+  - **Changed:** `/review-mr <iid> --done` is now the same cleanup: it needs the MR merged or closed (or `/cleanup mr-<iid> --force`), and it deletes `.work/mr-<iid>/` too instead of keeping it.
+
 - **Pinned models are confirmed on a paid plan** (#67). On a paid Copilot plan, with a model other than Auto picked, each stage of a real auto run ran on its pinned model. The guide's "Pinned models in an auto run", ADR 0001 and ADR 0002 now say so. Docs only.
 
 ## v2.4.0

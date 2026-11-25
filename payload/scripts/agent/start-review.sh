@@ -13,9 +13,9 @@
 # changes one), INSTALL_CMD installs them fresh in the worktree, once per
 # lockfile version; the log goes to .work/mr-<iid>/logs/install.log.
 #
-# --done removes the review worktree (and with it the dependencies installed
-# there) and keeps .work/mr-<iid>/'s text files. It needs no glab, so it works
-# after the MR is merged.
+# --done runs cleanup-task.sh mr-<iid>: once the MR is merged or closed, it
+# removes the review worktree (and the dependencies installed there) and
+# .work/mr-<iid>/.
 set -euo pipefail
 source "$(dirname "$0")/config.sh"
 source "$(dirname "$0")/evidence-lib.sh"   # sha256
@@ -31,14 +31,8 @@ DIR="$(task_dir "$TASK")"
 WT="$(review_worktree "$TASK")"
 
 case "$CLICKUP_ID" in
-  --done)
-    git worktree prune
-    if [ ! -e "$WT" ]; then echo "No review worktree for !$IID: nothing to remove."; exit 0; fi
-    [ -L "$WT/node_modules" ] && rm -f "$WT/node_modules"   # the link only, never the main checkout's
-    git worktree remove --force "$WT"
-    rm -f "$DIR/installed-lock"
-    echo "Removed the review worktree of !$IID. Kept ${DIR#"$REPO_ROOT"/} (the review's files)."
-    exit 0 ;;
+  --done)   # the same cleanup as any finished task (#132)
+    exec "$(dirname "$0")/cleanup-task.sh" "$TASK" ;;
   -*) echo "$USAGE" >&2; exit 1 ;;
 esac
 require git glab jq
