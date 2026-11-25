@@ -1,6 +1,6 @@
 ---
 name: start-task
-description: "Start a ClickUp task in the delivery pipeline: create the branch and work folder, fetch the task, then hand over to the requirements agent or, in the pipeline agent, start the auto run. Use only when the user runs /start-task."
+description: "Start a ClickUp task in the delivery pipeline: create the branch and work folder, fetch the task, then, in the pipeline agent, start the auto run. The requirements agent goes on with its analysis; any other agent will point you to the pipeline agent. Use only when the user runs /start-task."
 argument-hint: "<clickup-task-id> <short-slug> | <clickup-task-id> --mr <iid> | <clickup-task-id> --branch <branch>"
 disable-model-invocation: true
 ---
@@ -16,6 +16,6 @@ To fix work they started outside the pipeline (ADR 0004), they give `--mr <iid>`
    If you are the **requirements** agent, continue with your normal steps now.
    Otherwise reply with exactly this, filled in, and stop:
    > Task `<task-id>` is set up on branch `<branch>` and fetched to `.work/<task-id>/clickup/task.md`.
-   > **Next:** pick the **requirements** agent and say `Analyse <task-id>`.
+   > **Next:** pick the **pipeline** agent and say `Run <task-id>`.
 
 Don't analyse requirements yourself unless you are the requirements agent: that agent runs on the model chosen for that job.
