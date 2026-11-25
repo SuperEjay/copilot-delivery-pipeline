@@ -58,7 +58,7 @@ Then print its `▶` line and run `scripts/agent/next-stage.sh <task-id>` again.
 | Stop | Feedback goes to |
 |---|---|
 | `requirements` | requirements |
-| `plan` | planner |
+| `plan` | requirements, when the reply is about the acceptance criteria, scope or assumptions (the router then has the planner update the plan); otherwise planner |
 | `review` | reviewer |
 | `fix-limit` | implementer |
 | `stalled` | `<agent>` named at the start of the reason |

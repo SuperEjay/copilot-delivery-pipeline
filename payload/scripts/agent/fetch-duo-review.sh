@@ -11,6 +11,8 @@
 # round; anything else (nothing at all, or the same open ASK threads) is the
 # same round, so fetching again uses up nothing.
 #
+# A delivery task whose MR is merged or closed is refused, pointing at /cleanup.
+#
 # For an MR review (task mr-<iid>, ADR 0003) it writes .work/mr-<iid>/threads.json
 # instead: every author's open threads (unresolved ones, and plain comments,
 # not system notes), for the reviewer to read first. DUO_USERNAMES doesn't
@@ -49,6 +51,11 @@ if state_is_review "$TASK"; then
   echo "$(jq 'length' "$OUT") open thread(s) from every author in ${OUT#"$REPO_ROOT"/}"
   exit 0
 fi
+# A merged or closed MR has no review to answer: the task is finished (#132).
+MR_STATE=""; MR_LINE="$(forge_mr "$MR_IID")" && IFS=$'\037' read -r _ MR_STATE _ <<<"$MR_LINE"
+case "$MR_STATE" in
+  merged|closed) echo "MR !$MR_IID is $MR_STATE: there's no review to fetch. To remove the task's branch and work folder, run /cleanup $TASK." >&2; exit 1 ;;
+esac
 LAST_ROUND="$(state_review_round "$TASK")"
 LAST_SEEN="$(state_review_seen "$TASK")"
 ME="$(forge_me)" || { echo "Can't look up your glab user (glab api user), so threads you already answered can't be skipped. Check glab auth status." >&2; exit 1; }

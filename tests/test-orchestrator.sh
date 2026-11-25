@@ -58,6 +58,7 @@ done
 feedback_agents_exist() { local id a; for id in $(stop_ids); do [ "$id" = stalled ] && continue; a="$(feedback_agent "$id")"; [ -f "$A/$a.agent.md" ] || return 1; done; }
 check "feedback: every agent in the table exists" 'feedback_agents_exist'
 check "feedback: the stalled stop goes back to the agent its reason names" 'section Feedback | grep -E "^\| \`stalled\`" | grep -q "named at the start of the reason"'
+check "feedback: plan goes to requirements when about the ACs, scope or assumptions, otherwise planner (ADR 0006)" 'section Feedback | grep -E "^\| \`plan\`" | grep "acceptance criteria, scope or assumptions" | grep -q "requirements" && section Feedback | grep -E "^\| \`plan\`" | grep -q "otherwise planner"'
 check "feedback: pre-ship goes to evidence, or the shipper writing mr.md" 'section Feedback | grep -E "^\| \`pre-ship\`" | grep -q evidence && sec Feedback "Write mr.md for <task-id>. Don.t push or create the MR."'
 check "feedback: the prompt carries the reply word for word" 'sec Feedback "AUTO RUN. The user replied at the <stop-id> stop for <task-id>: \"<reply, word for word>\""'
 
@@ -118,8 +119,24 @@ check "/review-mr: the script failing stops before the hand-over" 'stops_before 
 check "/review-mr: takes an iid and an optional ClickUp id, or --done" 'grep -qx "argument-hint: \"<mr-iid> \[clickup-task-id | --done\]\"" "$SK/review-mr/SKILL.md"'
 check "/review-mr --done: runs start-review.sh --done and ends, no auto run" 'grep -q "start-review.sh <iid> --done" "$SK/review-mr/SKILL.md" && grep "\-\-done" "$SK/review-mr/SKILL.md" | grep -q "don.t start the auto run"'
 check "/review-mr: its description names the auto run" 'grep "^description:" "$SK/review-mr/SKILL.md" | grep -q "pipeline agent, start the auto run"'
+check "/cleanup: only the user starts it" 'grep -qx "disable-model-invocation: true" "$SK/cleanup/SKILL.md"'
+check "/cleanup: takes a task id with --force/--drop-debt, or --finished" 'grep -qx "argument-hint: \"<task-id | mr-iid> \[--force\] \[--drop-debt\] | --finished\"" "$SK/cleanup/SKILL.md"'
+check "/cleanup: runs cleanup-task.sh and passes on its message" 'grep -q "scripts/agent/cleanup-task.sh <what the user gave>" "$SK/cleanup/SKILL.md" && grep -q "Pass on its message and end your turn" "$SK/cleanup/SKILL.md"'
+check "/cleanup: never adds --force or --drop-debt itself" 'grep -q "Never add either yourself" "$SK/cleanup/SKILL.md"'
+check "/cleanup: no auto run, any agent" 'grep -q "don.t start an auto run" "$SK/cleanup/SKILL.md"'
+check "/review-mr --done: removes the worktree and the work folder once the MR is finished" 'grep "\-\-done" "$SK/review-mr/SKILL.md" | grep -q "removes the review worktree and \`.work/mr-<iid>/\`"'
 check "/start-task: its description names the auto run" 'grep "^description:" "$SK/start-task/SKILL.md" | grep -q "pipeline agent, start the auto run"'
 check "/fetch-review: its description names the auto run" 'grep "^description:" "$SK/fetch-review/SKILL.md" | grep -q "pipeline agent, resume the auto run"'
+# In any other agent, the skills set up and point to the pipeline agent, not to a
+# stage agent (#129): manual mode starts by picking the stage agent first.
+check "/start-task: in another agent, the hand-off names the pipeline agent and Run" 'grep -q "^   > \*\*Next:\*\* pick the \*\*pipeline\*\* agent and say \`Run <task-id>\`\.$" "$SK/start-task/SKILL.md"'
+check "/start-task: the hand-off no longer sends you to the requirements agent" '! grep -q "pick the \*\*requirements\*\* agent" "$SK/start-task/SKILL.md"'
+check "/start-task: the requirements agent still goes on by itself" 'grep -q "If you are the \*\*requirements\*\* agent, continue with your normal steps now" "$SK/start-task/SKILL.md"'
+check "/fetch-review: in another agent, the hand-off names the pipeline agent and Continue" 'grep -q "^   > \*\*Next:\*\* pick the \*\*pipeline\*\* agent and say \`Continue <task-id>\`\.$" "$SK/fetch-review/SKILL.md"'
+check "/fetch-review: the hand-off no longer sends you to the review-responder agent" '! grep -q "pick the \*\*review-responder\*\* agent" "$SK/fetch-review/SKILL.md"'
+check "/fetch-review: the review-responder agent still goes on by itself" 'grep -q "If you are the \*\*review-responder\*\* agent, continue with your \"Triage and fix\" steps" "$SK/fetch-review/SKILL.md"'
+check "/start-task: its description names the pipeline hand-off" 'grep "^description:" "$SK/start-task/SKILL.md" | grep -q "point you to the pipeline agent"'
+check "/fetch-review: its description names the pipeline hand-off" 'grep "^description:" "$SK/fetch-review/SKILL.md" | grep -q "point you to the pipeline agent"'
 
 # ---------- the MR review route is documented (ADR 0003, #88) ----------
 # guide_sec <heading> <ERE>: the guide's "## <heading>" section matches.
@@ -136,6 +153,9 @@ check "guide: re-review, never resolving a thread" 'guide_sec "$G" "[Rr]e-review
 check "guide: --done and the doctor warning" 'guide_sec "$G" "/review-mr <iid> --done" && guide_sec "$G" "doctor\.sh"'
 check "guide: the new settings" 'guide_sec "$G" "INSTALL_CMD" && guide_sec "$G" "MR_REVIEW_MAX_FILES" && guide_sec "$G" "MR_REVIEW_SKIP_PATTERN"'
 W="What's in here"
+check "guide: /cleanup is listed in What's in here" 'guide_sec "$W" "skills/cleanup/SKILL\.md"'
+check "guide: a Cleanup section for delivery tasks" 'guide_sec "Daily use: auto run" "/cleanup <id>" && guide_sec "Daily use: auto run" "--finished"'
+check "guide: the guard asks before a cleanup" 'guide_sec "Hooks (enforced rules)" "cleanup-task\.sh"'
 check "guide: the skill is listed in What's in here" 'guide_sec "$W" "skills/review-mr/SKILL\.md"'
 check "guide: the guard table has the MR review rules" 'guide_sec "Hooks (enforced rules)" "pipeline-reviews" && guide_sec "Hooks (enforced rules)" "post-review-thread\.sh"'
 README="$ROOT/README.md"
@@ -144,6 +164,11 @@ for f in "$ROOT"/tests/test-*.sh; do
 done
 check "guide: says which ClickUp writes the guard denies in an MR review" 'guide_sec "$G" "only for an .mr-<iid>. task id"'
 check "README: a Review a teammate's MR section with /review-mr" 'grep -qx "## Review a teammate.s MR" "$README" && grep -q "/review-mr <iid>" <<<"$(awk "/^## Review a teammate/ { on = 1; next } /^## / { on = 0 } on" "$README")"'
+M="Manual mode (fallback)"
+check "guide: manual mode picks requirements before /start-task" 'guide_sec "$M" "^\| 1 \| \*\*requirements\*\*, then \`/start-task 86c1abcde invoice-export\` \|"'
+check "guide: manual mode picks review-responder before /fetch-review" 'guide_sec "$M" "\| \*\*review-responder\*\*, then \`/fetch-review 86c1abcde\` \|"'
+check "guide: manual mode says the skills point anywhere else to the pipeline agent" 'guide_sec "$M" "In any other agent.*pipeline"'
+check "guide: the skills table names the pipeline hand-off" 'guide_sec "$W" "skills/start-task/SKILL\.md.*pipeline\*\* agent" && guide_sec "$W" "skills/fetch-review/SKILL\.md.*pipeline\*\* agent"'
 check "rules for every agent: an MR review is read-only" 'grep -q "/review-mr" "$ROOT/payload/pipeline-instructions.md" && grep -q "read-only" "$ROOT/payload/pipeline-instructions.md"'
 
 echo "passed=$pass failed=$fail"

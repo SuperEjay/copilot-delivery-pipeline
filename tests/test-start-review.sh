@@ -185,19 +185,18 @@ check "it says which commit it checked" 'grep -q "^CHECKED $(git -C "$WT/mr-11" 
 $S/run-checks.sh T1 lint > "$T/out.txt" 2>&1
 check "a delivery task's checks still run in the main checkout" '[ "$(cat "$STUB/lint-dir")" = "$PWD" ]'
 
-# ---------- --done: the worktree goes, the text files stay (#87) ----------
+# ---------- --done: cleanup-task.sh, once the MR is merged or closed (#87, #132) ----------
 review 11 --done
+check "--done on an open MR: refused, the worktree stays" '[ $rc -eq 1 ] && grep -q "MR !11 is opened" "$T/out.txt" && [ -e "$WT/mr-11" ] && [ -d .work/mr-11 ]'
+mr 11 merged; review 11 --done
 wts="$(git worktree list)"
 check "--done removes the review worktree" '[ $rc -eq 0 ] && [ ! -e "$WT/mr-11" ] && ! grep -q "$WTS/mr-11" <<<"$wts"'
-check "--done keeps the work folder's text files" '[ -f .work/mr-11/state.env ] && [ -f .work/mr-11/mr.json ] && [ -f .work/mr-11/logs/install.log ]'
-check "--done forgets the install, which went with the worktree" '[ ! -e .work/mr-11/installed-lock ]'
-check "--done says what it removed and kept" 'grep -q "Removed the review worktree of !11" "$T/out.txt" && grep -q ".work/mr-11" "$T/out.txt"'
-review 7 --done
+check "--done removes the work folder too" '[ ! -e .work/mr-11 ]'
+check "--done says what it removed" 'grep -q "Removed the review worktree of !11" "$T/out.txt" && grep -q "Removed .work/mr-11" "$T/out.txt"'
+mr 7 closed; review 7 --done
 check "--done never touches the main checkout's node_modules (the worktree linked to it)" '[ $rc -eq 0 ] && [ "$(cat node_modules/dep/index.js)" = main ]'
 review 11 --done
-check "--done again: nothing to remove, still exit 0" '[ $rc -eq 0 ] && grep -q "No review worktree for !11" "$T/out.txt"'
-PATH="$NO_GLAB_PATH" $S/start-review.sh 7 --done > "$T/out.txt" 2>&1; rc=$?
-check "--done works without glab (after the MR is merged, offline)" '[ $rc -eq 0 ]'
+check "--done again: no such task any more, exit 1" '[ $rc -eq 1 ] && grep -q "No task mr-11" "$T/out.txt"'
 review 7 --keep
 check "an unknown option is refused" '[ $rc -eq 1 ] && grep -q "usage" "$T/out.txt"'
 

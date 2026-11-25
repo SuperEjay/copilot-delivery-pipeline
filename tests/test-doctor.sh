@@ -107,25 +107,29 @@ fake uname 0 "MINGW64_NT-10.0"; doc
 check "Windows with Git Bash: FAIL, unsupported, use WSL" '[ $rc -eq 1 ] && line FAIL "Windows with Git Bash is unsupported" && grep -q "WSL" "$T/out.txt"'
 unfake uname
 
-# ---------- review worktrees of finished MRs (ADR 0003, #87) ----------
+# ---------- finished tasks to clean up (ADR 0003, #87, #132) ----------
 # mrstate <iid> <state>: the MR as the fake forge has it.
 mrstate() { jq -n --argjson i "$1" --arg s "$2" '{iid: $i, state: $s, target_branch: "main"}' > "$FAKE_FORGE/mr-$1.json"; }
+# work_task <task> <state.env lines>: a task's work folder, as the scripts leave it.
+work_task() { mkdir -p ".work/$1"; printf '%b' "$2" > ".work/$1/state.env"; }
 doc
-check "no review worktrees: no line about them" '! grep -q "review worktree" "$T/out.txt"'
-# review_wt <task>: where config.sh puts the review worktree, so doctor is checked against it.
-review_wt() { bash -c 'source scripts/agent/config.sh; review_worktree "$1"' _ "$1"; }
-for i in 5 6 8; do git worktree add -q --detach "$(review_wt mr-$i)" HEAD; done
+check "no tasks: no line about cleaning up" '! grep -q "/cleanup" "$T/out.txt"'
+work_task mr-5 'TASK=mr-5\nKIND=MR_REVIEW\nMR_IID=5\n'
+work_task T6 'TASK=T6\nBRANCH=feature/T6-x\nMR_IID=6\n'
+work_task mr-8 'TASK=mr-8\nKIND=MR_REVIEW\nMR_IID=8\n'
+work_task T9 'TASK=T9\nBRANCH=feature/T9-x\n'
 mrstate 5 merged; mrstate 6 closed; mrstate 8 opened
 doc
-check "a merged MR's review worktree: WARN with the --done command" '[ $rc -eq 0 ] && line WARN "review worktree of MR !5 is still here, and the MR is merged" && grep -q "/review-mr 5 --done" "$T/out.txt"'
-check "a closed MR's: WARN too" 'line WARN "review worktree of MR !6 is still here, and the MR is closed" && grep -q "/review-mr 6 --done" "$T/out.txt"'
-check "an open MR's worktree is fine: no WARN" '! grep -q "MR !8" "$T/out.txt"'
+check "an MR review whose MR is merged: WARN with the /cleanup command" '[ $rc -eq 0 ] && line WARN "mr-5 is finished: MR !5 is merged" && grep -q "/cleanup mr-5" "$T/out.txt"'
+check "a delivery task whose MR is closed: WARN too" 'line WARN "T6 is finished: MR !6 is closed" && grep -q "/cleanup T6" "$T/out.txt"'
+check "an open MR's task is fine: no line" '! grep -q "MR !8" "$T/out.txt"'
+check "a task with no MR yet: no line" '! grep -q "T9" "$T/out.txt"'
 rm "$FAKE_FORGE/mr-6.json"; doc
-check "an MR glab can't read: INFO, not a guess" 'line INFO "can.t tell whether MR !6 is still open"'
+check "an MR glab can't read: INFO, not a guess" 'line INFO "can.t tell whether MR !6 .T6. is finished"'
 glab_logged_out; doc
-check "glab not logged in: no MR states asked for, an INFO" 'line INFO "review worktrees: 3" && ! grep -q "is merged" "$T/out.txt"'
+check "glab not logged in: no MR states asked for, an INFO" 'line INFO "tasks with an MR: 3" && ! grep -q "is merged" "$T/out.txt" && grep -q "/cleanup <task-id>" "$T/out.txt"'
 glab_on
-for i in 5 6 8; do git worktree remove --force "$(review_wt mr-$i)"; done
+rm -rf .work/mr-5 .work/T6 .work/mr-8 .work/T9
 
 # ---------- e2e without Playwright (#112) ----------
 doc

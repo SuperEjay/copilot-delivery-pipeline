@@ -95,12 +95,12 @@ next T1
 check "only the eight stage agents are checked, not the orchestrator" '[ $rc -eq 0 ]'
 cp "$ROOT/payload/.github/agents/pipeline.agent.md" $AG/; rm -f $W/status.md
 
-# ---------- requirements: always stops ----------
+# ---------- requirements: stops first while a question is open (ADR 0006) ----------
 next T1
 check "no requirements.md: run the requirements agent" '[ $rc -eq 0 ] && [ "$out" = "run requirements AUTO RUN. Analyse T1." ]'
-printf '# T1: Export\n## Acceptance criteria\n- AC-1: x\n' > $W/requirements.md
+printf '# T1: Export\n## Acceptance criteria\n- AC-1: x\n## Open questions\n1. Which format?\n' > $W/requirements.md
 next T1
-check "requirements.md written: stop for the user" '[ $rc -eq 0 ] && [[ "$out" == "stop requirements "*"requirements.md"* ]]'
+check "requirements.md with an open question: stop for the user" '[ $rc -eq 0 ] && [[ "$out" == "stop requirements "*"requirements.md"* ]]'
 check "status.md records the pending stop" 'grep -q "^Pending stop: requirements " $W/status.md'
 
 # ---------- approve: tied to what the stop was about ----------
@@ -135,7 +135,7 @@ log_count() { [ -f $L ] && wc -l < $L | tr -d ' ' || echo 0; }
 check "no run.log before the first decision" '[ ! -f $L ]'
 next T3
 check "run: logged with the agent, the fix round and HEAD" '[ "$(log_line 1)" = "run requirements round=0/2 head=$HEAD7" ]'
-printf '# T3: Export\n## Acceptance criteria\n- AC-1: x\n' > .work/T3/requirements.md
+printf '# T3: Export\n## Acceptance criteria\n- AC-1: x\n## Open questions\n1. Which format?\n' > .work/T3/requirements.md
 next T3
 check "stop: logged with the stop id" '[ "$(log_line 2)" = "stop requirements round=0/2 head=$HEAD7" ]'
 echo "- AC-2: y" >> .work/T3/requirements.md
@@ -148,6 +148,75 @@ check "approve with no stop pending logs nothing" '[ $rc -eq 1 ] && [ "$(log_cou
 next T3
 check "lines are only ever appended" '[ "$(log_count)" -eq 5 ] && [ "$(log_line 5)" = "run planner round=0/2 head=$HEAD7" ]'
 check "status.md doesn't change because of run.log" '! grep -q "run.log" .work/T3/status.md'
+
+# ---------- no open questions: the requirements stop waits for the plan (ADR 0006) ----------
+$S/start-task.sh T4 deferred > "$T/out.txt" 2>&1
+W4=.work/T4
+# req4 [open questions section body]: requirements.md with that section (default: none open).
+req4() { printf '# T4: Export\n## Acceptance criteria\n- AC-1: x\n## Open questions\n%s\n## Assumptions\n- CSV is fine\n' "${1:-None.}" > $W4/requirements.md; }
+# plan4 <slices> [migration]: a plan with no other flags.
+plan4() {
+  local i
+  { echo "# Plan: T4"; echo "## Slices"
+    for i in $(seq 1 "$1"); do echo "- [ ] S$i: slice $i"; done
+    echo "## Stop flags"; echo "- Requirement gaps: no"; echo "- Migration: ${2:-no}"
+    echo "- Feature flag: no"; echo "- Other team: no"
+  } > $W4/plan.md
+}
+printf '# T4: Export\n## Acceptance criteria\n- AC-1: x\n' > $W4/requirements.md
+next T4
+check "no Open questions section: stop requirements, naming the section" '[ $rc -eq 0 ] && [[ "$out" == "stop requirements "*"## Open questions"* ]]'
+next T4 approve
+check "a requirements.md without the section can't be approved" '[ $rc -eq 1 ]'
+req4
+next T4
+check "no open questions: no requirements stop, run the planner" '[ "$out" = "run planner AUTO RUN. Plan T4." ]'
+req4 "Nothing is open: the ticket says it all."
+next T4
+check "text that isn't a list item isn't a question" '[ "$out" = "run planner AUTO RUN. Plan T4." ]'
+req4
+plan4 3
+next T4
+check "a plan with no flags: one stop for requirements and plan together" '[[ "$out" == "stop plan "*"$W4/requirements.md"*"$W4/plan.md"* ]]'
+check "and no auto-decision for that plan" '[ ! -f $W4/auto-decisions.md ]'
+echo "- Excel opens it" >> $W4/requirements.md   # a new assumption, nothing open
+next T4 approve
+check "approve refuses when requirements.md changed since the stop was shown" '[ $rc -eq 1 ] && grep -q "changed" "$T/out.txt"'
+next T4; plan4 4; next T4 approve
+check "approve refuses when plan.md changed since the stop was shown" '[ $rc -eq 1 ] && grep -q "changed" "$T/out.txt"'
+next T4; next T4 approve
+check "approving the combined stop approves both" '[ $rc -eq 0 ] && grep -q "^Approved requirements: " $W4/status.md && grep -q "^Approved plan: " $W4/status.md'
+next T4
+check "then on to the implementer, with no auto-decision for the plan" '[[ "$out" == "run implementer "* ]] && [ ! -f $W4/auto-decisions.md ]'
+sed -i 's/^- \[ \] S1:/- [x] S1:/' $W4/plan.md; next T4
+check "a ticked slice doesn't bring the combined stop back" '[[ "$out" == "run implementer "* ]]'
+# Requirements change mid-run, still with nothing open: re-plan, then the combined stop.
+sed -i 's/^- AC-1: x$/- AC-1: x, as CSV/' $W4/requirements.md
+next T4
+check "requirements changed with nothing open: the planner updates the plan" '[ "$out" = "run planner AUTO RUN. Requirements for T4 changed; update plan.md." ]'
+next T4
+check "the planner changed nothing: the stalled stop" '[[ "$out" == "stop stalled planner "* ]]'
+next T4 approve; next T4
+check "keeping the plan still brings the combined stop, the requirements being unapproved" '[[ "$out" == "stop plan "*"requirements.md"* ]]'
+next T4 approve; next T4
+check "approved: on to the implementer" '[[ "$out" == "run implementer "* ]]'
+sed -i 's/^- AC-1: x, as CSV$/- AC-1: x, as CSV or XLSX/' $W4/requirements.md
+next T4; plan4 5; next T4
+check "re-planned for the new requirements: the combined stop comes back" '[[ "$out" == "stop plan "*"requirements.md"*"plan.md"* ]]'
+next T4 approve; next T4
+check "approved again: on to the implementer" '[[ "$out" == "run implementer "* ]]'
+sed -i 's/^None\.$/1. XLSX too?/' $W4/requirements.md
+next T4
+check "an open question appears mid-run: the requirements stop" '[[ "$out" == "stop requirements "* ]]'
+
+$S/start-task.sh T5 flagged > "$T/out.txt" 2>&1
+W4=.work/T5
+printf '# T5: Export\n## Acceptance criteria\n- AC-1: x\n## Open questions\n' > $W4/requirements.md
+plan4 3 yes; sed -i 's/T4/T5/' $W4/plan.md
+next T5
+check "a flagged plan with nothing open: one stop, naming both files and the flag" '[[ "$out" == "stop plan "*"requirements.md"*"plan.md"*"Migration"* ]]'
+next T5 approve; next T5
+check "approved: both approvals recorded, on to the implementer" '[[ "$out" == "run implementer "* ]] && grep -q "^Approved requirements: " $W4/status.md'
 git switch -q "$(bash -c 'source scripts/agent/config.sh; state_branch T1')"   # start-task.sh switched to T3's branch
 
 # ---------- plan: stops only on a flag or more than 6 slices ----------

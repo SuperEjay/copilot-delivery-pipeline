@@ -117,23 +117,31 @@ else
   result WARN "can't tell the VS Code version (no code on PATH): it needs $MIN_CODE or later"
 fi
 
-# ---------- review worktrees of finished MRs (ADR 0003) ----------
-# A review worktree is kept for re-reviews; once its MR is merged or closed,
-# /review-mr <iid> --done removes it. Only asks GitLab when glab is logged in.
-reviews="$(git worktree list --porcelain 2>/dev/null | sed -n 's#^worktree .*/pipeline-reviews/mr-\([0-9][0-9]*\)$#\1#p')"
-if [ -n "$reviews" ]; then
+# ---------- finished tasks to clean up (ADR 0003, #132) ----------
+# A task's branch, work folder and (in an MR review) review worktree stay until
+# /cleanup removes them, once its MR is merged or closed. Only asks GitLab when
+# glab is logged in. A task with no MR yet isn't finished.
+work="$(bash -c 'source scripts/agent/config.sh >/dev/null 2>&1; printf "%s" "$WORK_DIR"' 2>/dev/null)"
+finished_tasks=()
+for f in "${work:-.work}"/*/state.env; do
+  [ -f "$f" ] || continue
+  iid="$(sed -n 's/^MR_IID=\([0-9][0-9]*\)$/\1/p' "$f" | tail -1)"
+  [ -n "$iid" ] && finished_tasks+=("$(basename "$(dirname "$f")") $iid")
+done
+if [ "${#finished_tasks[@]}" -gt 0 ]; then
   if has glab && glab auth status >/dev/null 2>&1; then
     source "$(dirname "$0")/forge-lib.sh"
-    for iid in $reviews; do
+    for entry in "${finished_tasks[@]}"; do
+      task="${entry% *}"; iid="${entry#* }"
       st=""; line="$(forge_mr "$iid" 2>/dev/null)" && IFS=$'\037' read -r _ st _ <<<"$line"
       case "$st" in
-        merged|closed) result WARN "review worktree of MR !$iid is still here, and the MR is $st: run /review-mr $iid --done to remove it" ;;
+        merged|closed) result WARN "$task is finished: MR !$iid is $st. Run /cleanup $task to remove its branch, work folder or review worktree" ;;
         opened|locked) ;;
-        *) result INFO "can't tell whether MR !$iid is still open: if it's merged or closed, run /review-mr $iid --done" ;;
+        *) result INFO "can't tell whether MR !$iid ($task) is finished: if it's merged or closed, run /cleanup $task" ;;
       esac
     done
   else
-    result INFO "review worktrees: $(printf '%s\n' $reviews | wc -l | tr -d ' ') (MRs $(printf '!%s ' $reviews | sed 's/ $//')). Without glab logged in, it can't tell which MRs are finished; remove one with /review-mr <iid> --done"
+    result INFO "tasks with an MR: ${#finished_tasks[@]}. Without glab logged in, it can't tell which are finished; clean one up with /cleanup <task-id>"
   fi
 fi
 

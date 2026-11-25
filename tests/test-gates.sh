@@ -203,6 +203,14 @@ mv "$STUB/me" "$STUB/me.off"
 $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1; rc=$?
 check "the glab user can't be looked up: the fetch fails (not a round-limit exit), the round is untouched" '[ $rc -ne 0 ] && [ $rc -ne 3 ] && grep -qi "glab user" "$T/out.txt" && grep -q "^REVIEW_ROUND=5$" $W/state.env'
 mv "$STUB/me.off" "$STUB/me"
+# A finished MR: no review to fetch, the cleanup instead (#132).
+cp "$STUB/mr-7.json" "$T/mr7.keep"
+for st in merged closed; do
+  jq --arg s "$st" '.state = $s' "$T/mr7.keep" > "$STUB/mr-7.json"
+  $S/fetch-duo-review.sh T1 > "$T/out.txt" 2>&1; rc=$?
+  check "a $st MR: refused with the /cleanup command, the round untouched" '[ $rc -eq 1 ] && grep -q "MR !7 is $st" "$T/out.txt" && grep -q "/cleanup T1" "$T/out.txt" && grep -q "^REVIEW_ROUND=5$" $W/state.env'
+done
+cp "$T/mr7.keep" "$STUB/mr-7.json"
 # ---------- an MR review's threads: every author, no round (ADR 0003) ----------
 # Discussions from Duo, a person, a resolved one, a system note and a plain
 # (unresolvable) comment.
