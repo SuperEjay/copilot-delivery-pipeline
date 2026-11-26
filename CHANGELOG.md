@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Reverted to the v2.4.0 flow:** the planner couldn't save `plan.md` in an auto run, so the changes since v2.4.0 that move a task on by itself are undone. Undone: the skills' hand-off to the **pipeline** agent (#129; `/start-task` and `/fetch-review` end with the stage agent to pick again), the deferred requirements stop (#130, ADR 0006 removed: the run always stops at requirements), `disable-model-invocation` on the pipeline agent (#144) and the stage agents' shell fallback (#145). Kept: `/cleanup` and doctor's finished-task list (#132, #139, #140), the test tooling per stack (#131) and the faster install tests (#133). Upgrading: merge the `.new` files for `pipeline.agent.md`, the eight stage agents, `/start-task`, `/fetch-review` and `/review-mr`.
+
 ## v2.5.0
 
 **Finished tasks clean up, and fewer stops.** `/cleanup` removes a task's branch, work folder or review worktree once its MR is merged or closed, and doctor lists each finished task with the command to run. An auto run whose requirements have no open questions goes on to the planner and stops once, at the plan, for both. The skills hand you to the **pipeline** agent instead of into manual mode, and doctor shows the test commands and tools for a Node or Laravel project.
