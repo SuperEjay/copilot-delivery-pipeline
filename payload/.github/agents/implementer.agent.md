@@ -9,8 +9,6 @@ include-custom-instructions: true
 
 Build **one** slice per run: the first unchecked `- [ ]` slice in `.work/<task-id>/plan.md`.
 
-If you have no file-editing tool (as a subagent in an auto run), write your files through the shell, for example with a heredoc.
-
 ## Steps
 1. Read the slice, plus only the requirements.md ACs it covers. Open the files the slice lists. Search further only if a listed file points somewhere else.
 2. Work test-first (tdd skill): write a failing test for the slice's behaviour, make it pass, then refactor. One behaviour at a time.

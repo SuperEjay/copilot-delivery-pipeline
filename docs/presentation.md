@@ -90,7 +90,7 @@ Any stage also stops if it stalls (changed nothing) or uses up its fix rounds
 
 <details><summary>Notes</summary>
 
-Two approvals always happen: the requirements (at their own stop, or with the plan when no question is open), and the evidence
+Two stops always happen: approving the requirements, and approving the evidence
 before anything is pushed. The others only fire when there's something genuinely
 ambiguous. The two safety stops mean it can never spin.
 
@@ -236,13 +236,11 @@ out of git.
 
 ---
 
-## 10. New in v2.5: less to tidy, fewer stops
+## 10. New in v2.5: less to tidy
 
 | | |
 |---|---|
 | **Clean up finished tasks** | Once an MR is merged or closed, `/cleanup <id>` removes its branch (merged only), its `.work/` folder and, for an MR review, its worktree. `/cleanup --finished` does them all. |
-| **One stop when nothing is open** | Requirements with no open questions are approved with the plan, at the plan stop ([ADR 0006](adr/0006-the-requirements-stop-waits-for-the-plan-when-nothing-is-open.md)). |
-| **Handed to the right agent** | `/start-task` and `/fetch-review` point you to the **pipeline** agent instead of into manual mode. |
 | **Test tooling per stack** | Doctor shows ready-to-paste test commands, and the tools to install, for a Node or Laravel project. |
 
 <details><summary>Notes</summary>
@@ -261,7 +259,7 @@ plan stop. Doctor's test tooling only recommends; it never writes your settings.
 
 | 1,590 | 6 | 11 |
 |---|---|---|
-| automated checks across 17 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), [MR review](adr/0003-mr-review-a-second-route.md), [adopting a branch or MR](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md), [live checks never feed the ship gate](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md), and [one stop when nothing is open](adr/0006-the-requirements-stop-waits-for-the-plan-when-nothing-is-open.md) | releases so far, from v1.0.0 to v2.5.0, each tagged on GitHub |
+| automated checks across 17 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), [MR review](adr/0003-mr-review-a-second-route.md), [adopting a branch or MR](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md), and [live checks never feed the ship gate](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md) | releases so far, from v1.0.0 to v2.5.0, each tagged on GitHub |
 
 Every change lands on its own branch, test first, with each new test proven to
 fail before the fix.

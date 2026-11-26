@@ -2,8 +2,7 @@
 
 ## Unreleased
 
-- **Fixed:** in default Agent mode (or any agent other than the stage agent the skill names), `/start-task`, `/fetch-review` and `/review-mr` ended with "pick the **pipeline** agent", and saying `Run <task-id>` there could make that agent start **pipeline** as a subagent. As a subagent, the guard refused it `next-stage.sh` and it hit the subagent depth limit, so the run did nothing. `pipeline.agent.md` now sets `disable-model-invocation: true`, so no agent can start it as a subagent. The hand-off now says to switch the agent picker to **pipeline**, and tells the agent never to start it itself. Upgrading: merge `pipeline.agent.md.new` and the three skills' `SKILL.md.new`.
-- **Fixed:** in an auto run, the planner wrote a plan but couldn't save `plan.md`, so you had to run the planner again yourself. As a subagent it got no file-editing tool, and unlike every other stage agent it had no shell. The planner now has `execute`, and every stage agent is told to write its files through the shell when it has no file-editing tool. Upgrading: merge the eight stage agents' `.agent.md.new`.
+- **Reverted to the v2.4.0 flow:** the planner couldn't save `plan.md` in an auto run, so the changes since v2.4.0 that move a task on by itself are undone. Undone: the skills' hand-off to the **pipeline** agent (#129; `/start-task` and `/fetch-review` end with the stage agent to pick again), the deferred requirements stop (#130, ADR 0006 removed: the run always stops at requirements), `disable-model-invocation` on the pipeline agent (#144) and the stage agents' shell fallback (#145). Kept: `/cleanup` and doctor's finished-task list (#132, #139, #140), the test tooling per stack (#131) and the faster install tests (#133). Upgrading: merge the `.new` files for `pipeline.agent.md`, the eight stage agents, `/start-task`, `/fetch-review` and `/review-mr`.
 
 ## v2.5.0
 

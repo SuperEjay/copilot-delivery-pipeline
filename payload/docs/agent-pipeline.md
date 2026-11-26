@@ -8,11 +8,11 @@ from its "Next:" line.
               /start-task <id> <slug>
                     │
                     ▼
-              requirements ······················ ⏸ requirements: an open question
+              requirements ······················ ⏸ requirements: answer it, or approve
                     │
                     ▼
-              planner ··························· ⏸ plan: with requirements, if nothing was
-                    │                               open; or a Stop flag, over 6 slices
+              planner ··························· ⏸ plan: a Stop flag, or over 6 slices
+                    │
                     ▼
   ┌──────┬───► implementer (one slice per run)
   │      │          │
@@ -89,8 +89,8 @@ its reply with a **Next:** line naming the agent to pick and what to say, e.g.
 | Path | What it is |
 |---|---|
 | `.github/agents/*.agent.md` | The eight stage agents (requirements, planner, implementer, verifier, reviewer, evidence, shipper, review-responder) and `pipeline`, the orchestrator of an auto run |
-| `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>` (or `--mr <iid>` / `--branch <branch>` to adopt your own work): branch, work folder, ClickUp fetch, then starts the auto run when **pipeline** is picked (the **requirements** agent goes on with its analysis; any other agent points you to the **pipeline** agent) |
-| `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then resumes the auto run when **pipeline** is picked (the **review-responder** agent goes on with its triage; any other agent points you to the **pipeline** agent) |
+| `.github/skills/start-task/SKILL.md` | `/start-task <id> <slug>` (or `--mr <iid>` / `--branch <branch>` to adopt your own work): branch, work folder, ClickUp fetch, then on to requirements, or starts the auto run when **pipeline** is picked |
+| `.github/skills/fetch-review/SKILL.md` | `/fetch-review <id> [--force]`: pull Duo's open threads, then on to review-responder, or resumes the auto run when **pipeline** is picked |
 | `.github/skills/review-mr/SKILL.md` | `/review-mr <iid> [clickup-id]`: check out an existing MR for a read-only review and start its auto run when **pipeline** is picked; `/review-mr <iid> --done` cleans up (see "MR review (a teammate's MR)") |
 | `.github/skills/cleanup/SKILL.md` | `/cleanup <id>` or `/cleanup --finished`: once a task's MR is merged or closed, removes its branch (merged only), its `.work/` folder and, for an MR review, its worktree (see "Cleanup" under "Daily use: auto run") |
 | `.github/hooks/pipeline-guard.json` | Hooks: a guard before every agent tool call, and a formatter after each edit |
@@ -254,8 +254,8 @@ afterwards, the stop comes back.
 
 | Stop | When | What to do |
 |---|---|---|
-| `requirements` | requirements.md has open questions (list items under `## Open questions`) | Answer them here, or approve it |
-| `plan` | Requirements not yet approved (nothing was open, so the run went straight on to the planner: ADR 0006), a Stop flag in plan.md (requirement gaps, migration, feature flag, other team) or more than 6 slices | Review plan.md, and requirements.md when the reason names it, then approve (that approves both) or say what to change |
+| `requirements` | Always, once requirements.md is written | Answer its open questions, or approve it |
+| `plan` | A Stop flag in plan.md (requirement gaps, migration, feature flag, other team) or more than 6 slices | Review plan.md, then approve or say what to change |
 | `review` | A finding without a clear decision (including a blocker recommended debt or skip), or a fix routed to requirements or re-plan | Decide those findings in code-review.md |
 | `fix-limit` | `MAX_AUTO_FIX_ROUNDS` fix rounds used and the work still needs fixing | Approve for more rounds, or say how to go on |
 | `stalled` | A stage ran and changed nothing | Read its **Result:** line in the block. Approve to run it once more, or say how to go on. When it's the planner updating plan.md for changed requirements, approving keeps the plan as it is |
@@ -264,7 +264,7 @@ afterwards, the stop comes back.
 | `spec` | MR review: no ClickUp task found for the MR | Reply with a ClickUp task id or the acceptance criteria, or approve reviewing against the MR description alone (the report says the spec check was weak) |
 | `focus` | MR review: the MR changes more than `MR_REVIEW_MAX_FILES` files (lockfiles and generated files don't count) | Reply with what to review, or approve to review the files with the most churn |
 | `findings` | MR review: always, once the review is written | Mark each finding in code-review.md post, debt or skip, then approve. Each post asks for your confirmation |
-| `requirements`, `plan`, `review`, `duo`, `verify`, `evidence`, `spec`, `focus` | The reason says a file is missing a line the router reads: requirements.md's `## Open questions` section, plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:` or a Verdict other than `FIX`, `PUSH BACK` or `ASK`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:`, requirements.md's `Spec source:` in an MR review. Or, for `focus`, the MR's target branch can't be read: run `/review-mr <iid>` again | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
+| `plan`, `review`, `duo`, `verify`, `evidence`, `spec`, `focus` | The reason says a file is missing a line the router reads: plan.md's Stop flags, code-review.md after a review, review-triage.md's `Round:` or a Verdict other than `FIX`, `PUSH BACK` or `ASK`, verification.md's `Result:` or `Commit:`, evidence.md's `Commit:`, requirements.md's `Spec source:` in an MR review. Or, for `focus`, the MR's target branch can't be read: run `/review-mr <iid>` again | No approval passes it. Say what's wrong and the stage writes the file again, or fix the file yourself and reply `retry` |
 
 The run ends when the MR is open, and again each time a Duo round is answered: run `/fetch-review <id>` after Duo's next review. An MR review ends once its findings are posted.
 
@@ -278,9 +278,7 @@ starts with `AUTO RUN`. Run by hand, the agents work as before. In an auto run:
 - **A stage that can't finish** returns `**Result:** blocked: <why>`, and the
   run stops (`stalled`).
 - **Requirements** leaves open questions in requirements.md for the
-  `requirements` stop. With none open, it leaves `## Open questions` without
-  list items, the run goes on to the planner, and you approve requirements.md
-  and plan.md together at the `plan` stop (ADR 0006).
+  `requirements` stop.
 - **The planner** writes blocking questions as Requirement gaps under
   `## Stop flags`, instead of stopping.
 - **The reviewer** sets each finding's decision to its recommendation and logs
@@ -505,22 +503,21 @@ and a re-review looks only at new commits.
 Use manual mode when an auto run can't be used: say a VS Code update breaks
 subagents or pinned models, or you want to drive one stage closely. You pick
 each stage agent yourself and follow the **Next:** line at the end of its
-reply. Pick the stage agent *before* running a skill: `/start-task` and
-`/fetch-review` go on in the **requirements** and **review-responder** agents.
-In any other agent, they set up or fetch, then point you to the **pipeline**
-agent for an auto run. The usual path:
+reply. The usual path:
 
 | Step | Pick agent / run | Say |
 |---|---|---|
-| 1 | **requirements**, then `/start-task 86c1abcde invoice-export` | (sets up and fetches the task, then analyses it). Answer its questions, then say "approved". |
-| 2 | **planner** | `Plan 86c1abcde`, then review `plan.md` |
-| 3 | **implementer** | `Build 86c1abcde`, then `Next slice` until all slices are done |
-| 4 | **verifier** | `Verify 86c1abcde`. FAIL goes back to the implementer. |
-| 5 | **reviewer** | `Review 86c1abcde`. Decide per finding; fixes loop back (see "Code review and tech debt"). |
-| 6 | **evidence** | `Capture evidence for 86c1abcde`, then review, tick and run `approve-evidence.sh` |
-| 7 | **shipper** | `Ship 86c1abcde`. Confirm the push when VS Code asks. |
-| 8 | **review-responder**, then `/fetch-review 86c1abcde` | When Duo has reviewed: (fetches the threads, then triages them). Approve the table. It commits the fixes without pushing. |
-| 9 | **verifier**, then **review-responder** | `Re-verify 86c1abcde`, then `Push and reply 86c1abcde`. Confirm the push. |
+| 1 | `/start-task 86c1abcde invoice-export` | (sets up, then tells you to pick requirements) |
+| 2 | **requirements** | `Analyse 86c1abcde`. Answer its questions, then say "approved". |
+| 3 | **planner** | `Plan 86c1abcde`, then review `plan.md` |
+| 4 | **implementer** | `Build 86c1abcde`, then `Next slice` until all slices are done |
+| 5 | **verifier** | `Verify 86c1abcde`. FAIL goes back to the implementer. |
+| 6 | **reviewer** | `Review 86c1abcde`. Decide per finding; fixes loop back (see "Code review and tech debt"). |
+| 7 | **evidence** | `Capture evidence for 86c1abcde`, then review, tick and run `approve-evidence.sh` |
+| 8 | **shipper** | `Ship 86c1abcde`. Confirm the push when VS Code asks. |
+| 9 | `/fetch-review 86c1abcde` | When Duo has reviewed: hands over to review-responder |
+| 10 | **review-responder** | `Triage 86c1abcde`, then approve the table. It commits the fixes without pushing. |
+| 11 | **verifier**, then **review-responder** | `Re-verify 86c1abcde`, then `Push and reply 86c1abcde`. Confirm the push. |
 
 After `MAX_REVIEW_ROUNDS` Duo rounds, the fetch script stops and leaves the
 rest to you. Fetching the same set of threads again doesn't count as a new round. Picking a later agent too early is safe: each one checks that the

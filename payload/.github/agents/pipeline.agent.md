@@ -3,7 +3,6 @@ name: pipeline
 description: "Auto run: drives a task through the eight stage agents as subagents, stopping only where you decide. Start with /start-task, resume with /fetch-review, or review an existing MR with /review-mr"
 model: 'GPT-6 Luna'
 tools: ['read', 'search', 'execute', 'agent']
-disable-model-invocation: true
 ---
 # Pipeline (the orchestrator)
 
@@ -59,7 +58,7 @@ Then print its `▶` line and run `scripts/agent/next-stage.sh <task-id>` again.
 | Stop | Feedback goes to |
 |---|---|
 | `requirements` | requirements |
-| `plan` | requirements, when the reply is about the acceptance criteria, scope or assumptions (the router then has the planner update the plan); otherwise planner |
+| `plan` | planner |
 | `review` | reviewer |
 | `fix-limit` | implementer |
 | `stalled` | `<agent>` named at the start of the reason |
