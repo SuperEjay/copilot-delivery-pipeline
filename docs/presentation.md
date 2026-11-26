@@ -90,7 +90,7 @@ Any stage also stops if it stalls (changed nothing) or uses up its fix rounds
 
 <details><summary>Notes</summary>
 
-Two approvals always happen: the requirements (at their own stop, or with the plan when no question is open), and the evidence
+Two stops always happen: approving the requirements, and approving the evidence
 before anything is pushed. The others only fire when there's something genuinely
 ambiguous. The two safety stops mean it can never spin.
 

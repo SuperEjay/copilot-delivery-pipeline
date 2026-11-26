@@ -58,8 +58,6 @@ done
 # ---------- each agent's own auto-run rules ----------
 check "requirements: no slug question, task state exists" 'auto requirements "skip the slug question"'
 check "requirements: no grill-me; open questions stay in the file" 'auto requirements "grill-me" && auto requirements "## Open questions"'
-check "requirements: always writes the Open questions section, with no list items when nothing is open (ADR 0006)" 'auto requirements "[Aa]lways write .## Open questions." && auto requirements "no list items"'
-check "requirements: says nothing open sends the run on to the planner, with one stop for both" 'auto requirements "on to the planner" && auto requirements "plan stop"'
 check "planner: open questions don't stop it" 'auto planner "Skip step 1" && auto planner "still write the plan"'
 check "planner: blocking questions become Requirement gaps: yes" 'auto planner "## Requirement gaps" && auto planner "\- Requirement gaps: yes"'
 check "planner: Stop flags kept current on an update or a re-plan" 'auto planner "Keep the Stop flags current" && auto planner "update plan.md" && auto planner "Re-plan the review findings"'

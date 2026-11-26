@@ -58,7 +58,6 @@ done
 feedback_agents_exist() { local id a; for id in $(stop_ids); do [ "$id" = stalled ] && continue; a="$(feedback_agent "$id")"; [ -f "$A/$a.agent.md" ] || return 1; done; }
 check "feedback: every agent in the table exists" 'feedback_agents_exist'
 check "feedback: the stalled stop goes back to the agent its reason names" 'section Feedback | grep -E "^\| \`stalled\`" | grep -q "named at the start of the reason"'
-check "feedback: plan goes to requirements when about the ACs, scope or assumptions, otherwise planner (ADR 0006)" 'section Feedback | grep -E "^\| \`plan\`" | grep "acceptance criteria, scope or assumptions" | grep -q "requirements" && section Feedback | grep -E "^\| \`plan\`" | grep -q "otherwise planner"'
 check "feedback: pre-ship goes to evidence, or the shipper writing mr.md" 'section Feedback | grep -E "^\| \`pre-ship\`" | grep -q evidence && sec Feedback "Write mr.md for <task-id>. Don.t push or create the MR."'
 check "feedback: the prompt carries the reply word for word" 'sec Feedback "AUTO RUN. The user replied at the <stop-id> stop for <task-id>: \"<reply, word for word>\""'
 
