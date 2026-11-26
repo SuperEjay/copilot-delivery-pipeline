@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed:** in default Agent mode (or any agent other than the stage agent the skill names), `/start-task`, `/fetch-review` and `/review-mr` ended with "pick the **pipeline** agent", and saying `Run <task-id>` there could make that agent start **pipeline** as a subagent. As a subagent, the guard refused it `next-stage.sh` and it hit the subagent depth limit, so the run did nothing. `pipeline.agent.md` now sets `disable-model-invocation: true`, so no agent can start it as a subagent. The hand-off now says to switch the agent picker to **pipeline**, and tells the agent never to start it itself. Upgrading: merge `pipeline.agent.md.new` and the three skills' `SKILL.md.new`.
+
 ## v2.5.0
 
 **Finished tasks clean up, and fewer stops.** `/cleanup` removes a task's branch, work folder or review worktree once its MR is merged or closed, and doctor lists each finished task with the command to run. An auto run whose requirements have no open questions goes on to the planner and stops once, at the plan, for both. The skills hand you to the **pipeline** agent instead of into manual mode, and doctor shows the test commands and tools for a Node or Laravel project.
