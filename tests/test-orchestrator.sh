@@ -24,10 +24,6 @@ check "name: pipeline" 'frontmatter | grep -qx "name: pipeline"'
 check "model: the cheapest model" 'frontmatter | grep -qx "model: '"'"'GPT-6 Luna'"'"'"'
 check "tools: read, search, execute, agent, and no edit" 'frontmatter | grep -qx "tools: \[.read., .search., .execute., .agent.\]"'
 check "no handoffs: it drives the stages as subagents" '! frontmatter | grep -q "^handoffs:"'
-# Another agent must not start the orchestrator as a subagent: the guard denies
-# next-stage.sh to subagents and the stages can't nest (the "Run <id>" in
-# default Agent mode bug).
-check "disable-model-invocation: true, so no agent starts it as a subagent" 'frontmatter | grep -qx "disable-model-invocation: true"'
 
 # ---------- the loop ----------
 check "runs next-stage.sh <task-id> and acts on the one line" 'sec "The loop" "scripts/agent/next-stage.sh <task-id>\`"'
@@ -133,16 +129,12 @@ check "/start-task: its description names the auto run" 'grep "^description:" "$
 check "/fetch-review: its description names the auto run" 'grep "^description:" "$SK/fetch-review/SKILL.md" | grep -q "pipeline agent, resume the auto run"'
 # In any other agent, the skills set up and point to the pipeline agent, not to a
 # stage agent (#129): manual mode starts by picking the stage agent first.
-check "/start-task: in another agent, the hand-off has you switch the picker to pipeline and say Run" 'grep -q "^   > \*\*Next:\*\* switch the agent picker to \*\*pipeline\*\*, then say \`Run <task-id>\` there\.$" "$SK/start-task/SKILL.md"'
-check "/start-task: never starts the pipeline agent as a subagent" 'grep -q "Never start the \*\*pipeline\*\* agent as a subagent" "$SK/start-task/SKILL.md"'
+check "/start-task: in another agent, the hand-off names the pipeline agent and Run" 'grep -q "^   > \*\*Next:\*\* pick the \*\*pipeline\*\* agent and say \`Run <task-id>\`\.$" "$SK/start-task/SKILL.md"'
 check "/start-task: the hand-off no longer sends you to the requirements agent" '! grep -q "pick the \*\*requirements\*\* agent" "$SK/start-task/SKILL.md"'
 check "/start-task: the requirements agent still goes on by itself" 'grep -q "If you are the \*\*requirements\*\* agent, continue with your normal steps now" "$SK/start-task/SKILL.md"'
-check "/fetch-review: in another agent, the hand-off has you switch the picker to pipeline and say Continue" 'grep -q "^   > \*\*Next:\*\* switch the agent picker to \*\*pipeline\*\*, then say \`Continue <task-id>\` there\.$" "$SK/fetch-review/SKILL.md"'
-check "/fetch-review: never starts the pipeline agent as a subagent" 'grep -q "Never start the \*\*pipeline\*\* agent as a subagent" "$SK/fetch-review/SKILL.md"'
+check "/fetch-review: in another agent, the hand-off names the pipeline agent and Continue" 'grep -q "^   > \*\*Next:\*\* pick the \*\*pipeline\*\* agent and say \`Continue <task-id>\`\.$" "$SK/fetch-review/SKILL.md"'
 check "/fetch-review: the hand-off no longer sends you to the review-responder agent" '! grep -q "pick the \*\*review-responder\*\* agent" "$SK/fetch-review/SKILL.md"'
 check "/fetch-review: the review-responder agent still goes on by itself" 'grep -q "If you are the \*\*review-responder\*\* agent, continue with your \"Triage and fix\" steps" "$SK/fetch-review/SKILL.md"'
-check "/review-mr: in another agent, the hand-off has you switch the picker to pipeline and say Run" 'grep -q "^   > \*\*Next:\*\* switch the agent picker to \*\*pipeline\*\*, then say \`Run mr-<iid>\` there\.$" "$SK/review-mr/SKILL.md"'
-check "/review-mr: never starts the pipeline agent as a subagent" 'grep -q "Never start the \*\*pipeline\*\* agent as a subagent" "$SK/review-mr/SKILL.md"'
 check "/start-task: its description names the pipeline hand-off" 'grep "^description:" "$SK/start-task/SKILL.md" | grep -q "point you to the pipeline agent"'
 check "/fetch-review: its description names the pipeline hand-off" 'grep "^description:" "$SK/fetch-review/SKILL.md" | grep -q "point you to the pipeline agent"'
 

@@ -13,5 +13,4 @@ The user gave a task id, and maybe `--force` after it. If the task id is missing
    If you are the **review-responder** agent, continue with your "Triage and fix" steps from step 2.
    Otherwise reply with exactly this, filled in, and stop:
    > Fetched `<n>` unresolved thread(s) into `.work/<task-id>/review.json`.
-   > **Next:** switch the agent picker to **pipeline**, then say `Continue <task-id>` there.
-   Never start the **pipeline** agent as a subagent, even if you can: run as a subagent, the guard refuses it `next-stage.sh` and it can't start the stage agents. Only the user switches to it.
+   > **Next:** pick the **pipeline** agent and say `Continue <task-id>`.

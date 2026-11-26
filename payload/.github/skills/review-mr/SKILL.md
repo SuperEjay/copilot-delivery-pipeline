@@ -14,7 +14,6 @@ The user gave an MR iid (the `142` in `!142`), and maybe a ClickUp task id after
 2. If you are the **pipeline** agent, start the auto run for `mr-<iid>`: follow your loop now, with `mr-<iid>` as the task id.
    Otherwise reply with exactly this, filled in, and stop:
    > MR `!<iid>` is checked out for review. An MR review runs only as an auto run.
-   > **Next:** switch the agent picker to **pipeline**, then say `Run mr-<iid>` there.
-   Never start the **pipeline** agent as a subagent, even if you can: run as a subagent, the guard refuses it `next-stage.sh` and it can't start the stage agents. Only the user switches to it.
+   > **Next:** pick the **pipeline** agent and say `Run mr-<iid>`.
 
 Never change the MR's code, in the review worktree or anywhere else: an MR review is read-only.
