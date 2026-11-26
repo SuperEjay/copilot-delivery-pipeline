@@ -1,6 +1,25 @@
 # Changelog
 
-## Unreleased
+## v2.5.0
+
+**Finished tasks clean up, and fewer stops.** `/cleanup` removes a task's branch, work folder or review worktree once its MR is merged or closed, and doctor lists each finished task with the command to run. An auto run whose requirements have no open questions goes on to the planner and stops once, at the plan, for both. The skills hand you to the **pipeline** agent instead of into manual mode, and doctor shows the test commands and tools for a Node or Laravel project.
+
+**Not yet tried for real:**
+- `/cleanup` and `/cleanup --finished` against a real GitLab: only checked with the tests' fake glab.
+- The combined requirements-and-plan stop (ADR 0006) in a real auto run: checked through the router tests and the agent files.
+- From v2.4.0, still: a full auto run in a project without Playwright, and the gap-checker agent in VS Code.
+
+### Upgrading to v2.5.0
+
+1. From v2.4.0 (or earlier, see the earlier upgrade notes first), run `install.sh --update` from v2.5.0: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.5.0/install.sh | bash -s -- --update`.
+2. Merge each `<file>.new` it reports. `pipeline.agent.md` and `requirements.agent.md` changed (the combined plan stop), and so did the `start-task`, `fetch-review` and `review-mr` skills. The `cleanup` skill is new.
+3. No new `.agent.env` settings. Doctor's new "test tooling" section only suggests lines to paste.
+4. Commit the updated pipeline files (with `--local`, there's nothing to commit), fully quit and reopen VS Code. `/cleanup` should now be offered in the chat.
+5. **Changed:** `/review-mr <iid> --done` now needs the MR merged or closed (or `/cleanup mr-<iid> --force`), and it deletes `.work/mr-<iid>/` too.
+
+Tasks in progress carry on. A task waiting at a `requirements` stop with no open questions now goes on to the planner on its next run.
+
+### Changes
 
 - **Test tooling per stack** (#131). `doctor.sh`, and so the end of every install and `--update`, prints a "test tooling" section: ready-to-paste `.agent.env` lines for each check of a Node or Laravel project, and the tool to install where one is missing (Laravel: Pest, else PHPUnit, Pint, Larastan, and the Pest browser plugin for e2e with Playwright as the alternative). It only recommends: nothing is written to `.agent.env` or installed. A command `.agent.env` sets to other than the example's value wins. The stacks are one table in `scripts/agent/stacks.sh`; another stack gets a one-line "set the commands by hand".
 - **`/cleanup` removes what a finished task leaves behind** (#132). Once a task's MR is merged or closed, `/cleanup <id>` (new skill, new `scripts/agent/cleanup-task.sh`) deletes its `.work/<id>/` folder and, when merged, its local branch (even after a squash merge); a closed MR's branch is kept, with the `git branch -D` command printed. The remote is never touched. It refuses while the MR is open, without an MR (`--force` for a task you abandoned), when glab can't tell the MR's state, on the task's branch, with uncommitted changes, or while `tech-debt.md` has parked debt (listed; `--drop-debt` goes ahead). `/cleanup --finished` sweeps every finished task and prints a summary. `doctor.sh` now lists every finished task (not only review worktrees) with its `/cleanup` command, `/fetch-review` on a merged or closed MR points to `/cleanup`, and the guard asks before an agent runs a cleanup.

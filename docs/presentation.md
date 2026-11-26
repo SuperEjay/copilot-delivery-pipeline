@@ -1,10 +1,10 @@
 # From ClickUp task to reviewed merge request
 
-How the Copilot delivery pipeline delivers and reviews work, as of v2.4.0. This
+How the Copilot delivery pipeline delivers and reviews work, as of v2.5.0. This
 is the team presentation written out as a document, one section per slide. The
 speaker notes are under each slide's **Notes**.
 
-Status as of 2026-11-23.
+Status as of 2026-11-26.
 
 ---
 
@@ -79,8 +79,8 @@ the MR, `/fetch-review` starts the response loop.
 
 | Stop | When it waits for you |
 |---|---|
-| Requirements | Always: answer its open questions, or approve |
-| Plan | A Stop flag in the plan, or more than 6 slices |
+| Requirements | Open questions to answer; with none, you approve it at the plan stop |
+| Plan | A Stop flag, more than 6 slices, or requirements still to approve |
 | Review | An unclear finding, or a fix sent back to requirements or planner |
 | Pre-ship | Always: you tick the evidence and approve it |
 | Duo | Threads that ask you something, or fixes to push |
@@ -178,7 +178,7 @@ flowchart TD
     class D,E,G,R auto
 ```
 
-Run `/review-mr 142` for MR !142. When you're done, `/review-mr 142 --done`
+Run `/review-mr 142` for MR !142. Once it's merged or closed, `/cleanup mr-142`
 removes the worktree. Focus stops only when the MR has more than
 `MR_REVIEW_MAX_FILES` files.
 
@@ -236,31 +236,52 @@ out of git.
 
 ---
 
-## 10. How it's built: test-first, decided in the open
+## 10. New in v2.5: less to tidy, fewer stops
 
-| 1,456 | 5 | 10 |
+| | |
+|---|---|
+| **Clean up finished tasks** | Once an MR is merged or closed, `/cleanup <id>` removes its branch (merged only), its `.work/` folder and, for an MR review, its worktree. `/cleanup --finished` does them all. |
+| **One stop when nothing is open** | Requirements with no open questions are approved with the plan, at the plan stop ([ADR 0006](adr/0006-the-requirements-stop-waits-for-the-plan-when-nothing-is-open.md)). |
+| **Handed to the right agent** | `/start-task` and `/fetch-review` point you to the **pipeline** agent instead of into manual mode. |
+| **Test tooling per stack** | Doctor shows ready-to-paste test commands, and the tools to install, for a Node or Laravel project. |
+
+<details><summary>Notes</summary>
+
+Cleanup refuses while the MR is open, with uncommitted changes, or while parked
+tech debt is still undecided, so nothing is lost silently; doctor lists every
+finished task with its `/cleanup` command. When the requirements have no open
+questions, the run goes straight on to the planner and you approve both at the
+plan stop. Doctor's test tooling only recommends; it never writes your settings.
+
+</details>
+
+---
+
+## 11. How it's built: test-first, decided in the open
+
+| 1,590 | 6 | 11 |
 |---|---|---|
-| automated checks across 16 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), [MR review](adr/0003-mr-review-a-second-route.md), [adopting a branch or MR](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md), and [live checks never feed the ship gate](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md) | releases so far, from v1.0.0 to v2.4.0, each tagged on GitHub |
+| automated checks across 17 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), [MR review](adr/0003-mr-review-a-second-route.md), [adopting a branch or MR](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md), [live checks never feed the ship gate](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md), and [one stop when nothing is open](adr/0006-the-requirements-stop-waits-for-the-plan-when-nothing-is-open.md) | releases so far, from v1.0.0 to v2.5.0, each tagged on GitHub |
 
 Every change lands on its own branch, test first, with each new test proven to
 fail before the fix.
 
 ---
 
-## 11. Where it stands: v2.4.0 is out; real runs are next
+## 12. Where it stands: v2.5.0 is out; more real runs are next
 
 | Status | What |
 |---|---|
-| ✅ **Done** | v2.1.0 to v2.4.0 released: MR review, adopting your own work, applied suggestions, UI work without Playwright, and gap checks. The browser-tools spike (#113) is settled: subagents don't get the tools, so the gap check is an agent you pick. |
+| ✅ **Done** | v2.1.0 to v2.5.0 released: MR review, adopting your own work, applied suggestions, UI work without Playwright, gap checks, cleanup of finished tasks, and one fewer stop. `/review-mr` has been tried on a real GitLab MR, and it works. Pinned models are confirmed on a paid plan (#67). |
 | 🔶 **In progress** | First real runs: a task in a project without Playwright, and gap-checker in VS Code. |
-| ➡️ **Next** | A run against real GitLab instead of stubs. Pinned models are confirmed on a paid plan (#67). |
+| ➡️ **Next** | v2.5's `/cleanup` and the combined plan stop on real tasks. |
 
 ---
 
-## 12. What I'd like from the team: help prove it on real work
+## 13. What I'd like from the team: help prove it on real work
 
-1. **An MR to review.** Volunteer an open MR so `/review-mr` runs on real GitLab, not stubs.
-2. **A small task.** Run one ticket through the delivery route, ideally in a project without Playwright, try the gap-checker agent at the pre-ship stop, and note where it stopped.
+1. **An MR to review.** `/review-mr` works on real GitLab: point it at your open MRs and tell me what it missed.
+2. **A small task.** Run one ticket through the delivery route, ideally in a project without Playwright, try the gap-checker agent at the pre-ship stop, run `/cleanup` once its MR is merged, and note where it stopped.
 3. **Your feedback.** Which stops are worth keeping, and which can go.
 
 Questions?
