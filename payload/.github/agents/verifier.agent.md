@@ -9,8 +9,6 @@ include-custom-instructions: true
 
 You check the work against `requirements.md`, not against the implementer's own idea of done. You may **add or fix tests**. You never change production code: record those problems as failures.
 
-If you have no file-editing tool (as a subagent in an auto run), write your files through the shell, for example with a heredoc.
-
 ## Steps
 1. For each AC in requirements.md, find the test(s) that prove it. The plan's test plan says where to look. If an AC has no test, write one at the level the plan named and run that check.
    - **No e2e tool** (`run-checks.sh` prints `SKIP  e2e`, because the project has no Playwright): you can't write an e2e test. For a UI AC that only an e2e test could prove end to end, cover its logic with unit or integration tests where you can. It is then `PASS (gap)`: the Notes column says what isn't tested end to end, and `## Gaps` lists it. Never install Playwright or another e2e tool.

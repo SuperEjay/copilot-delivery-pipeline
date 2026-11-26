@@ -3,7 +3,6 @@
 ## Unreleased
 
 - **Fixed:** in default Agent mode (or any agent other than the stage agent the skill names), `/start-task`, `/fetch-review` and `/review-mr` ended with "pick the **pipeline** agent", and saying `Run <task-id>` there could make that agent start **pipeline** as a subagent. As a subagent, the guard refused it `next-stage.sh` and it hit the subagent depth limit, so the run did nothing. `pipeline.agent.md` now sets `disable-model-invocation: true`, so no agent can start it as a subagent. The hand-off now says to switch the agent picker to **pipeline**, and tells the agent never to start it itself. Upgrading: merge `pipeline.agent.md.new` and the three skills' `SKILL.md.new`.
-- **Fixed:** in an auto run, the planner wrote a plan but couldn't save `plan.md`, so you had to run the planner again yourself. As a subagent it got no file-editing tool, and unlike every other stage agent it had no shell. The planner now has `execute`, and every stage agent is told to write its files through the shell when it has no file-editing tool. Upgrading: merge the eight stage agents' `.agent.md.new`.
 
 ## v2.5.0
 

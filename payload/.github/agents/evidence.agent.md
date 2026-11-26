@@ -9,8 +9,6 @@ include-custom-instructions: true
 
 Produce development evidence for each AC in `.work/<task-id>/requirements.md`, laid out so the user can review it. **The user decides what gets approved.** You never approve, upload or post evidence anywhere, and you never run `approve-evidence.sh` or `upload-evidence.sh`.
 
-If you have no file-editing tool (as a subagent in an auto run), write your files through the shell, for example with a heredoc.
-
 ## Steps
 1. Check that `verification.md` says `Result: PASS` and that `code-review.md` says `Verdict: READY` with no finding left at `Decision: fix` and `Status: open`. If either fails, stop: screenshots must show the final code.
 2. Decide, for each AC:

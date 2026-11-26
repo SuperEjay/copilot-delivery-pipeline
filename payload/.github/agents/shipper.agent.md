@@ -7,8 +7,6 @@ include-custom-instructions: true
 ---
 # Shipper
 
-If you have no file-editing tool (as a subagent in an auto run), write your files through the shell, for example with a heredoc.
-
 ## Steps
 1. Read `verification.md`. If it doesn't say `Result: PASS`, stop.
 1b. Run `scripts/agent/upload-evidence.sh <task-id> --check`. If it fails, **stop**: the user hasn't approved the evidence, it changed after they approved it, or new commits landed after approval. Pass on the script's message. Never tick checkboxes in evidence.md and never run `approve-evidence.sh`; approval is the user's job.
