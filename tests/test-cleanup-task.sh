@@ -126,6 +126,19 @@ task F3 23; mr 23 opened
 task F4 24; mr 24 merged; debt F4 parked
 task F5
 review 25; mr 25 merged
+task F6 26   # no mr-26.json: the forge can't read it
+
+# --finished --list (#140): what doctor reports, nothing removed.
+clean --finished --list
+check "--finished --list: exit 0" '[ $rc -eq 0 ]'
+check "--finished --list: task, iid and the MR's state for each task with an MR" 'grep -qx "F1 21 merged" "$T/out.txt" && grep -qx "F2 22 closed" "$T/out.txt" && grep -qx "F3 23 opened" "$T/out.txt" && grep -qx "F4 24 merged" "$T/out.txt" && grep -qx "mr-25 25 merged" "$T/out.txt"'
+check "--finished --list: an MR the forge can't read is unknown" 'grep -qx "F6 26 unknown" "$T/out.txt"'
+check "--finished --list: a task with no MR isn't listed, and nothing else is printed" '! grep -q F5 "$T/out.txt" && [ "$(wc -l < "$T/out.txt" | tr -d " ")" = 6 ]'
+check "--finished --list: nothing is removed" '[ -d .work/F1 ] && [ -d .work/F2 ] && [ -d .work/mr-25 ] && git show-ref --verify --quiet refs/heads/feature/F1-slug-F1'
+clean --finished --list --force
+check "--finished --list takes no other option" '[ $rc -eq 1 ] && [ -d .work/F1 ]'
+rm -rf .work/F6
+
 clean --finished
 check "--finished: exit 0" '[ $rc -eq 0 ]'
 check "--finished: the merged and closed tasks are cleaned" '[ ! -e .work/F1 ] && [ ! -e .work/F2 ] && [ ! -e .work/mr-25 ]'

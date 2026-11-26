@@ -120,20 +120,16 @@ fi
 # ---------- finished tasks to clean up (ADR 0003, #132) ----------
 # A task's branch, work folder and (in an MR review) review worktree stay until
 # /cleanup removes them, once its MR is merged or closed. Only asks GitLab when
-# glab is logged in. A task with no MR yet isn't finished.
-work="$(bash -c 'source scripts/agent/config.sh >/dev/null 2>&1; printf "%s" "$WORK_DIR"' 2>/dev/null)"
+# glab is logged in. A task with no MR yet isn't finished. cleanup-task.sh
+# --finished --list says which tasks have an MR and its state (#140).
 finished_tasks=()
-for f in "${work:-.work}"/*/state.env; do
-  [ -f "$f" ] || continue
-  iid="$(sed -n 's/^MR_IID=\([0-9][0-9]*\)$/\1/p' "$f" | tail -1)"
-  [ -n "$iid" ] && finished_tasks+=("$(basename "$(dirname "$f")") $iid")
-done
+while IFS= read -r l; do
+  [ -n "$l" ] && finished_tasks+=("$l")
+done < <(bash scripts/agent/cleanup-task.sh --finished --list 2>/dev/null)
 if [ "${#finished_tasks[@]}" -gt 0 ]; then
   if has glab && glab auth status >/dev/null 2>&1; then
-    source "$(dirname "$0")/forge-lib.sh"
     for entry in "${finished_tasks[@]}"; do
-      task="${entry% *}"; iid="${entry#* }"
-      st="$(forge_mr_state "$iid" 2>/dev/null)" || st=""
+      read -r task iid st <<<"$entry"
       case "$st" in
         merged|closed) result WARN "$task is finished: MR !$iid is $st. Run /cleanup $task to remove its branch, work folder or review worktree" ;;
         opened|locked) ;;

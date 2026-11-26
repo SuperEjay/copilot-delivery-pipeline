@@ -127,7 +127,7 @@ check "a task with no MR yet: no line" '! grep -q "T9" "$T/out.txt"'
 rm "$FAKE_FORGE/mr-6.json"; doc
 check "an MR glab can't read: INFO, not a guess" 'line INFO "can.t tell whether MR !6 .T6. is finished"'
 glab_logged_out; doc
-check "glab not logged in: no MR states asked for, an INFO" 'line INFO "tasks with an MR: 3" && ! grep -q "is merged" "$T/out.txt" && grep -q "/cleanup <task-id>" "$T/out.txt"'
+check "glab not logged in: the states are ignored, one INFO with the count" 'line INFO "tasks with an MR: 3" && ! grep -q "is merged" "$T/out.txt" && grep -q "/cleanup <task-id>" "$T/out.txt"'
 glab_on
 rm -rf .work/mr-5 .work/T6 .work/mr-8 .work/T9
 
