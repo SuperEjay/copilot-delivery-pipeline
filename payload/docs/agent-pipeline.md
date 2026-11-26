@@ -356,7 +356,10 @@ closed, run `/cleanup <id>` (any agent):
 - `/cleanup --finished` cleans every finished task, skips what it can't clean
   yet, and ends with a summary.
 - `scripts/agent/doctor.sh` lists every finished task with its `/cleanup`
-  command. The guard asks before an agent runs a cleanup.
+  command. It gets them from `scripts/agent/cleanup-task.sh --finished --list`,
+  which changes nothing and prints `<task> <iid> <state>` for each task with an
+  MR (`unknown` when glab can't read it). The guard asks before an agent runs a
+  cleanup.
 
 ### Pinned models in an auto run
 

@@ -25,11 +25,24 @@
 # --finished goes through every task in .work/: it cleans those whose MR is
 # merged or closed, skips the ones it can't clean yet (and says why), and ends
 # with a summary. It never forces anything.
+#
+# --finished --list changes nothing: one "<task> <iid> <state>" line for each task
+# that has an MR, the state as the forge gives it (opened, merged, closed, locked)
+# or unknown when it can't be read. doctor.sh reports from it (#140).
 set -uo pipefail
 source "$(dirname "$0")/config.sh"
 
-USAGE="usage: cleanup-task.sh <task-id | mr-<iid>> [--force] [--drop-debt] | cleanup-task.sh --finished"
+USAGE="usage: cleanup-task.sh <task-id | mr-<iid>> [--force] [--drop-debt] | cleanup-task.sh --finished [--list]"
 source "$(dirname "$0")/forge-lib.sh"
+
+# _tasks: every task id in the work folder, one per line.
+_tasks() {
+  local f
+  for f in "$WORK_DIR"/*/state.env; do
+    [ -f "$f" ] && basename "$(dirname "$f")"
+  done
+  return 0
+}
 
 # clean_one <task> <force yes|no> <drop-debt yes|no>: clean one task up. Prints
 # what it did, or the refusal; returns 0 cleaned, 1 refused (its reason in
@@ -113,11 +126,18 @@ clean_one() {
 case "${1:-}" in
   '') echo "$USAGE" >&2; exit 1 ;;
   --finished)
+    if [ $# -eq 2 ] && [ "$2" = --list ]; then
+      for t in $(_tasks); do
+        iid="$(_state_optional "$t" MR_IID "" 2>/dev/null)" || continue
+        [ -n "$iid" ] || continue
+        state="$(forge_mr_state "$iid" 2>/dev/null)" || state=unknown
+        echo "$t $iid $state"
+      done
+      exit 0
+    fi
     [ $# -eq 1 ] || { echo "$USAGE" >&2; exit 1; }
     cleaned=(); skipped=(); open=()
-    for f in "$WORK_DIR"/*/state.env; do
-      [ -f "$f" ] || continue
-      t="$(basename "$(dirname "$f")")"
+    for t in $(_tasks); do
       echo "== $t"
       clean_one "$t" no no 2>&1; rc=$?
       case "$rc" in
