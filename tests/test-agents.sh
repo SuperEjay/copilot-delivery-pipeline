@@ -26,6 +26,10 @@ frontmatter() { awk 'NR == 1 && $0 == "---" { on = 1; next } on && $0 == "---" {
 for a in "${AGENTS[@]}"; do
   check "$a: include-custom-instructions: true in the frontmatter" 'frontmatter $a | grep -qx "include-custom-instructions: true"'
   check "$a: no handoffs (ADR 0002)" '! frontmatter $a | grep -q "^handoffs:"'
+  # As a subagent, the edit tool set doesn't reach a stage agent (the planner
+  # couldn't save plan.md), so every stage writes its .work/ files through the shell.
+  check "$a: execute in tools, to write its files as a subagent" 'frontmatter $a | grep -q "^tools:.*'"'"'execute'"'"'"'
+  check "$a: told to write through the shell when it has no file-editing tool" 'grep -q "no file-editing tool" "$A/$a.agent.md"'
 done
 
 # section <agent> <heading>: the lines under "## <heading>", up to the next "## "
