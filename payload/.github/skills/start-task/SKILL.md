@@ -16,6 +16,7 @@ To fix work they started outside the pipeline (ADR 0004), they give `--mr <iid>`
    If you are the **requirements** agent, continue with your normal steps now.
    Otherwise reply with exactly this, filled in, and stop:
    > Task `<task-id>` is set up on branch `<branch>` and fetched to `.work/<task-id>/clickup/task.md`.
-   > **Next:** pick the **pipeline** agent and say `Run <task-id>`.
+   > **Next:** switch the agent picker to **pipeline**, then say `Run <task-id>` there.
+   Never start the **pipeline** agent as a subagent, even if you can: run as a subagent, the guard refuses it `next-stage.sh` and it can't start the stage agents. Only the user switches to it.
 
 Don't analyse requirements yourself unless you are the requirements agent: that agent runs on the model chosen for that job.
