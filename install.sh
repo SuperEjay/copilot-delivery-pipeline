@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copilot delivery pipeline: installer
+# Otto: installer
 #
 #   install.sh [options] [target-dir]        target-dir defaults to the current directory
 #
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 PIPELINE_VERSION="v2.6.1"
-PIPELINE_REPO="${PIPELINE_REPO:-SuperEjay/copilot-delivery-pipeline}"
+PIPELINE_REPO="${PIPELINE_REPO:-SuperEjay/otto}"
 MANIFEST=".github/agent-pipeline.manifest"
 UPDATE_FROM="v1.2.0"         # --update refuses an older install (ADR 0002)
 UPDATE_VIA="v1.2.2"          # ... and says to update to this release first

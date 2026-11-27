@@ -92,9 +92,9 @@ check "relative-path run installs the clone's payload" 'cmp -s "$T/rel/.github/a
 # stdin, or it eats the rest of the script. A fake npx that reads stdin (as the
 # real one can) and a fake curl that serves this clone's payload as the release.
 git init -q -b main "$T/piped"; git -C "$T/piped" commit -q --allow-empty -m init
-mkdir -p "$T/pipebin" "$T/rel-src/copilot-delivery-pipeline-x"
-cp -r "$ROOT/install.sh" "$ROOT/VERSION" "$ROOT/payload" "$T/rel-src/copilot-delivery-pipeline-x/"
-tar -czf "$T/release.tgz" -C "$T/rel-src" copilot-delivery-pipeline-x
+mkdir -p "$T/pipebin" "$T/rel-src/otto-x"
+cp -r "$ROOT/install.sh" "$ROOT/VERSION" "$ROOT/payload" "$T/rel-src/otto-x/"
+tar -czf "$T/release.tgz" -C "$T/rel-src" otto-x
 printf '#!/bin/sh\ncat "%s"\n' "$T/release.tgz" > "$T/pipebin/curl"
 printf '#!/bin/sh\ncat > /dev/null\nexit 0\n' > "$T/pipebin/npx"
 printf '#!/bin/sh\ncat > /dev/null\nexit 1\n' > "$T/pipebin/glab"
@@ -195,7 +195,7 @@ if tags_present v1.1.0 v1.2.0 v1.2.1 v1.2.2; then
   for force in "" --force; do
     up $force "$T/old110"; rc=$?
     check "update ${force:-without --force} from v1.1.0 is refused" '[ $rc -ne 0 ] && grep -q "v1.1.0" "$T/out.txt" && grep -q "v1.2.0 or later" "$T/out.txt"'
-    check "the refusal ${force:+(--force) }says how to update to v1.2.2 first" 'grep -qF "SuperEjay/copilot-delivery-pipeline/v1.2.2/install.sh | bash -s -- --update" "$T/out.txt"'
+    check "the refusal ${force:+(--force) }says how to update to v1.2.2 first" 'grep -qF "SuperEjay/otto/v1.2.2/install.sh | bash -s -- --update" "$T/out.txt"'
     check "a refused update ${force:+(--force) }changes no file" 'snapshot "$T/old110" | cmp -s - "$T/before"'
   done
   # The refusal comes before the payload is fetched: the installer alone, as
@@ -252,11 +252,11 @@ readme_section() { awk -v h="$1" 'index($0, "#") == 1 { lvl = index($0, " ") - 1
 # slug <heading text>: GitHub's anchor for a heading.
 slug() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9 _-]//g; s/ /-/g'; }
 version="$(sed -n 's/^PIPELINE_VERSION="\(.*\)"$/\1/p' "$ROOT/install.sh")"
-check "README: the pinned curl install is this version" 'grep -q "copilot-delivery-pipeline/$version/install.sh | bash$" "$README"'
-check "README: the pinned curl update is this version" 'grep -q "copilot-delivery-pipeline/$version/install.sh | bash -s -- --update$" "$README"'
+check "README: the pinned curl install is this version" 'grep -q "SuperEjay/otto/$version/install.sh | bash$" "$README"'
+check "README: the pinned curl update is this version" 'grep -q "SuperEjay/otto/$version/install.sh | bash -s -- --update$" "$README"'
 via="$(sed -n 's/^UPDATE_VIA="\(.*\)".*/\1/p' "$ROOT/install.sh")"
-check "README: every pinned release (clone --branch, checkout, curl URL) is this version" '[ -z "$(grep -oE "(--branch|checkout|copilot-delivery-pipeline/) ?v[0-9]+\.[0-9]+\.[0-9]+" "$README" | grep -v "$version\$" | grep -v "copilot-delivery-pipeline/$via\$")" ]'
-check "README: the one other pin is the update-first step, to UPDATE_VIA ($via), with --update" '[ "$(grep -c "copilot-delivery-pipeline/$via/install.sh | bash -s -- --update\$" "$README")" -eq 1 ] && readme_section "## Updating an existing install" | grep -q "v1.2.0 or later"'
+check "README: every pinned release (clone --branch, checkout, curl URL) is this version" '[ -z "$(grep -oE "(--branch|checkout|SuperEjay/otto/) ?v[0-9]+\.[0-9]+\.[0-9]+" "$README" | grep -v "$version\$" | grep -v "SuperEjay/otto/$via\$")" ]'
+check "README: the one other pin is the update-first step, to UPDATE_VIA ($via), with --update" '[ "$(grep -c "SuperEjay/otto/$via/install.sh | bash -s -- --update\$" "$README")" -eq 1 ] && readme_section "## Updating an existing install" | grep -q "v1.2.0 or later"'
 check "README: the update links the CHANGELOG's Upgrading to v2" 'grep -q "(CHANGELOG.md#upgrading-to-v2)" "$README" && grep -qx "### Upgrading to v2" "$ROOT/CHANGELOG.md"'
 check "VERSION, install.sh and the CHANGELOG's newest release agree" '[ "$(cat "$ROOT/VERSION")" = "$version" ] && [ "$(grep -m1 "^## v" "$ROOT/CHANGELOG.md")" = "## $version" ]'
 for flag in $(sed -n 's/^    \(--[a-z-]*\)[)|].*/\1/p' "$ROOT/install.sh"); do

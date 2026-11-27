@@ -1,4 +1,4 @@
-# Copilot delivery pipeline
+# Otto
 
 Turn a ClickUp task into a reviewed GitLab merge request with GitHub Copilot in
 VS Code, or review a teammate's MR against its ClickUp task. You install it into
@@ -206,11 +206,11 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
 
    ```bash
    # Option A: clone, read, run (recommended)
-   git clone -c core.autocrlf=false --branch v2.6.1 https://github.com/SuperEjay/copilot-delivery-pipeline.git /tmp/cdp
-   /tmp/cdp/install.sh .
+   git clone -c core.autocrlf=false --branch v2.6.1 https://github.com/SuperEjay/otto.git /tmp/otto
+   /tmp/otto/install.sh .
 
    # Option B: one line, pinned to a release
-   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.6.1/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/SuperEjay/otto/v2.6.1/install.sh | bash
    ```
 
 3. Read the installer's output. It ends by running `scripts/agent/doctor.sh`,
@@ -268,12 +268,12 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
    ```
 
    It prints `# agent-pipeline <version> installed <date>`. Compare it with the
-   [latest release](https://github.com/SuperEjay/copilot-delivery-pipeline/releases/latest).
+   [latest release](https://github.com/SuperEjay/otto/releases/latest).
    **v2 updates only from v1.2.0 or later.** On anything older, update to v1.2.2
    first, then come back to step 3:
 
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v1.2.2/install.sh | bash -s -- --update
+   curl -fsSL https://raw.githubusercontent.com/SuperEjay/otto/v1.2.2/install.sh | bash -s -- --update
    ```
 
 2. Start from a clean tree, on a new branch, and finish or park any task that's
@@ -287,12 +287,12 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
 3. Run the new version's installer with `--update`:
 
    ```bash
-   # Option A: from a clone (clone it again as in First-time install if /tmp/cdp is gone)
-   git -C /tmp/cdp fetch --tags && git -C /tmp/cdp checkout v2.6.1
-   /tmp/cdp/install.sh --update .
+   # Option A: from a clone (clone it again as in First-time install if /tmp/otto is gone)
+   git -C /tmp/otto fetch --tags && git -C /tmp/otto checkout v2.6.1
+   /tmp/otto/install.sh --update .
 
    # Option B: one line
-   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.6.1/install.sh | bash -s -- --update
+   curl -fsSL https://raw.githubusercontent.com/SuperEjay/otto/v2.6.1/install.sh | bash -s -- --update
    ```
 
 4. Merge each `.new` file. When you'd changed a pipeline file, the installer
@@ -358,7 +358,7 @@ and hooks. To use it only yourself, without adding anything to the project's
 history, install with `--local`:
 
 ```bash
-/tmp/cdp/install.sh --local .
+/tmp/otto/install.sh --local .
 ```
 
 Through curl: `curl -fsSL <install.sh URL> | bash -s -- --local`.
