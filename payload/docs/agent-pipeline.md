@@ -234,7 +234,8 @@ Answer every stop in that same chat.
 for your own open MR, or `--branch <branch>` for a branch with no MR yet. The
 task runs the same route on that branch: the planner ticks what your commits
 already cover, the reviewer and fix loop work on it, and the shipper updates
-your MR, keeping your title and description. A teammate's MR is refused: use
+your MR, keeping your title and description, and assigns it to you if nobody
+is assigned. A teammate's MR is refused: use
 `/review-mr` for that.
 
 ### Stops and what to reply
@@ -286,7 +287,9 @@ starts with `AUTO RUN`. Run by hand, the agents work as before. In an auto run:
 - **The implementer** marks a quick fix that turned out bigger than its
   estimate as `re-plan`, so the `review` stop shows it to you.
 - **The shipper** runs twice: once to write mr.md, and once to ship after you
-  approve `pre-ship`.
+  approve `pre-ship`. The MR it opens is assigned to you (the `glab` user). An
+  existing MR with no assignee gets you too; someone already assigned is kept.
+  If assigning fails, the ship still goes ahead with a warning.
 - **The review-responder** triages Duo's threads and commits the fixes without
   waiting for an OK. ASK threads wait for the `duo` stop.
 - **In an MR review,** the requirements agent, the verifier and the reviewer

@@ -112,6 +112,25 @@ lib forge_mr_update 7 "New title" "New description"
 check "forge_mr_update: title and description replaced" '[ $rc -eq 0 ] && [ -z "$out" ] && [ "$(jq -c "[.title, .description]" "$FAKE_FORGE/mr-7.json")" = "[\"New title\",\"New description\"]" ] && tail -n1 "$FAKE_FORGE/writes.log" | grep -qx "update !7"'
 lib forge_mr_update 99 t d
 check "forge_mr_update: an MR glab can't find, non-zero" '[ $rc -ne 0 ] && grep -q 404 "$T/out.txt"'
+
+# ---------- forge_mr_assign_me (#150) ----------
+check "forge_mr_create: a new MR has no assignees" '[ "$(jq -c .assignees "$FAKE_FORGE/mr-7.json")" = "[]" ]'
+: > "$FAKE_FORGE/writes.log"; lib forge_mr_assign_me 7
+check "forge_mr_assign_me: no assignees, the glab user is assigned, one write" '[ $rc -eq 0 ] && [ -z "$out" ] && [ "$(jq -c "[.assignees[].username]" "$FAKE_FORGE/mr-7.json")" = "[\"me\"]" ] && [ "$(cat "$FAKE_FORGE/writes.log")" = "assign !7" ]'
+jq '.assignees = [{id: 5, username: "ann"}]' "$FAKE_FORGE/mr-7.json" > "$T/m" && mv "$T/m" "$FAKE_FORGE/mr-7.json"
+: > "$FAKE_FORGE/writes.log"; lib forge_mr_assign_me 7
+check "forge_mr_assign_me: someone already assigned, kept, no write" '[ $rc -eq 0 ] && [ "$(jq -c "[.assignees[].username]" "$FAKE_FORGE/mr-7.json")" = "[\"ann\"]" ] && [ ! -s "$FAKE_FORGE/writes.log" ]'
+jq 'del(.assignees)' "$FAKE_FORGE/mr-7.json" > "$T/m" && mv "$T/m" "$FAKE_FORGE/mr-7.json"
+lib forge_mr_assign_me 7
+check "forge_mr_assign_me: no assignees field counts as none" '[ $rc -eq 0 ] && [ "$(jq -c "[.assignees[].username]" "$FAKE_FORGE/mr-7.json")" = "[\"me\"]" ]'
+jq '.assignees = []' "$FAKE_FORGE/mr-7.json" > "$T/m" && mv "$T/m" "$FAKE_FORGE/mr-7.json"
+mv "$FAKE_FORGE/me" "$T/me"; : > "$FAKE_FORGE/writes.log"; lib forge_mr_assign_me 7
+check "forge_mr_assign_me: glab user unknown, non-zero, no write" '[ $rc -ne 0 ] && grep -q 401 "$T/out.txt" && [ ! -s "$FAKE_FORGE/writes.log" ]'
+mv "$T/me" "$FAKE_FORGE/me"
+lib forge_mr_assign_me 99
+check "forge_mr_assign_me: an MR glab can't find, non-zero" '[ $rc -ne 0 ] && grep -q 404 "$T/out.txt"'
+: > "$FAKE_FORGE/calls.log"; lib forge_mr_assign_me x
+check "forge_mr_assign_me: a non-number iid is refused before glab" '[ $rc -ne 0 ] && [ ! -s "$FAKE_FORGE/calls.log" ]'
 # A glab that "creates" without the MR appearing: forge_mr_create fails and says so.
 mkdir -p "$T/liar"; printf '#!/bin/sh\ncase "$1" in mr) exit 0 ;; *) echo "[]" ;; esac\n' > "$T/liar/glab"; chmod +x "$T/liar/glab"
 PATH="$T/liar:$PATH" lib forge_mr_create feat/d main "Add d" ""

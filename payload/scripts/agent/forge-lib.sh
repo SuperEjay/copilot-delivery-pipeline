@@ -143,6 +143,18 @@ forge_mr_update() {
   glab api -X PUT "projects/:id/merge_requests/$1" -f "title=$2" -f "description=$3" >/dev/null
 }
 
+# forge_mr_assign_me <iid>: assigns the glab user to the MR, but only when it has no
+# assignees; someone already assigned is kept (#150). Prints nothing.
+forge_mr_assign_me() {
+  local json id
+  json="$(_forge_mr_json "$1")" || return 1
+  jq -e '(.assignees // []) | length == 0' <<<"$json" >/dev/null || return 0
+  json="$(glab api user)" || return 1
+  id="$(jq -r '.id // empty' <<<"$json")" || return 1
+  [ -n "$id" ] || { echo "forge: GitLab gave no id for the glab user." >&2; return 1; }
+  glab api -X PUT "projects/:id/merge_requests/$1" -f "assignee_id=$id" >/dev/null
+}
+
 forge_reply() {
   _forge_iid "$1" && _forge_did "$2" || return 1
   glab api -X POST "projects/:id/merge_requests/$1/discussions/$2/notes" -f "body=$3" >/dev/null
