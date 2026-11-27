@@ -1,6 +1,6 @@
 # From ClickUp task to reviewed merge request
 
-How the Copilot delivery pipeline delivers and reviews work, as of v2.6.1. This
+How Otto delivers and reviews work, as of v2.6.1. This
 is the team presentation written out as a document, one section per slide. The
 speaker notes are under each slide's **Notes**.
 

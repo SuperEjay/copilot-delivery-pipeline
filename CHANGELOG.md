@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Renamed to Otto.** The repo moves to `SuperEjay/otto`, and the README's install and update commands and the installer's default `PIPELINE_REPO` now point there. GitHub redirects the old `copilot-delivery-pipeline` URLs, so commands from older releases keep working. Nothing changes in an installed project: the `pipeline` agent, `.github/agent-pipeline.manifest` and `docs/agent-pipeline.md` keep their names.
+
 ## v2.6.1
 
 **The MR is assigned to you.** MRs the pipeline opened had no assignee. `create-mr.sh` now assigns the person running the pipeline (the `glab` user), and assigns an existing MR only when nobody is assigned.

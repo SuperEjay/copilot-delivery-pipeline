@@ -1,4 +1,4 @@
-# Copilot delivery pipeline
+# Otto
 
 A pipeline of Copilot agents that takes a ClickUp task from requirements to a reviewed GitLab merge request, with the user approving every step that publishes anything.
 
