@@ -79,8 +79,8 @@ the MR, `/fetch-review` starts the response loop.
 
 | Stop | When it waits for you |
 |---|---|
-| Requirements | Open questions to answer; with none, you approve it at the plan stop |
-| Plan | A Stop flag, more than 6 slices, or requirements still to approve |
+| Requirements | Always: answer its open questions, or approve |
+| Plan | A Stop flag in the plan, or more than 6 slices |
 | Review | An unclear finding, or a fix sent back to requirements or planner |
 | Pre-ship | Always: you tick the evidence and approve it |
 | Duo | Threads that ask you something, or fixes to push |
@@ -236,20 +236,23 @@ out of git.
 
 ---
 
-## 10. New in v2.5: less to tidy
+## 10. New in v2.5 and v2.6: less to tidy, and the plan gets saved
 
 | | |
 |---|---|
 | **Clean up finished tasks** | Once an MR is merged or closed, `/cleanup <id>` removes its branch (merged only), its `.work/` folder and, for an MR review, its worktree. `/cleanup --finished` does them all. |
 | **Test tooling per stack** | Doctor shows ready-to-paste test commands, and the tools to install, for a Node or Laravel project. |
+| **The planner saves its plan** | v2.6: in an auto run, a stage agent with no file-editing tool writes its files through the shell. |
+| **Back to the v2.4 stops** | v2.6: the run stops at requirements again, and `/start-task` and `/fetch-review` name the stage agent to pick. |
 
 <details><summary>Notes</summary>
 
 Cleanup refuses while the MR is open, with uncommitted changes, or while parked
 tech debt is still undecided, so nothing is lost silently; doctor lists every
-finished task with its `/cleanup` command. When the requirements have no open
-questions, the run goes straight on to the planner and you approve both at the
-plan stop. Doctor's test tooling only recommends; it never writes your settings.
+finished task with its `/cleanup` command. Doctor's test tooling only
+recommends; it never writes your settings. v2.6 fixes the planner saving its
+plan in an auto run, tried on a real run, and undoes v2.5's combined plan stop
+and hand-off to the pipeline agent.
 
 </details>
 
