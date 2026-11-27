@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## v2.6.1
+
+**The MR is assigned to you.** MRs the pipeline opened had no assignee. `create-mr.sh` now assigns the person running the pipeline (the `glab` user), and assigns an existing MR only when nobody is assigned.
+
+**Not yet tried for real:**
+- The assignee call against a real GitLab (`glab api -X PUT …/merge_requests/<iid> -f assignee_id=<id>`): only checked with the tests' fake glab.
+- From v2.6.0, still: `/cleanup` against a real GitLab, a full auto run in a project without Playwright, and the gap-checker agent in VS Code.
+
+### Upgrading to v2.6.1
+
+1. From v2.6.0 (or earlier, see the earlier upgrade notes first), run `install.sh --update` from v2.6.1: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.6.1/install.sh | bash -s -- --update`.
+2. Only `scripts/agent/create-mr.sh`, `scripts/agent/forge-lib.sh` and `docs/agent-pipeline.md` changed. If you'd changed one of them, merge its `.new` file. No agent or skill changed.
+3. No new `.agent.env` settings.
+4. Commit the updated pipeline files (with `--local`, there's nothing to commit). No need to restart VS Code: the scripts are read on each run.
+
+### Changes
 
 - **The MR is assigned to you (#150).** `create-mr.sh` used to open MRs with no assignee. It now assigns the `glab` user, the person running the pipeline. When it updates an existing MR (a re-ship, or an MR adopted with `--mr`), it assigns you only if nobody is assigned, and never replaces an assignee. If assigning fails, the MR is still created or updated, with a warning. No new setting.
 

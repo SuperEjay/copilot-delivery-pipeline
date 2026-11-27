@@ -1,6 +1,6 @@
 # From ClickUp task to reviewed merge request
 
-How the Copilot delivery pipeline delivers and reviews work, as of v2.6.0. This
+How the Copilot delivery pipeline delivers and reviews work, as of v2.6.1. This
 is the team presentation written out as a document, one section per slide. The
 speaker notes are under each slide's **Notes**.
 
@@ -260,22 +260,22 @@ and hand-off to the pipeline agent.
 
 ## 11. How it's built: test-first, decided in the open
 
-| 1,569 | 5 | 12 |
+| 1,581 | 5 | 13 |
 |---|---|---|
-| automated checks across 17 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), [MR review](adr/0003-mr-review-a-second-route.md), [adopting a branch or MR](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md), and [live checks never feed the ship gate](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md) | releases so far, from v1.0.0 to v2.6.0, each tagged on GitHub |
+| automated checks across 17 test scripts, all passing on main | architecture decision records: the [auto run](adr/0001-auto-run-through-an-orchestrator-and-subagents.md), [making it the main path](adr/0002-v2-auto-run-is-the-main-path.md), [MR review](adr/0003-mr-review-a-second-route.md), [adopting a branch or MR](adr/0004-a-task-can-adopt-an-existing-branch-or-mr.md), and [live checks never feed the ship gate](adr/0005-a-live-browser-check-never-feeds-the-ship-gate.md) | releases so far, from v1.0.0 to v2.6.1, each tagged on GitHub |
 
 Every change lands on its own branch, test first, with each new test proven to
 fail before the fix.
 
 ---
 
-## 12. Where it stands: v2.6.0 is out; more real runs are next
+## 12. Where it stands: v2.6.1 is out; v3 moves to the Copilot harness
 
 | Status | What |
 |---|---|
-| ✅ **Done** | v2.1.0 to v2.6.0 released: MR review, adopting your own work, applied suggestions, UI work without Playwright, gap checks, and cleanup of finished tasks. v2.6.0 fixes the planner saving its plan in an auto run (tried on a real run) and goes back to the v2.4.0 stops. `/review-mr` has been tried on a real GitLab MR, and it works. Pinned models are confirmed on a paid plan (#67). |
+| ✅ **Done** | v2.1.0 to v2.6.0 released: MR review, adopting your own work, applied suggestions, UI work without Playwright, gap checks, and cleanup of finished tasks. v2.6.0 fixes the planner saving its plan in an auto run (tried on a real run) and goes back to the v2.4.0 stops. v2.6.1 assigns the MR to you. `/review-mr` has been tried on a real GitLab MR, and it works. Pinned models are confirmed on a paid plan (#67). |
 | 🔶 **In progress** | First real runs: a task in a project without Playwright, and gap-checker in VS Code. |
-| ➡️ **Next** | `/cleanup` on real tasks. |
+| ➡️ **Next** | `/cleanup` on real tasks, and the v3 spike (#151): VS Code is removing the Local harness the auto run uses in February 2027, so v3 moves to the Copilot harness, aiming for mid-January 2027. |
 
 ---
 
