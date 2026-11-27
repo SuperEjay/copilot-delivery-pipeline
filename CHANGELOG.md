@@ -1,6 +1,27 @@
 # Changelog
 
-## Unreleased
+## v2.6.0
+
+**Back to the v2.4.0 flow, and the planner saves its plan in an auto run.** In an auto run the planner, running as a subagent, said it had no file-writing tool and didn't save `plan.md`. It now has the shell, and every stage agent writes its files through the shell when it has no file-editing tool. While that was tested, the v2.5.0 changes that move a task on by itself were undone: the run stops at requirements again, and `/start-task` and `/fetch-review` end by telling you which stage agent to pick. `/cleanup`, doctor's finished-task list and the test tooling per stack stay.
+
+**Tried for real:** the planner fix, in an auto run on a second device (pick **pipeline**, say `Continue <task-id>`): `plan.md` was saved.
+
+**Not yet tried for real:**
+- `/cleanup` and `/cleanup --finished` against a real GitLab: only checked with the tests' fake glab.
+- From v2.4.0, still: a full auto run in a project without Playwright, and the gap-checker agent in VS Code.
+
+**Known risk:** with #144 undone, `/review-mr`'s "pick the **pipeline** agent and say `Run`" can make a default agent start pipeline as a subagent if you don't switch agents first. Pick **pipeline** in the agent picker before saying `Run`.
+
+### Upgrading to v2.6.0
+
+1. From v2.5.0 (or earlier, see the earlier upgrade notes first), run `install.sh --update` from v2.6.0: `curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.6.0/install.sh | bash -s -- --update`.
+2. Merge each `<file>.new` it reports: `pipeline.agent.md`, the eight stage agents (shell fallback; the planner also gets `execute`), and the `start-task`, `fetch-review` and `review-mr` skills. Take the new version of each.
+3. No new `.agent.env` settings.
+4. Commit the updated pipeline files (with `--local`, there's nothing to commit), fully quit and reopen VS Code.
+
+Tasks in progress carry on. An auto run now always stops after the requirements agent, even with no open questions; approve it to go on to the planner.
+
+### Changes
 
 - **Reverted to the v2.4.0 flow:** the planner couldn't save `plan.md` in an auto run, so the changes since v2.4.0 that move a task on by itself are undone. Undone: the skills' hand-off to the **pipeline** agent (#129; `/start-task` and `/fetch-review` end with the stage agent to pick again), the deferred requirements stop (#130, ADR 0006 removed: the run always stops at requirements), and `disable-model-invocation` on the pipeline agent (#144). Kept: the planner fix (#145: in an auto run the planner couldn't save `plan.md` as a subagent; it now has `execute`, and every stage agent writes its files through the shell when it has no file-editing tool), `/cleanup` and doctor's finished-task list (#132, #139, #140), the test tooling per stack (#131) and the faster install tests (#133). Upgrading: merge the `.new` files for `pipeline.agent.md`, the eight stage agents (shell fallback), `/start-task`, `/fetch-review` and `/review-mr`.
 

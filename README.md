@@ -206,11 +206,11 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
 
    ```bash
    # Option A: clone, read, run (recommended)
-   git clone -c core.autocrlf=false --branch v2.5.0 https://github.com/SuperEjay/copilot-delivery-pipeline.git /tmp/cdp
+   git clone -c core.autocrlf=false --branch v2.6.0 https://github.com/SuperEjay/copilot-delivery-pipeline.git /tmp/cdp
    /tmp/cdp/install.sh .
 
    # Option B: one line, pinned to a release
-   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.5.0/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.6.0/install.sh | bash
    ```
 
 3. Read the installer's output. It ends by running `scripts/agent/doctor.sh`,
@@ -288,11 +288,11 @@ self-managed GitLab, add `--hostname gitlab.example.com`.
 
    ```bash
    # Option A: from a clone (clone it again as in First-time install if /tmp/cdp is gone)
-   git -C /tmp/cdp fetch --tags && git -C /tmp/cdp checkout v2.5.0
+   git -C /tmp/cdp fetch --tags && git -C /tmp/cdp checkout v2.6.0
    /tmp/cdp/install.sh --update .
 
    # Option B: one line
-   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.5.0/install.sh | bash -s -- --update
+   curl -fsSL https://raw.githubusercontent.com/SuperEjay/copilot-delivery-pipeline/v2.6.0/install.sh | bash -s -- --update
    ```
 
 4. Merge each `.new` file. When you'd changed a pipeline file, the installer
