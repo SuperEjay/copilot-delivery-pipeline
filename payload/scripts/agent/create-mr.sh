@@ -38,3 +38,5 @@ fi
 
 state_set_mr_iid "$TASK" "$IID"
 echo "$action MR !$IID: ${existing#* }"
+# Assign it to you when nobody is (#150). A missing assignee never fails the ship.
+forge_mr_assign_me "$IID" || echo "Warning: couldn't assign MR !$IID to you (see above). Assign it in GitLab." >&2

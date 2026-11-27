@@ -143,13 +143,24 @@ approve
 $S/upload-evidence.sh T1 --check > "$T/out.txt" 2>&1
 check "upload-evidence --check accepts the approval" '[ $? -eq 0 ] && grep -q "valid: 1 file" "$T/out.txt"'
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
-check "MR created at the verified, approved commit" '[ $? -eq 0 ] && [ "$(cat "$STUB/writes.log")" = "create !7" ] && [ "$(jq -r .source_branch "$STUB/mr-7.json")" = feature/T1-gate ] && grep -q "^MR_IID=7$" $W/state.env'
+check "MR created at the verified, approved commit, assigned to you (#150)" '[ $? -eq 0 ] && [ "$(cat "$STUB/writes.log")" = $'"'"'create !7\nassign !7'"'"' ] && [ "$(jq -r .source_branch "$STUB/mr-7.json")" = feature/T1-gate ] && [ "$(jq -c "[.assignees[].username]" "$STUB/mr-7.json")" = "[\"me\"]" ] && grep -q "^MR_IID=7$" $W/state.env'
 echo six >> a.txt; git commit -qam "duo fix"
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
 check "MR update refused before re-verification" '[ $? -ne 0 ]'
 $S/run-checks.sh T1 all > /dev/null 2>&1
 $S/create-mr.sh T1 > "$T/out.txt" 2>&1
-check "MR update allowed once re-verified (no new evidence needed)" '[ $? -eq 0 ] && grep -q "^Updated" "$T/out.txt" && [ "$(tail -n1 "$STUB/writes.log")" = "update !7" ]'
+check "MR update allowed once re-verified (no new evidence needed); you're already assigned, no assign write" '[ $? -eq 0 ] && grep -q "^Updated" "$T/out.txt" && [ "$(tail -n1 "$STUB/writes.log")" = "update !7" ]'
+jq '.assignees = [{id: 5, username: "ann"}]' "$STUB/mr-7.json" > "$T/m" && mv "$T/m" "$STUB/mr-7.json"
+$S/create-mr.sh T1 > "$T/out.txt" 2>&1
+check "MR update: someone else assigned, kept" '[ $? -eq 0 ] && [ "$(jq -c "[.assignees[].username]" "$STUB/mr-7.json")" = "[\"ann\"]" ] && [ "$(tail -n1 "$STUB/writes.log")" = "update !7" ]'
+jq '.assignees = []' "$STUB/mr-7.json" > "$T/m" && mv "$T/m" "$STUB/mr-7.json"
+$S/create-mr.sh T1 > "$T/out.txt" 2>&1
+check "MR update: no assignees (an adopted or pre-v2.6.1 MR), you're assigned" '[ $? -eq 0 ] && [ "$(jq -c "[.assignees[].username]" "$STUB/mr-7.json")" = "[\"me\"]" ] && [ "$(tail -n1 "$STUB/writes.log")" = "assign !7" ]'
+jq '.assignees = []' "$STUB/mr-7.json" > "$T/m" && mv "$T/m" "$STUB/mr-7.json"
+mv "$STUB/me" "$T/me"
+$S/create-mr.sh T1 > "$T/out.txt" 2>&1
+check "MR update: assigning fails, still updated, warns, exit 0" '[ $? -eq 0 ] && grep -q "^Updated" "$T/out.txt" && grep -qi "warning: couldn.t assign MR !7 to you" "$T/out.txt" && [ "$(jq -c .assignees "$STUB/mr-7.json")" = "[]" ]'
+mv "$T/me" "$STUB/me"
 
 # ---------- Duo review rounds ----------
 threads d1 d2

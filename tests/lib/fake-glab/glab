@@ -11,6 +11,7 @@
 # Writes change that state and add one line to writes.log:
 #   create !<iid>          mr create: a new open mr-<iid>.json, by "me"
 #   update !<iid>          PUT title and description into mr-<iid>.json
+#   assign !<iid>          PUT assignee_id: the glab user (id 42) becomes the MR's only assignee
 #   thread !<iid> <id>     a new thread, its request body in thread-<n>.json, id disc<n>
 #   reply !<iid> <did>     a reply, its body in reply-<n>.txt
 #   resolve !<iid> <did>
@@ -42,7 +43,7 @@ case "$ARGS" in
     echo "Logged in to gitlab.test as $(cat "$F/me" 2>/dev/null)" ;;
   "api user")
     [ -f "$F/me" ] || { echo "glab: 401 Unauthorized" >&2; exit 1; }
-    jq -n --arg u "$(cat "$F/me")" '{username: $u}' ;;
+    jq -n --arg u "$(cat "$F/me")" '{id: 42, username: $u}' ;;
   "api --paginate $P/"*)
     p="${3#"$P"/}"; iid="${p%%/*}"; what="${p#*/}"; number "$iid"
     case "$what" in "commits?per_page=100") what=commits ;; "discussions?per_page=100") what=discussions ;; *) unexpected ;; esac
@@ -71,12 +72,18 @@ case "$ARGS" in
           --argjson dr "$draft" --argjson rm "$remove" \
       '{iid: $i, project_id: 1, source_project_id: 1, state: "opened", author: {username: $me},
         source_branch: $s, target_branch: $t, title: $ti, description: $d, draft: $dr,
-        force_remove_source_branch: $rm, web_url: "https://gitlab.test/mr/\($i)"}' > "$F/mr-$iid.json"
+        force_remove_source_branch: $rm, assignees: [], web_url: "https://gitlab.test/mr/\($i)"}' > "$F/mr-$iid.json"
     echo "create !$iid" >> "$F/writes.log"
     echo "https://gitlab.test/mr/$iid" ;;
   "api -X PUT $P/"*"/discussions/"*" -f resolved=true")
     p="${4#"$P"/}"; iid="${p%%/*}"; did="${p##*/}"; number "$iid"; [ $# -eq 6 ] || unexpected
     echo "resolve !$iid $did" >> "$F/writes.log" ;;
+  "api -X PUT $P/"*" -f assignee_id=42")
+    iid="${4#"$P"/}"; number "$iid"; [ $# -eq 6 ] || unexpected
+    [ -f "$F/mr-$iid.json" ] || { echo "glab: 404 Not Found" >&2; exit 1; }
+    jq --arg me "$(cat "$F/me" 2>/dev/null)" '.assignees = [{id: 42, username: $me}]' "$F/mr-$iid.json" > "$F/mr.tmp" && mv "$F/mr.tmp" "$F/mr-$iid.json"
+    echo "assign !$iid" >> "$F/writes.log"
+    echo "{}" ;;
   "api -X PUT $P/"*)
     iid="${4#"$P"/}"; number "$iid"; [ -f "$F/mr-$iid.json" ] || { echo "glab: 404 Not Found" >&2; exit 1; }
     set -- "${@:5}"; new="$(fields "$@")"

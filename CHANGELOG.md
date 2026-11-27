@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **The MR is assigned to you (#150).** `create-mr.sh` used to open MRs with no assignee. It now assigns the `glab` user, the person running the pipeline. When it updates an existing MR (a re-ship, or an MR adopted with `--mr`), it assigns you only if nobody is assigned, and never replaces an assignee. If assigning fails, the MR is still created or updated, with a warning. No new setting.
+
 ## v2.6.0
 
 **Back to the v2.4.0 flow, and the planner saves its plan in an auto run.** In an auto run the planner, running as a subagent, said it had no file-writing tool and didn't save `plan.md`. It now has the shell, and every stage agent writes its files through the shell when it has no file-editing tool. While that was tested, the v2.5.0 changes that move a task on by itself were undone: the run stops at requirements again, and `/start-task` and `/fetch-review` end by telling you which stage agent to pick. `/cleanup`, doctor's finished-task list and the test tooling per stack stay.

@@ -55,6 +55,8 @@ sh deny 'git commit --no-verify -m x'
 sh deny 'git push origin HEAD'
 sh deny 'glab mr create --title x'
 sh deny 'glab api projects/1/merge_requests -X POST'
+sh deny 'glab api -X PUT projects/:id/merge_requests/7 -f assignee_id=42'
+sh deny 'glab mr update 7 --assignee me'
 sh deny 'curl -s https://api.clickup.com/api/v2/task/1'
 
 # ---------- raw test commands ----------
